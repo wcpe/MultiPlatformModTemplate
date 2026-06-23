@@ -30,7 +30,7 @@ MPMT 作为脚手架 / 模板，其接口分三个面（玩法开发者在克隆
 - `PlayerPort`：玩家信息查询 / 操作的领域视图。
 - `WorldPort`：世界 / 方块 / 实体的领域视图。
 - `SchedulerPort`：任务调度（同步 / 异步 / 延迟 / 周期），屏蔽各平台调度差异（含 Folia 区域调度特判，经 FeatureGate；区域调度的真机验证维度见 PRD / spec）。
-- `EventBusPort`：**自有 EventBus** 的订阅 / 发布接口（L0 内核实现，承载域间事件转发；非平台端口，无 L3 实现）。
+- `EventBusPort`：**自有 EventBus** 的订阅 / 发布接口（L0 内核实现，承载域间事件转发；非平台端口，无 L3 实现）。**已落地**：`<E extends DomainEvent> void subscribe(Class<E> type, Consumer<E> handler)` + `void publish(DomainEvent event)`；标记接口 `DomainEvent`；默认实现 `SimpleEventBus`（平台无关、线程安全、按精确类型分发、订阅者异常隔离、零第三方依赖）。
 - `MessagePort`：向玩家 / 频道发送消息。
 - `PersistencePort`：玩法状态的读写持久化。
 - `TransportPort`：跨端字节收发（供 `protocol` 使用，不直接面向玩法）。

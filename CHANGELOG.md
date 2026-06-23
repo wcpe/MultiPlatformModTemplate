@@ -7,6 +7,7 @@
 ## 未发布版本
 
 ### 新增
+- 落地 **L0 自有 EventBus 内核**（FR-01 起步）：`EventBusPort`（订阅 / 发布）+ `DomainEvent` 标记接口 + `SimpleEventBus` 默认实现——平台无关、线程安全（`ConcurrentHashMap` + `CopyOnWriteArrayList`）、按精确类型分发、订阅者异常隔离、零第三方依赖（JDK 自带日志）。纯 JVM 单测覆盖正常 / 类型隔离 / 无订阅者 / 异常隔离 / null 校验 / 并发（FR-01 / ADR-0011 / testing-and-quality §2）。
 - 落地 **M0 Gradle 复合构建骨架 + 打包 spike + 跨栈 spike**（`docs/specs/build-skeleton-and-spikes.md`）：
   - Gradle 8.10.2 wrapper + 根复合构建（Kotlin DSL）；`core-domain`（根常规模块，JDK 8 工具链，零第三方运行期依赖）+ `platform-fabric`（独立 includeBuild·Loom 1.7.4·MC 1.20.1·Mojang 官方映射·Java 17）。
   - **打包 spike 通过**：core 纯 Java 经 shadow shade 进 Fabric remapped jar 且不被 remap、snakeyaml relocate 到 `top.wcpe.mc.mpmt.libs.*`、`fabric.mod.json` 注入版本号；自动化校验任务 `verifyPackaging` 守护。**结论：core 消费走 includeBuild 依赖替换成立，未触发 ADR-0012 的 mavenLocal 回退。**
