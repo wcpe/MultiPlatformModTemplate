@@ -19,7 +19,8 @@ version = file("../VERSION").readText().trim()
 val mcVersion = "1.20.1"
 val loaderVersion = "0.16.5"
 val snakeyamlVersion = "2.2"
-val coreCoordinate = "top.wcpe.mc.mpmt:core-domain:$version"
+// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经 includeBuild 依赖替换消费
+val spiCoordinate = "top.wcpe.mc.mpmt:platform-spi:$version"
 
 base {
     // 最终产物名带平台后缀，便于区分
@@ -44,9 +45,9 @@ dependencies {
     mappings(loom.officialMojangMappings())
     modImplementation("net.fabricmc:fabric-loader:$loaderVersion")
 
-    // 共享核心：纯 Java、非 mod 依赖、不参与 remap → 普通 implementation 编译可见 + shade 打入
-    implementation(coreCoordinate)
-    shadowBundle(coreCoordinate)
+    // 共享核心（platform-spi + 传递的 core-runtime/core-domain）：纯 Java、非 mod 依赖、不参与 remap
+    implementation(spiCoordinate)
+    shadowBundle(spiCoordinate)
 
     // 第三方运行期依赖：shade 进产物并 relocate 到 top.wcpe.mc.mpmt.libs.*（ADR-0012，防类冲突的统一约定）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
@@ -105,6 +106,7 @@ val verifyPackaging by tasks.registering {
             if (!cond) throw GradleException("打包 spike 校验失败：$msg")
         }
         must(entries.contains("top/wcpe/mc/mpmt/core/domain/Mpmt.class"), "core 类未以原包名出现在产物（应被 shade 且未被 remap）")
+        must(entries.contains("top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class"), "platform-spi 未 shade 进产物")
         must(entries.any { it.startsWith("top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/") }, "snakeyaml 未 relocate 到 top.wcpe.mc.mpmt.libs.*")
         must(entries.none { it.startsWith("org/yaml/snakeyaml/") }, "snakeyaml 仍在原包名 org.yaml.snakeyaml（relocate 未生效）")
         must(entries.none { it.startsWith("META-INF/maven/org.yaml/") }, "snakeyaml 的 Maven 坐标元数据残留（应 exclude META-INF/maven/**）")

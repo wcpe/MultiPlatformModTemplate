@@ -8,6 +8,9 @@
   "entrypoints": {
     "main": [
       "top.wcpe.mc.mpmt.platform.fabric.MpmtFabricBootstrap"
+    ],
+    "client": [
+      "top.wcpe.mc.mpmt.platform.fabric.MpmtFabricClientBootstrap"
     ]
   },
   "depends": {

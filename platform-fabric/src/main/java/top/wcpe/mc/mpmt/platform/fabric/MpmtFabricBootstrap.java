@@ -3,13 +3,14 @@ package top.wcpe.mc.mpmt.platform.fabric;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import top.wcpe.mc.mpmt.core.domain.Mpmt;
+import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
+import top.wcpe.mc.mpmt.platform.spi.PlatformProvider;
 
 /**
- * M0 阶段最小 Fabric 入口：仅引用 L0 核心常量，证明 core 已正确打入产物且可被加载。
+ * Fabric 主入口（main，客户端与服务端发行环境共用）：驱动平台装配——构造运行时、经本 mod 类加载器
+ * 发现并装配唯一活跃平台、启用特性。
  *
- * <p>本类不含任何平台胶水逻辑（SPI 装配 / TransportPort / 命令等属后续平台轮次）；
- * 存在的唯一目的是让产物成为一个可加载的合法 mod，并验证 core 依赖链路。
+ * <p>用本类的类加载器（Fabric knot 加载器）做 ServiceLoader 发现，确保扫到本 mod 的 services（ADR-0002 注意项）。
  */
 public final class MpmtFabricBootstrap implements ModInitializer {
 
@@ -17,7 +18,10 @@ public final class MpmtFabricBootstrap implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        // 引用 core 常量，证明共享核心已随产物加载；平台胶水后续实现
-        LOGGER.info("MPMT 命名空间 {} 已加载（M0 构建骨架 / 打包 spike）", Mpmt.NAMESPACE);
+        MpmtRuntime runtime = new MpmtRuntime();
+        // 玩法特性随后续增量登记到 runtime.features()；当前先打通"发现 + 装配 + 启用"链路
+        PlatformProvider.boot(getClass().getClassLoader(), runtime);
+        runtime.enable();
+        LOGGER.info("MPMT 已装配并启用，活跃平台：{}", PlatformProvider.get().platformId());
     }
 }
