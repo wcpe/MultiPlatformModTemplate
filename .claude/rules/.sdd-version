@@ -1,0 +1,4 @@
+sdd-skills: 0.5.0
+date: 2026-06-23
+source-skill: init-sdd-project
+note: 由 init-sdd-project 初始化的治理层来源戳，供 sdd-sync-governance 日后增量升级对账使用。
