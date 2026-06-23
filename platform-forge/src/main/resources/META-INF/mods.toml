@@ -1,0 +1,27 @@
+# MPMT Forge mod 描述（由 Forge 加载；字段为 Forge 框架强制约定）
+# 使用 javafml 模组加载器，兼容 Forge 47（1.20.1）
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+# 模组条目
+[[mods]]
+modId="mpmt"
+version="${version}"
+displayName="MultiPlatformModTemplate"
+description="多平台 mod 玩法脚手架 —— Forge 平台胶水"
+
+# 依赖声明：要求 Forge 与 Minecraft 处于 1.20.1 区间
+[[dependencies.mpmt]]
+modId="forge"
+mandatory=true
+versionRange="[47,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.mpmt]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.21)"
+ordering="NONE"
+side="BOTH"
