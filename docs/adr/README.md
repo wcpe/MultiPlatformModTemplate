@@ -19,6 +19,7 @@
 | [0013](0013-threading-and-scheduling.md) | 线程模型与归属调度：Folia 无主线程，SchedulerPort 按归属调度 | 已接受 |
 | [0014](0014-realserver-acceptance-harness.md) | realserver 验收：服务端驱动 / 客户端验证 / 单一权威报告（镜像 AllinCore-New ADR-0020） | 已接受 |
 | [0015](0015-domain-organization.md) | 功能域组织与拆分约定：域模板 + 注册 + 包→模块成长，不预建空壳 | 已接受 |
+| [0016](0016-mappings-policy.md) | 反混淆映射策略：锚点有官方映射用 Mojmap，无官方走各 loader 自带 | 已接受 |
 
 > 模板：状态 / 背景 / 决策 / 理由 / 后果 / 备选方案，见 [`_template.md`](_template.md)。
 

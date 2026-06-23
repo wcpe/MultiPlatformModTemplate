@@ -224,7 +224,8 @@ flowchart TB
 ## 6. 部署
 
 - **构建产物**：每个目标平台产出各自的可加载件——Bukkit 家族为插件 jar（含 `plugin.yml`），Fabric 为 Loom 重映射 mod jar（`fabric.mod.json`），Forge/NeoForge 为对应 mod jar（`mods.toml` / `neoforge.mods.toml`）。各产物内打包 L0–L2 核心 + 对应 L3/L4 胶水。
-- **构建工具**：Gradle **复合构建**（Kotlin DSL）；L0–L2 与 Bukkit 家族（`platform-bukkit`）为根构建常规模块，Fabric/Forge/NeoForge/Sponge 各为经 `includeBuild` 引入的独立构建以隔离其专属插件（Loom/ForgeGradle/NeoGradle/SpongeGradle），核心经依赖替换共享；第三方依赖统一 relocate、core 打进各产物的方式见 [ADR-0012](adr/0012-packaging-and-dependency-isolation.md)（M0 先做打包 spike，必要时回退 mavenLocal+shadow）。详见 [ADR-0007](adr/0007-composite-build-loader-isolation.md)（取代 [ADR-0005](adr/0005-build-toolchain.md)）。
+- **构建工具**：Gradle **复合构建**（Kotlin DSL）；L0–L2 与 Bukkit 家族（`platform-bukkit`）为根构建常规模块，Fabric/Forge/NeoForge/Sponge 各为经 `includeBuild` 引入的独立构建以隔离其专属插件（Loom/ForgeGradle/NeoGradle/SpongeGradle），核心经依赖替换共享；第三方依赖统一 relocate、core 打进各产物的方式见 [ADR-0012](adr/0012-packaging-and-dependency-isolation.md)。模组加载器的反混淆映射策略（锚点有官方映射用 Mojmap、无官方走各自）见 [ADR-0016](adr/0016-mappings-policy.md)。详见 [ADR-0007](adr/0007-composite-build-loader-isolation.md)（取代 [ADR-0005](adr/0005-build-toolchain.md)）。
+  - **当前落地（M0 构建骨架 + spike）**：已建立 Gradle 8.10.2 wrapper + 根复合构建；现存模块 `core-domain`（根，JDK 8 工具链）与 `platform-fabric`（独立 includeBuild，Loom 1.7.4 / MC 1.20.1 / Mojmap / Java 17）。**打包 spike 已验证**：core 纯 Java 经 shadow shade 进 Fabric remapped jar 且不被 remap、snakeyaml relocate 到 `top.wcpe.mc.mpmt.libs.*`；**core 消费走 includeBuild 依赖替换，未触发 ADR-0012 的 mavenLocal 回退**。**跨栈 spike 已验证**：Fabric `FriendlyByteBuf` 字节与普通 `byte[]` 路径逐字节一致（自动化测试）。其余平台（Paper/Forge 及后续 Folia/Sponge/NeoForge）与 protocol/domain 等模块后续各轮按此骨架与打包链路落地。详见 [`specs/build-skeleton-and-spikes.md`](specs/build-skeleton-and-spikes.md)。
 - **运行拓扑**：服务端进程（Paper/Folia/Sponge/Fabric-server/Forge-server）+ 客户端进程（Fabric/Forge/NeoForge 客户端），二者经协议通信；亦支持单机（客户端内置服务端）。
 - 部署 / 运行细节见 [`OPERATIONS.md`](OPERATIONS.md)。
 
@@ -245,6 +246,7 @@ flowchart TB
 - [ADR-0013] 线程模型与归属调度：Folia 无主线程，SchedulerPort 按归属调度。
 - [ADR-0014] realserver 验收：服务端驱动 / 客户端验证 / 单一权威报告（镜像 AllinCore-New ADR-0020）。
 - [ADR-0015] 功能域组织与拆分约定：域模板 + 注册 + 包→模块成长，不预建空壳。
+- [ADR-0016] 反混淆映射策略：锚点有官方映射用 Mojmap、无官方走各 loader 自带。
 
 **当前不做（明确边界）**：
 - 不含产品级玩法，仅 `smoke` 冒烟特性验证架构（交付形态 = 脚手架 / 模板，克隆复用而非发布为依赖库）。

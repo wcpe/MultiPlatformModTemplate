@@ -7,6 +7,12 @@
 ## 未发布版本
 
 ### 新增
+- 落地 **M0 Gradle 复合构建骨架 + 打包 spike + 跨栈 spike**（`docs/specs/build-skeleton-and-spikes.md`）：
+  - Gradle 8.10.2 wrapper + 根复合构建（Kotlin DSL）；`core-domain`（根常规模块，JDK 8 工具链，零第三方运行期依赖）+ `platform-fabric`（独立 includeBuild·Loom 1.7.4·MC 1.20.1·Mojang 官方映射·Java 17）。
+  - **打包 spike 通过**：core 纯 Java 经 shadow shade 进 Fabric remapped jar 且不被 remap、snakeyaml relocate 到 `top.wcpe.mc.mpmt.libs.*`、`fabric.mod.json` 注入版本号；自动化校验任务 `verifyPackaging` 守护。**结论：core 消费走 includeBuild 依赖替换成立，未触发 ADR-0012 的 mavenLocal 回退。**
+  - **跨栈 spike 通过**：自动化字节等价测试（12 例）证明 Fabric `FriendlyByteBuf` 与普通 `byte[]` 路径逐字节一致，为协议单一真源铺路。
+  - **Java 8 强制**：core 用 JDK 8 工具链编译，误用 Java 9+ API 编译失败（ADR-0004）。
+  - 新增 **ADR-0016**（反混淆映射策略：锚点有官方映射用 Mojmap、无官方走各 loader 自带）。
 - 建立 SDD 规格与治理脚手架：PRD、ARCHITECTURE（含 Mermaid 架构图）、基础 ADR（分层 / 平台抽象 SPI / 多版本适配 / Java8 核心 / 构建复合构建与加载器隔离 / 跨端协议）、API 契约骨架、运维与安全说明。
 - 建立防漂移规则集 `.claude/rules/`（架构不变量、范围纪律、验证门、提交规范等）。
 - 规划基础跨端网络（跨平台传输 Bukkit/Folia/Sponge/Fabric/Forge/NeoForge + 单人回环 + 务实可靠性层：分片/重组+CRC/重连重同步）+ 进服握手 + 机器码上报 + 机器码封禁 + 融合服（CatServer）适配 + 三层测试（FR-19~FR-25），新增 ADR-0008（融合服 / 活跃平台语义细化），产出 `docs/specs/network-handshake-machine-code-ban.md`。
