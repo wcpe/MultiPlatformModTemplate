@@ -21,6 +21,9 @@ include("core-runtime")
 include("protocol")
 include("platform-spi")
 
+// L3 平台胶水：Bukkit 家族为根构建常规模块（普通 Java + shadow，无专属冲突插件，ADR-0007）
+include("platform-bukkit")
+
 // 带专属 Gradle 插件的平台（Fabric/Loom）为独立 includeBuild，隔离其工具链（ADR-0007 决策点 2）。
 // platform-fabric 经其自身 includeBuild("..") 反向消费 core 共享坐标（依赖替换，见 ADR-0012）。
 includeBuild("platform-fabric")

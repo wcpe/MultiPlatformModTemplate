@@ -7,6 +7,7 @@
 ## 未发布版本
 
 ### 新增
+- 落地 **L3 platform-bukkit 平台胶水**（FR-07 起步，Bukkit 家族单一构建）：普通 Java + shadow，编译针对 **spigot-api 1.20.1** 基线（compileOnly），`BukkitPlatformBootstrap`（SPI + `META-INF/services` 注册）+ `BukkitFeatureGate`（按类存在探测 Folia / 融合服能力）+ `MpmtBukkitPlugin`（JavaPlugin 入口，进服后经本插件类加载器装配运行时）。打包：shade 共享核心 + relocate snakeyaml 进插件 jar（`verifyPackaging` 守护，**closes ADR-0012 Bukkit relocate 验证**）。集成测试用 **MockBukkit**（无真实服）验证装配链路：插件启用 → 平台装配为 bukkit → FeatureGate 分流（FR-23）。真实 Paper 服装配为实机维度（待用户确认）。
 - 落地 **L2 platform-spi 平台抽象层**（FR-05 / FR-06 起步）：`PlatformBootstrap` SPI + `FeatureGate`（`supports(Capability)` 能力探测）+ `PlatformProvider`（Holder，一次性装配后只读，重复 boot 失败快）+ `PlatformAssembler`（`ServiceLoader` 发现唯一活跃平台，零 / 多入口启动期失败快）。新增 **ADR-0017**（平台发现 / 装配编排归属 L2、L1 不依赖 L2，细化 ADR-0002）。集成测试 6 例（含经 `META-INF/services` 注册的假平台被发现并把端口注入 L1 运行时）。
 - 落地 **L1 core-runtime 框架编排**（FR-02 起步）：`MpmtRuntime` 生命周期（NEW→ENABLED→DISABLED，转换守护、非法转换失败快）+ `Feature` / `FeatureRegistry`（按序登记、按名去重、启用顺序 / 停用逆序）+ `RuntimePorts`（类型安全端口注册表，装配期写入、之后只读）+ `RuntimeContext`（向特性暴露 EventBus 与端口）。平台发现在 L2、注入本运行时，L1 不依赖 L2（ADR-0001）。纯 JVM 单测 8 例覆盖生命周期时序 / 守护 / 上下文装配 / 启用异常传播 / 端口注册边界。
 - 落地 **L1 protocol 跨端协议骨架**（FR-04 起步）：`ProtocolVersion`（`CURRENT` / `MIN_SUPPORTED` + `isCompatible` 版本协商）；编解码原语 `ProtocolBufWriter` / `ProtocolBufReader` + `byte[]` 默认实现（字节布局与 MC 线缆对齐，非法 / 截断输入抛 `ProtocolException` 不崩溃）；`Packet` + `PacketCodec`（帧头 + 按 id 注册表分发）；握手包 `ClientHello` / `ServerHello` 与往返包 `Ping` / `Pong`。纯 JVM 单测 46 例覆盖往返一致 / 版本协商边界 / VarInt 与 long 边界 / 非法与截断输入（FR-04 / ADR-0006 / testing-and-quality §2）。

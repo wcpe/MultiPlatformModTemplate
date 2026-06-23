@@ -49,14 +49,15 @@ L0/L1 不含任何平台 / 版本代码；跨平台、跨版本的差异全部�
 
 ## 快速开始
 
-M0 构建骨架已落地（当前含 `core-domain` 与 `platform-fabric`，其余平台随后续迭代补全）。需本机有 JDK（构建自动选用 JDK 8 编译核心、JDK 17 编译 Fabric 胶水，缺失时按需下载）。
+平台无关核心（L0–L2）与首个平台胶水已落地，其余平台随后续迭代补全（进度见 [`docs/PRD.md`](docs/PRD.md) FR 状态）。需本机有 JDK（构建自动选用 JDK 8 编译核心、JDK 17 编译平台胶水，缺失时按需下载）。
 
 ```bash
 ./gradlew buildAll                 # 全量构建（根模块 + 各 includeBuild 平台）
-./gradlew :platform-fabric:build   # 仅构建 Fabric 产物 → platform-fabric/build/libs/mpmt-fabric-<版本>.jar
+./gradlew :platform-bukkit:build   # Bukkit 家族插件 → platform-bukkit/build/libs/platform-bukkit-<版本>.jar
+./gradlew :platform-fabric:build   # Fabric 产物 → platform-fabric/build/libs/mpmt-fabric-<版本>.jar
 ```
 
-平台产物（mod/插件 jar）落地后放入客户端 `mods/` 或服务端 `plugins/`；玩法开发与完整平台矩阵随后续迭代补全（见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)）。
+Bukkit 家族插件 jar 放入服务端 `plugins/`、Fabric mod jar 放入客户端 `mods/`；玩法开发与完整平台矩阵随后续迭代补全（见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)）。
 
 ## 约定
 

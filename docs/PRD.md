@@ -45,7 +45,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | FR-04 | protocol 跨端协议骨架：包定义单一真源 + 版本协商（CURRENT/MIN_SUPPORTED） | P1 | 开发中 |
 | FR-05 | platform-spi：SPI 接口集 + PlatformProvider(Holder) + ServiceLoader 发现装配 | P1 | 开发中 |
 | FR-06 | FeatureGate 能力探测机制：承载平台/版本"特判"，杜绝散落 if-else | P1 | 开发中 |
-| FR-07 | platform-bukkit 服务端胶水：Bukkit 家族单一构建覆盖 Bukkit/Spigot/Paper（Folia 能力见 FR-13），锚点 1.20.1 | P1 | 计划 |
+| FR-07 | platform-bukkit 服务端胶水：Bukkit 家族单一构建覆盖 Bukkit/Spigot/Paper（Folia 能力见 FR-13），锚点 1.20.1 | P1 | 开发中 |
 | FR-08 | platform-fabric 胶水（Loom·独立 includeBuild）：客户端 + 服务端双端入口（锚点 1.20.1） | P1 | 计划 |
 | FR-09 | platform-forge 胶水（ForgeGradle·独立 includeBuild）：客户端 / 服务端分离代理（锚点 1.20.1） | P1 | 计划 |
 | FR-10 | L4 版本适配机制：version-api + vX_Y 运行期按 MC 版本装配（先落地 1.20.1） | P1 | 计划 |
