@@ -40,7 +40,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | 编号 | 需求 | 优先级 | 状态 |
 |---|---|---|---|
 | FR-01 | L0 功能域骨架：领域模型（Lombok 值对象）+ 平台端口接口集（Player/World/Scheduler/Message/Persistence/Transport/DataDirectory）+ 自有 EventBus（订阅/发布接口 EventBusPort，L0 内核） | P1 | 开发中 |
-| FR-02 | L1 框架编排：生命周期、特性（Feature）注册、端口装配 | P1 | 计划 |
+| FR-02 | L1 框架编排：生命周期、特性（Feature）注册、端口装配 | P1 | 开发中 |
 | FR-03 | L1 端逻辑骨架：core-server / core-client 公共逻辑分模块 | P1 | 计划 |
 | FR-04 | protocol 跨端协议骨架：包定义单一真源 + 版本协商（CURRENT/MIN_SUPPORTED） | P1 | 开发中 |
 | FR-05 | platform-spi：SPI 接口集 + PlatformProvider(Holder) + ServiceLoader 发现装配 | P1 | 计划 |

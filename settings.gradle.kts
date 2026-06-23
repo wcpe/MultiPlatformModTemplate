@@ -17,6 +17,7 @@ rootProject.name = "mpmt"
 
 // 共享核心（L0–L2），常规 java-library 模块（ADR-0007 决策点 1）
 include("core-domain")
+include("core-runtime")
 include("protocol")
 
 // 带专属 Gradle 插件的平台（Fabric/Loom）为独立 includeBuild，隔离其工具链（ADR-0007 决策点 2）。
