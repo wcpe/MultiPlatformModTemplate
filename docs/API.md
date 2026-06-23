@@ -53,4 +53,9 @@ MPMT 作为脚手架 / 模板，其接口分三个面（玩法开发者在克隆
 - **单一真源**：包定义 / 字节布局 / 方向（S2C/C2S）/ 协议版本号只在 `protocol` 一处定义，客户端与服务端共用。
 - **版本协商**：握手时按 `MIN_SUPPORTED` 判定兼容；不兼容明确拒绝。
 - **传输无关**：序列化不依赖平台类型，底层经 `TransportPort` 收发。
-- 协议演进规则见 [ADR-0006](adr/0006-cross-end-protocol.md)；具体包目录随实现补全。
+- 协议演进规则见 [ADR-0006](adr/0006-cross-end-protocol.md)。
+- **已落地（M2 骨架）**：
+  - `ProtocolVersion`：`CURRENT` / `MIN_SUPPORTED` + `isCompatible(int)` 版本协商。
+  - 编解码：`ProtocolBufWriter` / `ProtocolBufReader`（字节布局与 MC 线缆对齐：VarInt / UTF / long 大端 / byte / bytes）+ 默认实现 `ByteArrayProtocolWriter` / `ByteArrayProtocolReader`；非法 / 截断输入抛 `ProtocolException`、不崩溃。
+  - `Packet`（`id()` + `encode`，约定对称 `static decode`）+ `PacketCodec`（帧头 `[protocolVersion:u8][packetId:u8]` + 按 id 注册表分发）。
+  - 包：`ClientHelloPacket` / `ServerHelloPacket`（握手）、`PingPacket` / `PongPacket`（往返）；其余包随网络特性增量添加。

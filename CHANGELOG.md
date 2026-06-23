@@ -7,6 +7,7 @@
 ## 未发布版本
 
 ### 新增
+- 落地 **L1 protocol 跨端协议骨架**（FR-04 起步）：`ProtocolVersion`（`CURRENT` / `MIN_SUPPORTED` + `isCompatible` 版本协商）；编解码原语 `ProtocolBufWriter` / `ProtocolBufReader` + `byte[]` 默认实现（字节布局与 MC 线缆对齐，非法 / 截断输入抛 `ProtocolException` 不崩溃）；`Packet` + `PacketCodec`（帧头 + 按 id 注册表分发）；握手包 `ClientHello` / `ServerHello` 与往返包 `Ping` / `Pong`。纯 JVM 单测 46 例覆盖往返一致 / 版本协商边界 / VarInt 与 long 边界 / 非法与截断输入（FR-04 / ADR-0006 / testing-and-quality §2）。
 - 落地 **L0 自有 EventBus 内核**（FR-01 起步）：`EventBusPort`（订阅 / 发布）+ `DomainEvent` 标记接口 + `SimpleEventBus` 默认实现——平台无关、线程安全（`ConcurrentHashMap` + `CopyOnWriteArrayList`）、按精确类型分发、订阅者异常隔离、零第三方依赖（JDK 自带日志）。纯 JVM 单测覆盖正常 / 类型隔离 / 无订阅者 / 异常隔离 / null 校验 / 并发（FR-01 / ADR-0011 / testing-and-quality §2）。
 - 落地 **M0 Gradle 复合构建骨架 + 打包 spike + 跨栈 spike**（`docs/specs/build-skeleton-and-spikes.md`）：
   - Gradle 8.10.2 wrapper + 根复合构建（Kotlin DSL）；`core-domain`（根常规模块，JDK 8 工具链，零第三方运行期依赖）+ `platform-fabric`（独立 includeBuild·Loom 1.7.4·MC 1.20.1·Mojang 官方映射·Java 17）。
