@@ -19,6 +19,7 @@ rootProject.name = "mpmt"
 include("core-domain")
 include("core-runtime")
 include("protocol")
+include("platform-spi")
 
 // 带专属 Gradle 插件的平台（Fabric/Loom）为独立 includeBuild，隔离其工具链（ADR-0007 决策点 2）。
 // platform-fabric 经其自身 includeBuild("..") 反向消费 core 共享坐标（依赖替换，见 ADR-0012）。

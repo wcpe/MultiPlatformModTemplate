@@ -46,7 +46,15 @@ MPMT 作为脚手架 / 模板，其接口分三个面（玩法开发者在克隆
 - 各端口的工厂：把平台原生 API 适配为对应端口实现。
 - `FeatureGate`：能力探测（如"是否 Folia 区域调度可用"、"该版本是否具备某 API"），承载平台 / 版本特判。
 
-发现与装配机制见 [ADR-0002](adr/0002-platform-abstraction-spi.md)；运行期访问点为 `PlatformProvider`（Holder）。
+发现与装配机制见 [ADR-0002](adr/0002-platform-abstraction-spi.md) 与 [ADR-0017](adr/0017-assembly-orchestration-in-l2.md)；运行期访问点为 `PlatformProvider`（Holder）。
+
+**已落地（M4 骨架）**：
+
+- `PlatformBootstrap`：`String platformId()` + `FeatureGate featureGate()` + `void assemble(RuntimePorts ports)`（平台把端口注入运行时）。
+- `FeatureGate`：`boolean supports(Capability)`；`Capability` 枚举（当前：`REGION_SCHEDULER` / `HYBRID_FORGE_BUKKIT` / `INTEGRATED_SERVER`，随特性增量添加）。
+- `PlatformProvider`（Holder）：`static boot(ClassLoader, MpmtRuntime)`（一次性装配、之后只读）+ `get()` / `isBooted()` / `platformId()` / `featureGate()`；重复 boot 失败快。
+- `PlatformAssembler`：`ServiceLoader` 发现 + 唯一活跃平台选择（零 / 多入口抛 `PlatformAssemblyException`，启动期失败快）；须显式传入承载平台 services 的 ClassLoader。
+- `ServerAdapter` / `ClientAdapter` 与各端口工厂随平台胶水落地时补全。
 
 ## 5. 跨端协议（L1 `protocol`）
 
