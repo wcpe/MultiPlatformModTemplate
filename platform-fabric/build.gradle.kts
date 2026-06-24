@@ -1,5 +1,6 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import net.fabricmc.loom.task.RemapJarTask
+import org.gradle.language.jvm.tasks.ProcessResources
 import java.util.zip.ZipFile
 
 // platform-fabric（L3）：M0 阶段只验证构建骨架 + 打包链路，不含平台胶水逻辑。
@@ -27,6 +28,8 @@ val spiCoordinate = "top.wcpe.mc.mpmt:platform-spi:$version"
 val serverCoordinate = "top.wcpe.mc.mpmt:core-server:$version"
 // 依赖 core-client（客户端网络装配特性 ClientNetworkFeature + 弱标识提供者）
 val clientCoordinate = "top.wcpe.mc.mpmt:core-client:$version"
+// realserver 验收 harness 平台无关核心（仅 gametest 接入层用，不入产品 jar，ADR-0014）
+val acceptanceCoordinate = "top.wcpe.mc.mpmt:acceptance:$version"
 
 base {
     // 最终产物名带平台后缀，便于区分
@@ -45,6 +48,14 @@ repositories {
 
 // 专用配置：需 shade 进产物并 relocate 的内容（core + 第三方运行期依赖），不参与 Loom remap
 val shadowBundle: Configuration by configurations.creating
+
+// realserver 验收 Fabric 接入层独立源集（src/gametest）：不入产品 jar、仅供 runRealServerAcceptance（后续）。
+// 编译期继承 main 的类路径（含 Loom 提供的 remapped MC + fabric-api）+ main 产物，并叠加 acceptance 核心。
+val gametest: SourceSet by sourceSets.creating {
+    compileClasspath += sourceSets["main"].compileClasspath + sourceSets["main"].output
+    runtimeClasspath += sourceSets["main"].runtimeClasspath + sourceSets["main"].output
+}
+configurations["gametestImplementation"].extendsFrom(configurations["implementation"])
 
 dependencies {
     minecraft("com.mojang:minecraft:$mcVersion")
@@ -69,11 +80,40 @@ dependencies {
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
 
+    // gametest 接入层依赖 realserver 验收平台无关核心（控制协议 / 协调 / 报告 / GameTest 框架）
+    "gametestImplementation"(acceptanceCoordinate)
+
     // 跨栈字节对齐 spike 的纯 JVM 测试
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.junit.jupiter:junit-jupiter-params")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+// realserver 验收的 Loom 运行配置（dev 环境，加载 gametest 源集的 mpmt-acceptance 测试 mod）。
+// 服务端可 headless 跑（runAcceptanceServer）；客户端需显示，由用户本机经 quickPlay 自连（runAcceptanceClient）。
+val acceptanceReportFile = layout.buildDirectory.file("acceptance/server-report.txt")
+loom {
+    runs {
+        create("acceptanceServer") {
+            server()
+            configName = "Acceptance Server"
+            source(gametest)
+            property("mpmt.acceptance", "true")
+            property("mpmt.acceptance.report", acceptanceReportFile.get().asFile.absolutePath)
+            // 看门狗绝对截止（无客户端连入时由场景 awaitClientReady 先失败，这里是上限兜底）
+            property("mpmt.acceptance.deadlineMs", "300000")
+        }
+        create("acceptanceClient") {
+            client()
+            configName = "Acceptance Client"
+            source(gametest)
+            // 独立运行目录，避免与服务端 run/ 并发冲突
+            runDir("run-client")
+            // 经 --quickPlayMultiplayer <服务端地址> 自连
+            programArgs("--quickPlayMultiplayer", "127.0.0.1")
+        }
+    }
 }
 
 // fabric.mod.json 中 ${version} 占位由构建注入
@@ -141,4 +181,39 @@ tasks.named("build") {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+// 把 gametest 接入层纳入构建期编译校验（只编译、不运行——运行需真实服）
+tasks.named("build") {
+    dependsOn("gametestClasses")
+}
+
+// realserver 验收门禁：读服务端写出的单一权威报告，末行非 RESULT PASS 即构建失败（ADR-0014）。
+// 实跑流程（须真实进程，客户端需显示）：① 一端跑 runAcceptanceServer（服务端 headless，等客户端连入）；
+// ② 另一端跑 runAcceptanceClient（客户端经 --quickPlayMultiplayer 自连，须显示）；③ 服务端聚合写报告后本任务判定。
+tasks.register("runRealServerAcceptance") {
+    group = "verification"
+    description = "读 realserver 验收权威报告，末行非 RESULT PASS 即失败"
+    doLast {
+        val report = acceptanceReportFile.get().asFile
+        if (!report.exists()) {
+            throw GradleException(
+                "未找到验收报告（先跑 runAcceptanceServer + runAcceptanceClient 使服务端写出报告）：${report.absolutePath}")
+        }
+        val text = report.readText()
+        logger.lifecycle("[realserver] 服务端权威验收报告：\n$text")
+        val resultLine = text.lineSequence().map { it.trim() }.lastOrNull { it.startsWith("RESULT") }
+        if (resultLine != "RESULT PASS") {
+            throw GradleException("[realserver] 验收未通过（末行非 RESULT PASS）：$resultLine")
+        }
+        logger.lifecycle("[realserver] 验收通过 ✓ RESULT PASS")
+    }
+}
+
+// gametest 测试 mod 的 fabric.mod.json 同样注入版本号占位
+tasks.named<ProcessResources>("processGametestResources") {
+    inputs.property("version", project.version)
+    filesMatching("fabric.mod.json") {
+        expand("version" to project.version)
+    }
 }
