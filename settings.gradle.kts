@@ -27,6 +27,10 @@ include("platform-spi")
 // 架构验证载体（不发布）：跨端冒烟特性的集成测试（FR-11）
 include("smoke")
 
+// realserver 验收 harness 平台无关核心（不发布、仅测试设施，ADR-0014）：
+// 测试控制协议 + 客户端排程协调 + 单一权威报告；不入任何产品 jar / 产品协议。
+include("acceptance")
+
 // L3 平台胶水：Bukkit 家族为根构建常规模块（普通 Java + shadow，无专属冲突插件，ADR-0007）
 include("platform-bukkit")
 
