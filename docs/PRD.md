@@ -66,7 +66,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | FR-25 | 融合服（CatServer 等 Forge+Bukkit）适配设计：以 Bukkit 入口加载 + FeatureGate HYBRID_FORGE_BUKKIT + 不变量细化（ADR-0008）；实跑需 1.12.2，属 P2 | P1 | 计划 |
 | FR-26 | 平台能力示例：玩家事件（EventBusPort）+ 调度（SchedulerPort 含 Folia 区域经 FeatureGate）+ 持久化（PersistencePort），跨平台一致 | P1 | 计划 |
 | FR-27 | 跨端消息/HUD 示例：server→client 下发 title/actionbar/toast/聊天消息 | P1 | 计划 |
-| FR-28 | 会话 + 心跳示例：会话注册表/在线列表 + keepalive ping/pong + RTT（兼重连检测，联动重连重同步） | P1 | 计划 |
+| FR-28 | 会话 + 心跳示例：会话注册表/在线列表 + keepalive ping/pong + RTT（兼重连检测，联动重连重同步） | P1 | 开发中 |
 | FR-29 | 平台无关配置加载模块 `core-config`（共享 L1）：YAML / JSON 等配置文件加载为类型化模型 | P1 | 计划 |
 | FR-30 | 客户端/服务端共享目录与资源路径模块 `core-paths` + `DataDirectoryPort`：预设标准位置，调用方引用、不自算路径 | P1 | 计划 |
 | FR-31 | 自有 EventBus（L0 内核）：平台无关发布/订阅 + 域间事件转发，支撑功能域解耦与拆分；平台事件经适配器桥接入总线 | P1 | 计划 |

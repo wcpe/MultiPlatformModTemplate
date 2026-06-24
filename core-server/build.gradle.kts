@@ -19,6 +19,10 @@ dependencies {
     // 握手服务经 protocol 收发管线 + 版本协商；protocol 传递 core-domain（端口 / 状态机）
     api(project(":protocol"))
 
+    // 会话值对象用 Lombok（ADR-0004）
+    compileOnly("org.projectlombok:lombok:1.18.34")
+    annotationProcessor("org.projectlombok:lombok:1.18.34")
+
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

@@ -7,6 +7,7 @@
 ## 未发布版本
 
 ### 新增
+- 新增 **会话与心跳逻辑**（FR-28 起步，纯 JVM 平台无关）：`SessionRegistry`（服务端在线会话登记 / 查询 / 下线 / 在线列表，线程安全；core-server 接入 Lombok 用于 Session 值对象）+ `RttTracker`（客户端心跳 RTT 计算 + 超时清扫判疑似丢失，时钟可注入）。纯 JVM 单测 7 例（会话 3 + RTT 4）。周期发包与重连重同步联动由上层 / 平台驱动（后续）。
 - 新增 **协议包**（FR-21/22）：`ClientIdReportPacket`(C2S 0x81)、`ServerMessagePacket`(S2C 0x02)、`DisconnectPacket`(S2C 0x03)，注册进 PacketCodec、纳入往返一致测试。
 - 新增 **L0 弱客户端标识与封禁域**（FR-21 / FR-22 起步）：`MachineCode`（Lombok 值对象，弱标识）+ `BanEntry` + `BanRegistry`（线程安全 ban/unban/isBanned/list，纯逻辑）+ `MachineCodeProvider` 端口（客户端侧弱标识提供者）。core-domain 接入 Lombok（首批领域值对象，ADR-0004/FR-01）。纯 JVM 单测 4 例穷举封禁表。
 - 落地 **网络可靠性层·分片与重组**（FR-24 起步，L1 protocol·平台无关·线程安全）：`FragmentPacket`（id 0x10）+ `Fragmenter`（按上限切片、各片携带完整载荷 CRC32）+ `Reassembler`（按 seqId 归组、乱序可重组、CRC 校验、超时清理，时钟可注入）；codec 增加定长 `int`（4 字节大端，供 CRC32）。纯 JVM 单测 12 例（往返各尺寸 / 乱序 / 单片 / CRC 检出 / 超时清理）。（重连 / 重同步随会话特性后续。）
