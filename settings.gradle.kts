@@ -20,6 +20,7 @@ include("core-domain")
 include("core-runtime")
 include("core-server")
 include("core-client")
+include("core-paths")
 include("protocol")
 include("platform-spi")
 

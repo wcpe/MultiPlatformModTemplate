@@ -7,6 +7,7 @@
 ## 未发布版本
 
 ### 新增
+- 新增 **共享目录与资源路径模块**（FR-30，纯 JVM 平台无关，ADR-0010）：新增 L0 端口 `DataDirectoryPort`（`@FunctionalInterface`，平台提供基目录 `java.nio.file.Path baseDirectory()`，`Path` 为 JDK 标准类型守 L0 不依赖平台）+ L1 模块 `core-paths` 的 `ResourcePaths`（在基目录下预设 `config/`/`data/`/`resources/` 标准目录，`configFile`/`dataFile`/`resourceFile` 解析相对名，调用方引用预设不自算路径；相对名规范化后越界 / 绝对路径即拒、基目录为空失败快）。客户端 / 服务端共用同一份预设。纯 JVM 单测 8 例（预设位置 / 相对名解析 / 嵌套 / 越界拒绝 / 绝对路径拒绝 / 空白名 / 失败快 / 端口为空）。平台基目录实现待平台胶水按需提供。
 - 新增 **会话与心跳逻辑**（FR-28 起步，纯 JVM 平台无关）：`SessionRegistry`（服务端在线会话登记 / 查询 / 下线 / 在线列表，线程安全；core-server 接入 Lombok 用于 Session 值对象）+ `RttTracker`（客户端心跳 RTT 计算 + 超时清扫判疑似丢失，时钟可注入）。纯 JVM 单测 7 例（会话 3 + RTT 4）。周期发包与重连重同步联动由上层 / 平台驱动（后续）。
 - 新增 **协议包**（FR-21/22）：`ClientIdReportPacket`(C2S 0x81)、`ServerMessagePacket`(S2C 0x02)、`DisconnectPacket`(S2C 0x03)，注册进 PacketCodec、纳入往返一致测试。
 - 新增 **L0 弱客户端标识与封禁域**（FR-21 / FR-22 起步）：`MachineCode`（Lombok 值对象，弱标识）+ `BanEntry` + `BanRegistry`（线程安全 ban/unban/isBanned/list，纯逻辑）+ `MachineCodeProvider` 端口（客户端侧弱标识提供者）。core-domain 接入 Lombok（首批领域值对象，ADR-0004/FR-01）。纯 JVM 单测 4 例穷举封禁表。

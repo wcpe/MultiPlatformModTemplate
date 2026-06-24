@@ -34,6 +34,7 @@ MPMT 作为脚手架 / 模板，其接口分三个面（玩法开发者在克隆
 - `MessagePort`：向玩家 / 频道发送消息。
 - `PersistencePort`：玩法状态的读写持久化。
 - `TransportPort`：跨端字节收发（供 `protocol` 使用，不直接面向玩法）。
+- `DataDirectoryPort`：平台提供本插件 / mod 的**基目录**（绝对路径），共享层在其下解析预设位置。**已落地**：`@FunctionalInterface`，`java.nio.file.Path baseDirectory()`（`Path` 为 JDK 标准类型、非平台原生类型，守 ADR-0001）；平台胶水按需实现，由 `core-paths` 消费（ADR-0010）。
 
 > 端口只暴露领域视图，**不暴露任何平台原生对象**。MVP 只实现冒烟特性所需的端口子集，其余按需增量添加（见 scope-discipline）。
 
@@ -67,3 +68,13 @@ MPMT 作为脚手架 / 模板，其接口分三个面（玩法开发者在克隆
   - 编解码：`ProtocolBufWriter` / `ProtocolBufReader`（字节布局与 MC 线缆对齐：VarInt / UTF / long 大端 / byte / bytes）+ 默认实现 `ByteArrayProtocolWriter` / `ByteArrayProtocolReader`；非法 / 截断输入抛 `ProtocolException`、不崩溃。
   - `Packet`（`id()` + `encode`，约定对称 `static decode`）+ `PacketCodec`（帧头 `[protocolVersion:u8][packetId:u8]` + 按 id 注册表分发）。
   - 包：`ClientHelloPacket` / `ServerHelloPacket`（握手）、`PingPacket` / `PongPacket`（往返）；其余包随网络特性增量添加。
+
+## 6. 共享基础设施（L1，面向玩法开发者）
+
+平台无关的共享工具模块，客户端 / 服务端共用（ADR-0010）：
+
+- **`core-paths` · `ResourcePaths`（已落地，FR-30）**：在 `DataDirectoryPort` 提供的基目录下预设标准子目录并解析文件位置，调用方<b>引用预设、不自算路径</b>。
+  - 构造：`new ResourcePaths(DataDirectoryPort)`（端口为空即拒）。
+  - 预设目录：`baseDirectory()` / `configDirectory()`（`config/`）/ `dataDirectory()`（`data/`）/ `resourcesDirectory()`（`resources/`）。
+  - 文件解析：`configFile(name)` / `dataFile(name)` / `resourceFile(name)`；相对名规范化后越界（`../` 逃逸或绝对路径）即抛 `IllegalArgumentException`，基目录为空抛 `IllegalStateException`。
+- **`core-config`（计划，FR-29）**：YAML / JSON 配置加载为类型化模型，随实现补全签名。
