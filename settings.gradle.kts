@@ -18,8 +18,13 @@ rootProject.name = "mpmt"
 // 共享核心（L0–L2），常规 java-library 模块（ADR-0007 决策点 1）
 include("core-domain")
 include("core-runtime")
+include("core-server")
+include("core-client")
 include("protocol")
 include("platform-spi")
+
+// 架构验证载体（不发布）：跨端冒烟特性的集成测试（FR-11）
+include("smoke")
 
 // L3 平台胶水：Bukkit 家族为根构建常规模块（普通 Java + shadow，无专属冲突插件，ADR-0007）
 include("platform-bukkit")

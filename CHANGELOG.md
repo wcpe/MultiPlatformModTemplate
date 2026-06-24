@@ -7,6 +7,10 @@
 ## 未发布版本
 
 ### 新增
+- 落地 **握手服务 + 跨端冒烟集成**（FR-03 / FR-11 / FR-21 起步）：
+  - L1 `core-server`：`HandshakeServerService`（收 ClientHello → 版本协商 → 回 ServerHello，每连接一台握手状态机，成功后才建立会话、分配会话 id，重复 Hello 忽略）。
+  - L1 `core-client`：`HandshakeClientService`（发 ClientHello、处理 ServerHello，volatile 暴露协商结果）。
+  - `smoke`（不发布）：`InProcessLoopbackTransport`（进程内回环传输，FR-20）+ 集成测试，**纯 JVM 跑通"进服握手 + 版本协商 + 一次往返包"全链路 + 不兼容版本被拒**（FR-11 ② 的逻辑证明；真实异构互通为实机维度）。
 - 新增 **跨端收发核心**（FR-19 / FR-21 起步）：
   - L0：`TransportPort`（裸 `byte[]` 收发，不依赖协议层以守 L0⊄L1）+ `ConnectionHandle`（不透明连接句柄）+ `HandshakeStateMachine`（纯逻辑状态机 CONNECTED→HELLO_OK/REJECTED→ESTABLISHED，非法迁移失败快、版本兼容性由 L1 传入）。
   - L1 protocol：`PacketDispatcher` 收发管线——在 TransportPort 之上用 PacketCodec 编码发送 / 解码按 id 路由，非法 / 截断 / 未知字节不崩溃，无处理器静默忽略，处理器表并发安全。
