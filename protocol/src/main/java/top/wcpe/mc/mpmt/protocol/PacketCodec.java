@@ -8,10 +8,13 @@ import top.wcpe.mc.mpmt.protocol.codec.ByteArrayProtocolWriter;
 import top.wcpe.mc.mpmt.protocol.codec.ProtocolBufReader;
 import top.wcpe.mc.mpmt.protocol.codec.ProtocolBufWriter;
 import top.wcpe.mc.mpmt.protocol.packet.ClientHelloPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ClientIdReportPacket;
+import top.wcpe.mc.mpmt.protocol.packet.DisconnectPacket;
 import top.wcpe.mc.mpmt.protocol.packet.FragmentPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
 
 /**
  * 帧编解码器：在包体外套统一帧头 {@code [protocolVersion:u8][packetId:u8]}（network spec §3.2），
@@ -32,6 +35,9 @@ public final class PacketCodec {
     public PacketCodec() {
         register(PacketIds.CLIENT_HELLO, ClientHelloPacket::decode);
         register(PacketIds.SERVER_HELLO, ServerHelloPacket::decode);
+        register(PacketIds.SERVER_MESSAGE, ServerMessagePacket::decode);
+        register(PacketIds.DISCONNECT, DisconnectPacket::decode);
+        register(PacketIds.CLIENT_ID_REPORT, ClientIdReportPacket::decode);
         register(PacketIds.PING, PingPacket::decode);
         register(PacketIds.PONG, PongPacket::decode);
         register(PacketIds.FRAGMENT, FragmentPacket::decode);

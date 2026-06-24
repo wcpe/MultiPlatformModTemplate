@@ -17,6 +17,12 @@ repositories {
 }
 
 dependencies {
+    // 领域值对象用 Lombok 减样板（ADR-0004：Lombok 仅用于 Java 模块；编译期注解，运行期无依赖）。
+    compileOnly("org.projectlombok:lombok:1.18.34")
+    annotationProcessor("org.projectlombok:lombok:1.18.34")
+    testCompileOnly("org.projectlombok:lombok:1.18.34")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.34")
+
     // L0 不引入任何第三方运行期依赖（保持纯功能域）。
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")

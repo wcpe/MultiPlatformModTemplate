@@ -39,15 +39,17 @@ public final class HandshakeStateMachine {
     }
 
     /**
-     * 握手完成、建立会话。
+     * 收到客户端标识上报：按是否封禁推进。
      *
+     * @param banned 该标识是否被封禁（由 L1 依 BanRegistry 判定后传入）
+     * @return 新状态（未封禁 → ESTABLISHED；封禁 → REJECTED）
      * @throws IllegalStateException 不在 HELLO_OK 状态
      */
-    public State onEstablished() {
+    public State onClientId(boolean banned) {
         if (state != State.HELLO_OK) {
-            throw new IllegalStateException("非法握手迁移：onEstablished 时状态为 " + state);
+            throw new IllegalStateException("非法握手迁移：onClientId 时状态为 " + state);
         }
-        state = State.ESTABLISHED;
+        state = banned ? State.REJECTED : State.ESTABLISHED;
         return state;
     }
 }

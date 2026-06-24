@@ -14,6 +14,15 @@ public final class PacketIds {
     /** S2C 服务端握手应答。 */
     public static final int SERVER_HELLO = 0x01;
 
+    /** S2C 服务端消息（欢迎 / 提示 / 封禁告知等）。 */
+    public static final int SERVER_MESSAGE = 0x02;
+
+    /** S2C 断开通知（携带原因）。 */
+    public static final int DISCONNECT = 0x03;
+
+    /** C2S 客户端标识上报（弱标识）。 */
+    public static final int CLIENT_ID_REPORT = 0x81;
+
     /** C2S 心跳 / 往返演示请求。 */
     public static final int PING = 0x83;
 

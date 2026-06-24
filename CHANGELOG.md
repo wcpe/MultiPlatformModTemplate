@@ -7,11 +7,14 @@
 ## 未发布版本
 
 ### 新增
+- 新增 **协议包**（FR-21/22）：`ClientIdReportPacket`(C2S 0x81)、`ServerMessagePacket`(S2C 0x02)、`DisconnectPacket`(S2C 0x03)，注册进 PacketCodec、纳入往返一致测试。
+- 新增 **L0 弱客户端标识与封禁域**（FR-21 / FR-22 起步）：`MachineCode`（Lombok 值对象，弱标识）+ `BanEntry` + `BanRegistry`（线程安全 ban/unban/isBanned/list，纯逻辑）+ `MachineCodeProvider` 端口（客户端侧弱标识提供者）。core-domain 接入 Lombok（首批领域值对象，ADR-0004/FR-01）。纯 JVM 单测 4 例穷举封禁表。
 - 落地 **网络可靠性层·分片与重组**（FR-24 起步，L1 protocol·平台无关·线程安全）：`FragmentPacket`（id 0x10）+ `Fragmenter`（按上限切片、各片携带完整载荷 CRC32）+ `Reassembler`（按 seqId 归组、乱序可重组、CRC 校验、超时清理，时钟可注入）；codec 增加定长 `int`（4 字节大端，供 CRC32）。纯 JVM 单测 12 例（往返各尺寸 / 乱序 / 单片 / CRC 检出 / 超时清理）。（重连 / 重同步随会话特性后续。）
 - 落地 **握手服务 + 跨端冒烟集成**（FR-03 / FR-11 / FR-21 起步）：
-  - L1 `core-server`：`HandshakeServerService`（收 ClientHello → 版本协商 → 回 ServerHello，每连接一台握手状态机，成功后才建立会话、分配会话 id，重复 Hello 忽略）。
-  - L1 `core-client`：`HandshakeClientService`（发 ClientHello、处理 ServerHello，volatile 暴露协商结果）。
-  - `smoke`（不发布）：`InProcessLoopbackTransport`（进程内回环传输，FR-20）+ 集成测试，**纯 JVM 跑通"进服握手 + 版本协商 + 一次往返包"全链路 + 不兼容版本被拒**（FR-11 ② 的逻辑证明；真实异构互通为实机维度）。
+  - L0 `HandshakeStateMachine` 扩展标识上报迁移：`onClientId(banned)`（HELLO_OK → ESTABLISHED / REJECTED）。
+  - L1 `core-server`：`HandshakeServerService`（收 ClientHello → 版本协商 → 回 ServerHello；收 ClientIdReport → 封禁校验 → 欢迎建会话 / 告知封禁并通知断开，真实踢出由平台 L3 调度执行）。
+  - L1 `core-client`：`HandshakeClientService`（发 ClientHello、被接受后上报弱标识、接收服务端消息 / 断开通知，volatile 暴露结果）+ `DefaultMachineCodeProvider`（弱系统属性 SHA-256，原始来源可注入）。
+  - `smoke`（不发布）：`InProcessLoopbackTransport`（进程内回环传输，FR-20）+ 集成测试，**纯 JVM 跑通"进服握手 + 版本协商 + 标识上报 + 封禁判定 + 一次往返包"全链路 + 不兼容版本被拒 + 被封禁被通知断开**（FR-11 ② 的逻辑证明；真实异构互通为实机维度）。
 - 新增 **跨端收发核心**（FR-19 / FR-21 起步）：
   - L0：`TransportPort`（裸 `byte[]` 收发，不依赖协议层以守 L0⊄L1）+ `ConnectionHandle`（不透明连接句柄）+ `HandshakeStateMachine`（纯逻辑状态机 CONNECTED→HELLO_OK/REJECTED→ESTABLISHED，非法迁移失败快、版本兼容性由 L1 传入）。
   - L1 protocol：`PacketDispatcher` 收发管线——在 TransportPort 之上用 PacketCodec 编码发送 / 解码按 id 路由，非法 / 截断 / 未知字节不崩溃，无处理器静默忽略，处理器表并发安全。

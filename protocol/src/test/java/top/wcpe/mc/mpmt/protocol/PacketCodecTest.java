@@ -11,10 +11,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import top.wcpe.mc.mpmt.protocol.packet.ClientHelloPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ClientIdReportPacket;
+import top.wcpe.mc.mpmt.protocol.packet.DisconnectPacket;
 import top.wcpe.mc.mpmt.protocol.packet.FragmentPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
 
 /** 协议包帧编解码往返一致与非法输入处理（FR-04 验收）。 */
 class PacketCodecTest {
@@ -30,6 +33,9 @@ class PacketCodecTest {
                 new PingPacket(Long.MIN_VALUE),
                 new PingPacket(Long.MAX_VALUE),
                 new PongPacket(-1L),
+                new ClientIdReportPacket("deadbeef-客户端标识"),
+                new ServerMessagePacket("欢迎来到 MPMT"),
+                new DisconnectPacket("已被封禁"),
                 new FragmentPacket(7, 1, 3, 0x1234ABCD, new byte[] {1, 2, 3, -1, 127}));
     }
 
