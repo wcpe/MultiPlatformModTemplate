@@ -7,6 +7,7 @@
 ## 未发布版本
 
 ### 新增
+- 落地 **网络可靠性层·分片与重组**（FR-24 起步，L1 protocol·平台无关·线程安全）：`FragmentPacket`（id 0x10）+ `Fragmenter`（按上限切片、各片携带完整载荷 CRC32）+ `Reassembler`（按 seqId 归组、乱序可重组、CRC 校验、超时清理，时钟可注入）；codec 增加定长 `int`（4 字节大端，供 CRC32）。纯 JVM 单测 12 例（往返各尺寸 / 乱序 / 单片 / CRC 检出 / 超时清理）。（重连 / 重同步随会话特性后续。）
 - 落地 **握手服务 + 跨端冒烟集成**（FR-03 / FR-11 / FR-21 起步）：
   - L1 `core-server`：`HandshakeServerService`（收 ClientHello → 版本协商 → 回 ServerHello，每连接一台握手状态机，成功后才建立会话、分配会话 id，重复 Hello 忽略）。
   - L1 `core-client`：`HandshakeClientService`（发 ClientHello、处理 ServerHello，volatile 暴露协商结果）。

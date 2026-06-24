@@ -62,7 +62,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | FR-21 | 进服握手 + 客户端标识上报：握手协商后客户端上报**弱客户端标识**（默认基于可得弱硬件/系统属性 SHA-256，可伪造/可随机化，`MachineCodeProvider` 可插拔），服务端接收并回发消息 | P1 | 开发中 |
 | FR-22 | 标识封禁：服务端**原生命令**按标识封禁/解封，被封标识再次进服**尽快踢出**（Bukkit 仅能进服后踢；标识不可信、可缺席，封禁为威慑非安全保证） | P1 | 计划 |
 | FR-23 | 测试与 MVP 验收门：纯 JVM 单测 + **mod 加载器 GameTest「模拟服套件」（单人/集成 headless，`gradle runGameTest`，in-process 回环自动跑）** + **「realserver 套件」（真实专用服，服务端驱动：等待程序化客户端进入 → 触发场景 → 客户端与服务端双重断言、客户端回报、服务端聚合单一权威报告 pass/fail，镜像 AllinCore-New ADR-0020、见 ADR-0014）**——**二者均须在 MVP 完成并通过、作为 MVP 验收门**；Bukkit 家族/Sponge（无 GameTest）用 MockBukkit/测试设施 + 真实服手测达同等覆盖。realserver 维度需用户实机确认 | P1 | 计划 |
-| FR-24 | 网络可靠性层（L1·平台无关，`TransportPort` 之上）：分片 + 有序重组(+CRC) + 重连/重同步 + 重组超时重请求；所有平台共享 | P1 | 计划 |
+| FR-24 | 网络可靠性层（L1·平台无关，`TransportPort` 之上）：分片 + 有序重组(+CRC) + 重连/重同步 + 重组超时重请求；所有平台共享 | P1 | 开发中 |
 | FR-25 | 融合服（CatServer 等 Forge+Bukkit）适配设计：以 Bukkit 入口加载 + FeatureGate HYBRID_FORGE_BUKKIT + 不变量细化（ADR-0008）；实跑需 1.12.2，属 P2 | P1 | 计划 |
 | FR-26 | 平台能力示例：玩家事件（EventBusPort）+ 调度（SchedulerPort 含 Folia 区域经 FeatureGate）+ 持久化（PersistencePort），跨平台一致 | P1 | 计划 |
 | FR-27 | 跨端消息/HUD 示例：server→client 下发 title/actionbar/toast/聊天消息 | P1 | 计划 |

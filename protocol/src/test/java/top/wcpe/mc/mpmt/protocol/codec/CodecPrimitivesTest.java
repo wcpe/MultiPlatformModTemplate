@@ -24,6 +24,17 @@ class CodecPrimitivesTest {
     }
 
     @ParameterizedTest
+    @DisplayName("定长 int 往返：边界（4 字节大端）")
+    @ValueSource(ints = {0, 1, -1, Integer.MIN_VALUE, Integer.MAX_VALUE, 0x1234ABCD})
+    void int往返(int value) {
+        ByteArrayProtocolWriter writer = new ByteArrayProtocolWriter();
+        writer.writeInt(value);
+        ProtocolBufReader reader = new ByteArrayProtocolReader(writer.toByteArray());
+        assertEquals(value, reader.readInt());
+        assertEquals(0, reader.remaining());
+    }
+
+    @ParameterizedTest
     @DisplayName("long 往返：边界")
     @ValueSource(longs = {0L, 1L, -1L, Long.MIN_VALUE, Long.MAX_VALUE})
     void long往返(long value) {

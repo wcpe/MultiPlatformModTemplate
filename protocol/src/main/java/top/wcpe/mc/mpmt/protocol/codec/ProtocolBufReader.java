@@ -13,6 +13,9 @@ public interface ProtocolBufReader {
     /** 读取一个 VarInt（Minecraft 标准编码）。 */
     int readVarInt();
 
+    /** 读取一个定长 int（4 字节大端）。 */
+    int readInt();
+
     /** 读取一个 long（8 字节大端）。 */
     long readLong();
 

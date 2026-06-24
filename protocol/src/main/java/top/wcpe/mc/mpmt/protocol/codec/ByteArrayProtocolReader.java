@@ -50,6 +50,15 @@ public final class ByteArrayProtocolReader implements ProtocolBufReader {
     }
 
     @Override
+    public int readInt() {
+        require(4);
+        return ((data[pos++] & 0xFF) << 24)
+                | ((data[pos++] & 0xFF) << 16)
+                | ((data[pos++] & 0xFF) << 8)
+                | (data[pos++] & 0xFF);
+    }
+
+    @Override
     public long readLong() {
         require(8);
         long result = 0;

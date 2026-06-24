@@ -29,6 +29,16 @@ public final class ByteArrayProtocolWriter implements ProtocolBufWriter {
     }
 
     @Override
+    public ProtocolBufWriter writeInt(int value) {
+        // 4 字节大端
+        out.write((value >>> 24) & 0xFF);
+        out.write((value >>> 16) & 0xFF);
+        out.write((value >>> 8) & 0xFF);
+        out.write(value & 0xFF);
+        return this;
+    }
+
+    @Override
     public ProtocolBufWriter writeLong(long value) {
         // 8 字节大端
         for (int shift = 56; shift >= 0; shift -= 8) {

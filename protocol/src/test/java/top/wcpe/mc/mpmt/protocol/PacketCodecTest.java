@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import top.wcpe.mc.mpmt.protocol.packet.ClientHelloPacket;
+import top.wcpe.mc.mpmt.protocol.packet.FragmentPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
@@ -28,7 +29,8 @@ class PacketCodecTest {
                 new PingPacket(0L),
                 new PingPacket(Long.MIN_VALUE),
                 new PingPacket(Long.MAX_VALUE),
-                new PongPacket(-1L));
+                new PongPacket(-1L),
+                new FragmentPacket(7, 1, 3, 0x1234ABCD, new byte[] {1, 2, 3, -1, 127}));
     }
 
     @ParameterizedTest

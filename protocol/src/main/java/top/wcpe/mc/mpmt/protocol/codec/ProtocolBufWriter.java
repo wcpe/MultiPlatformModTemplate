@@ -14,6 +14,9 @@ public interface ProtocolBufWriter {
     /** 写入一个 VarInt（Minecraft 标准编码）。 */
     ProtocolBufWriter writeVarInt(int value);
 
+    /** 写入一个定长 int（4 字节大端，用于 CRC32 等定长字段）。 */
+    ProtocolBufWriter writeInt(int value);
+
     /** 写入一个 long（8 字节大端）。 */
     ProtocolBufWriter writeLong(long value);
 

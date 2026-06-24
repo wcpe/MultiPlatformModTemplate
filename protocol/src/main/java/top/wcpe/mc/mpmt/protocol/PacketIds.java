@@ -20,6 +20,9 @@ public final class PacketIds {
     /** S2C 心跳 / 往返演示应答。 */
     public static final int PONG = 0x04;
 
+    /** 双向 分片包（可靠性层：大包切片 + 重组）。 */
+    public static final int FRAGMENT = 0x10;
+
     private PacketIds() {
         // 常量类不实例化
     }

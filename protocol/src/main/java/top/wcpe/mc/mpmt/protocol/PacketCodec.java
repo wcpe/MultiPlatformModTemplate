@@ -8,6 +8,7 @@ import top.wcpe.mc.mpmt.protocol.codec.ByteArrayProtocolWriter;
 import top.wcpe.mc.mpmt.protocol.codec.ProtocolBufReader;
 import top.wcpe.mc.mpmt.protocol.codec.ProtocolBufWriter;
 import top.wcpe.mc.mpmt.protocol.packet.ClientHelloPacket;
+import top.wcpe.mc.mpmt.protocol.packet.FragmentPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
@@ -33,6 +34,7 @@ public final class PacketCodec {
         register(PacketIds.SERVER_HELLO, ServerHelloPacket::decode);
         register(PacketIds.PING, PingPacket::decode);
         register(PacketIds.PONG, PongPacket::decode);
+        register(PacketIds.FRAGMENT, FragmentPacket::decode);
     }
 
     private void register(int id, PacketDecoder decoder) {
