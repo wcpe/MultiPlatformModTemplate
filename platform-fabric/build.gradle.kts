@@ -18,9 +18,15 @@ version = file("../VERSION").readText().trim()
 // 锚点版本与依赖坐标（集中声明，避免散落魔法值）
 val mcVersion = "1.20.1"
 val loaderVersion = "0.16.5"
+// fabric-api：Fabric 平台 API（含网络 ServerPlayNetworking / ClientPlayNetworking，network spec §3.4），1.20.1 末版
+val fabricApiVersion = "0.92.2+1.20.1"
 val snakeyamlVersion = "2.2"
 // 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经 includeBuild 依赖替换消费
 val spiCoordinate = "top.wcpe.mc.mpmt:platform-spi:$version"
+// 依赖 core-server（服务端网络装配特性 ServerNetworkFeature；经 api 传递 protocol + core-runtime）
+val serverCoordinate = "top.wcpe.mc.mpmt:core-server:$version"
+// 依赖 core-client（客户端网络装配特性 ClientNetworkFeature + 弱标识提供者）
+val clientCoordinate = "top.wcpe.mc.mpmt:core-client:$version"
 
 base {
     // 最终产物名带平台后缀，便于区分
@@ -44,10 +50,20 @@ dependencies {
     minecraft("com.mojang:minecraft:$mcVersion")
     mappings(loom.officialMojangMappings())
     modImplementation("net.fabricmc:fabric-loader:$loaderVersion")
+    // Fabric 平台 API：提供网络收发（fabric-networking-api-v1）等；编译期依赖，运行期由宿主提供
+    modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
 
     // 共享核心（platform-spi + 传递的 core-runtime/core-domain）：纯 Java、非 mod 依赖、不参与 remap
     implementation(spiCoordinate)
     shadowBundle(spiCoordinate)
+
+    // 服务端公共逻辑（core-server + 传递的 protocol）：同样纯 Java、shade 进产物、不参与 remap
+    implementation(serverCoordinate)
+    shadowBundle(serverCoordinate)
+
+    // 客户端公共逻辑（core-client）：客户端网络装配 + 弱标识提供者，shade 进产物、不参与 remap
+    implementation(clientCoordinate)
+    shadowBundle(clientCoordinate)
 
     // 第三方运行期依赖：shade 进产物并 relocate 到 top.wcpe.mc.mpmt.libs.*（ADR-0012，防类冲突的统一约定）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")

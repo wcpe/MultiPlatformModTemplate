@@ -48,7 +48,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | FR-07 | platform-bukkit 服务端胶水：Bukkit 家族单一构建覆盖 Bukkit/Spigot/Paper（Folia 能力见 FR-13），锚点 1.20.1 | P1 | 开发中 |
 | FR-08 | platform-fabric 胶水（Loom·独立 includeBuild）：客户端 + 服务端双端入口（锚点 1.20.1） | P1 | 开发中 |
 | FR-09 | platform-forge 胶水（ForgeGradle·独立 includeBuild）：客户端 / 服务端分离代理（锚点 1.20.1） | P1 | 开发中 |
-| FR-10 | L4 版本适配机制：version-api + vX_Y 运行期按 MC 版本装配（先落地 1.20.1） | P1 | 计划 |
+| FR-10 | L4 版本适配机制：version-api + vX_Y 运行期按 MC 版本装配（先落地 1.20.1） | P1 | 开发中 |
 | FR-11 | smoke 冒烟特性（两证）：① 同一份 L0 逻辑经端口在 Paper/Fabric/Forge 各端一致运行——证"逻辑/胶水完全分离"；② 异构客户端（Fabric/Forge mod）经 protocol 与异构服务端（Paper/Bukkit 插件）完成握手 + 版本协商 + 一次往返包——证"服务端软件 ↔ 模组加载器"桥接成立 | P1 | 开发中 |
 | FR-12 | 多版本扩展：新增 1.21.1、1.12.2 版本适配，验证 L4 机制跨版本成立 | P2 | 计划 |
 | FR-13 | Folia 支持：并入 Bukkit 家族构建，经 FeatureGate 适配 RegionScheduler（验证特判机制，不拆独立构建） | P1 | 计划 |
@@ -58,7 +58,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | FR-17 | 脚手架发布与版本化：作为模板仓库（如 GitHub Template）发布 + VERSION 注入各平台构建产物 + 版本化/标签 | P3 | 计划 |
 | FR-18 | 玩法开发者上手：克隆模板后如何在 L0 写玩法的文档 + 示例（非产品玩法） | P3 | 计划 |
 | FR-19 | 跨端网络收发框架：基于 protocol 的 C2S/S2C 收发管线 + 各平台经 `TransportPort` 注册通道（具体平台见 FR-20），附若干发包示例 | P1 | 开发中 |
-| FR-20 | 跨平台传输：Bukkit/Folia/Sponge（插件消息）+ Fabric/Forge/NeoForge 服务端（各网络 API）+ 单人世界（集成服内存回环）均实现 `TransportPort`；上层逻辑不变 | P1 | 计划 |
+| FR-20 | 跨平台传输：Bukkit/Folia/Sponge（插件消息）+ Fabric/Forge/NeoForge 服务端（各网络 API）+ 单人世界（集成服内存回环）均实现 `TransportPort`；上层逻辑不变 | P1 | 开发中 |
 | FR-21 | 进服握手 + 客户端标识上报：握手协商后客户端上报**弱客户端标识**（默认基于可得弱硬件/系统属性 SHA-256，可伪造/可随机化，`MachineCodeProvider` 可插拔），服务端接收并回发消息 | P1 | 开发中 |
 | FR-22 | 标识封禁：服务端**原生命令**按标识封禁/解封，被封标识再次进服**尽快踢出**（Bukkit 仅能进服后踢；标识不可信、可缺席，封禁为威慑非安全保证） | P1 | 开发中 |
 | FR-23 | 测试与 MVP 验收门：纯 JVM 单测 + **mod 加载器 GameTest「模拟服套件」（单人/集成 headless，`gradle runGameTest`，in-process 回环自动跑）** + **「realserver 套件」（真实专用服，服务端驱动：等待程序化客户端进入 → 触发场景 → 客户端与服务端双重断言、客户端回报、服务端聚合单一权威报告 pass/fail，镜像 AllinCore-New ADR-0020、见 ADR-0014）**——**二者均须在 MVP 完成并通过、作为 MVP 验收门**；Bukkit 家族/Sponge（无 GameTest）用 MockBukkit/测试设施 + 真实服手测达同等覆盖。realserver 维度需用户实机确认 | P1 | 计划 |

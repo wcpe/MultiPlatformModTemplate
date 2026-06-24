@@ -1,9 +1,12 @@
 package top.wcpe.mc.mpmt.platform.fabric;
 
+import java.util.UUID;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
+import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
 import top.wcpe.mc.mpmt.platform.spi.PlatformProvider;
 
 /**
@@ -19,8 +22,11 @@ public final class MpmtFabricBootstrap implements ModInitializer {
     @Override
     public void onInitialize() {
         MpmtRuntime runtime = new MpmtRuntime();
-        // 玩法特性随后续增量登记到 runtime.features()；当前先打通"发现 + 装配 + 启用"链路
+        // 先装配平台端口（含服务端 TransportPort），再登记复用的服务端网络特性，最后启用
         PlatformProvider.boot(getClass().getClassLoader(), runtime);
+        // 会话 id 暂用随机 UUID（每会话唯一即可）；统一生成策略待 FR-28 会话注册表整合
+        runtime.features()
+                .register(new ServerNetworkFeature(new BanRegistry(), () -> UUID.randomUUID().toString()));
         runtime.enable();
         LOGGER.info("MPMT 已装配并启用，活跃平台：{}", PlatformProvider.get().platformId());
     }

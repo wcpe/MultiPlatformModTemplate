@@ -18,6 +18,8 @@ repositories {
 dependencies {
     // 握手服务经 protocol 收发管线 + 版本协商；protocol 传递 core-domain（端口 / 状态机）
     api(project(":protocol"))
+    // 服务端网络装配特性实现 core-runtime 的 Feature，经运行时编排（ARCHITECTURE §2.2：core-server → core-runtime）
+    api(project(":core-runtime"))
 
     // 会话值对象用 Lombok（ADR-0004）
     compileOnly("org.projectlombok:lombok:1.18.34")
