@@ -7,7 +7,10 @@
 ## 未发布版本
 
 ### 新增
-- 新增 **L0 跨端传输端口与握手状态机**（FR-19 / FR-21 起步）：`TransportPort`（裸 `byte[]` 收发，不依赖协议层以守 L0⊄L1）+ `ConnectionHandle`（不透明连接句柄）+ `HandshakeStateMachine`（纯逻辑状态机 CONNECTED→HELLO_OK/REJECTED→ESTABLISHED，非法迁移失败快、版本兼容性由 L1 传入）。纯 JVM 单测 3 例穷举握手迁移。
+- 新增 **跨端收发核心**（FR-19 / FR-21 起步）：
+  - L0：`TransportPort`（裸 `byte[]` 收发，不依赖协议层以守 L0⊄L1）+ `ConnectionHandle`（不透明连接句柄）+ `HandshakeStateMachine`（纯逻辑状态机 CONNECTED→HELLO_OK/REJECTED→ESTABLISHED，非法迁移失败快、版本兼容性由 L1 传入）。
+  - L1 protocol：`PacketDispatcher` 收发管线——在 TransportPort 之上用 PacketCodec 编码发送 / 解码按 id 路由，非法 / 截断 / 未知字节不崩溃，无处理器静默忽略，处理器表并发安全。
+  - 纯 JVM 单测：握手迁移 3 例 + 收发管线 4 例。
 - 落地 **L3 platform-forge 平台胶水**（FR-09 起步，独立 includeBuild·ForgeGradle 6.0.54·Forge 1.20.1-47.4.2·官方映射）：`ForgePlatformBootstrap`（SPI + `META-INF/services` 注册）+ `ForgeFeatureGate`（Forge 无 Folia；同进程有 Bukkit 判融合服；客户端发行环境判集成服）+ `MpmtForgeMod`（`@Mod` 入口，构造期装配运行时）+ **client/server 分离代理**（`SidedProxy`/`ClientProxy`/`ServerProxy`，按 `FMLEnvironment.dist` 选择）。打包：shade platform-spi + core + relocate snakeyaml，再 **reobf 到 SRG** 供真实 Forge 运行；`verifyPackaging` 守护。已验证 **ForgeGradle 可在本仓库 Gradle 8.10 起来**；纯 JVM 测试 2 例验证经真实 ServiceLoader 发现 Forge 入口 + FeatureGate 分流；真实客户端 / 服务端为实机维度。
 - 落地 **L3 platform-fabric 平台胶水**（FR-08 起步，由 M0 spike 载体升级为真正胶水）：`FabricPlatformBootstrap`（SPI + `META-INF/services` 注册）+ `FabricFeatureGate`（Fabric 无 Folia / 非融合服，集成服按发行环境探测，纯 JVM 下保守判否）+ **main/client 双端入口**（`MpmtFabricBootstrap` 两端共用、一次性装配运行时；`MpmtFabricClientBootstrap` 客户端接缝）。打包链路升级为 shade platform-spi + core 全链 + relocate snakeyaml 进 remapped jar（`verifyPackaging` 加查 platform-spi 在位）。纯 JVM 测试 2 例验证经真实 ServiceLoader 发现 Fabric 入口 + FeatureGate 分流；真实客户端 / GameTest 模拟服为实机维度（随网络 / smoke 特性落地）。
 - 落地 **L3 platform-bukkit 平台胶水**（FR-07 起步，Bukkit 家族单一构建）：普通 Java + shadow，编译针对 **spigot-api 1.20.1** 基线（compileOnly），`BukkitPlatformBootstrap`（SPI + `META-INF/services` 注册）+ `BukkitFeatureGate`（按类存在探测 Folia / 融合服能力）+ `MpmtBukkitPlugin`（JavaPlugin 入口，进服后经本插件类加载器装配运行时）。打包：shade 共享核心 + relocate snakeyaml 进插件 jar（`verifyPackaging` 守护，**closes ADR-0012 Bukkit relocate 验证**）。集成测试用 **MockBukkit**（无真实服）验证装配链路：插件启用 → 平台装配为 bukkit → FeatureGate 分流（FR-23）。真实 Paper 服装配为实机维度（待用户确认）。
