@@ -52,7 +52,7 @@ public interface SchedulerPort {                 // 按归属调度（ADR-0013�
 - 纯逻辑（会话状态机、超时判定）在 L0/L1，可单测。
 
 ## 4. 任务拆分（确认后执行）
-- [ ] E1（L0/L1）：EventBusPort/SchedulerPort/PersistencePort 端口 + 示例领域逻辑 + 单测
+- [x] E1（L0）：SchedulerPort（按归属，ADR-0013）/PersistencePort/MessagePort 端口 + 领域引用（PlayerRef/EntityRef/WorldRef）+ capability 功能域示例逻辑 + 纯 JVM 单测（EventBusPort 此前已落地）。各平台 L3 适配见 E2。
 - [ ] E2（L3）：各平台事件→EventBus 适配、调度适配（Folia FeatureGate）、文件持久化
 - [ ] E3（L1+L3）：ServerHudMessagePacket + HudMessageService + 各客户端渲染
 - [ ] E4（L1）：SessionRegistry + 心跳/RTT + 超时→重连重同步联动

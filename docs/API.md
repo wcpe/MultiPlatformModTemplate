@@ -29,12 +29,13 @@ MPMT 作为脚手架 / 模板，其接口分三个面（玩法开发者在克隆
 
 - `PlayerPort`：玩家信息查询 / 操作的领域视图。
 - `WorldPort`：世界 / 方块 / 实体的领域视图。
-- `SchedulerPort`：任务调度（同步 / 异步 / 延迟 / 周期），屏蔽各平台调度差异（含 Folia 区域调度特判，经 FeatureGate；区域调度的真机验证维度见 PRD / spec）。
+- `SchedulerPort`：**按归属调度**（ADR-0013），屏蔽各平台差异（Folia 区域调度经 FeatureGate；真机验证维度见 PRD / spec）。**已落地**：`runForEntity(EntityRef, Runnable)` / `runForLocation(WorldRef, int x, int z, Runnable)` / `runGlobal(Runnable)` / `runAsync(Runnable)` / `AutoCloseable runTimer(long delayTicks, long periodTicks, Runnable)`；触碰世界 / 实体态必须经带归属入口，禁止无归属碰世界态；周期句柄调用方负责 `close` 释放。
 - `EventBusPort`：**自有 EventBus** 的订阅 / 发布接口（L0 内核实现，承载域间事件转发；非平台端口，无 L3 实现）。**已落地**：`<E extends DomainEvent> void subscribe(Class<E> type, Consumer<E> handler)` + `void publish(DomainEvent event)`；标记接口 `DomainEvent`；默认实现 `SimpleEventBus`（平台无关、线程安全、按精确类型分发、订阅者异常隔离、零第三方依赖）。
-- `MessagePort`：向玩家 / 频道发送消息。
-- `PersistencePort`：玩法状态的读写持久化。
+- `MessagePort`：向玩家发送文本消息。**已落地**：`void send(PlayerRef player, String text)`（富消息 / HUD 属 FR-27，经协议下发）。
+- `PersistencePort`：玩法状态的读写持久化，存储由平台 / 宿主决定。**已落地**：`Optional<String> read(String namespace, String key)` / `void write(String namespace, String key, String value)`；通常经 `SchedulerPort.runAsync` 在异步线程读写。
 - `TransportPort`：跨端字节收发（供 `protocol` 使用，不直接面向玩法）。
 - `DataDirectoryPort`：平台提供本插件 / mod 的**基目录**（绝对路径），共享层在其下解析预设位置。**已落地**：`@FunctionalInterface`，`java.nio.file.Path baseDirectory()`（`Path` 为 JDK 标准类型、非平台原生类型，守 ADR-0001）；平台胶水按需实现，由 `core-paths` 消费（ADR-0010）。
+- **领域引用（L0 内核值对象，已落地）**：`PlayerRef`（UUID + 名称）、`EntityRef`（UUID，实体调度归属）、`WorldRef`（标识串，按位置调度归属）；平台无关，不携带任何平台原生对象。
 
 > 端口只暴露领域视图，**不暴露任何平台原生对象**。MVP 只实现冒烟特性所需的端口子集，其余按需增量添加（见 scope-discipline）。
 

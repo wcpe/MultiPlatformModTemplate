@@ -7,6 +7,7 @@
 ## 未发布版本
 
 ### 新增
+- 落地 **平台能力示例 L0 层**（FR-26 起步，纯 JVM 平台无关）：新增 L0 端口 `SchedulerPort`（按归属调度 `runForEntity`/`runForLocation`/`runGlobal`/`runAsync`/`runTimer`，实现 ADR-0013，触碰世界 / 实体态必经带归属入口、周期句柄可关闭）+ `PersistencePort`（namespace/key 字符串读写）+ `MessagePort`（向玩家发文本）；新增 L0 内核领域引用 `PlayerRef`/`EntityRef`/`WorldRef`（Lombok 值对象）；新增 `capability` 功能域：`PlayerJoinedEvent`/`PlayerLeftEvent`（经自有 EventBus 协作，ADR-0011）+ `PlatformCapabilityExample`（玩家加入→异步持久化首次加入时间→按归属发欢迎→注册周期心跳；离开→关闭心跳句柄释放资源；时钟可注入）。纯 JVM 单测 7 例（首次/再次加入、心跳周期、离开释放、重复加入防泄露、经 EventBus 订阅、入参校验）。各平台事件桥接 / 调度 / 持久化 L3 实现待后续，实机一致性维度待用户确认。
 - 新增 **共享目录与资源路径模块**（FR-30，纯 JVM 平台无关，ADR-0010）：新增 L0 端口 `DataDirectoryPort`（`@FunctionalInterface`，平台提供基目录 `java.nio.file.Path baseDirectory()`，`Path` 为 JDK 标准类型守 L0 不依赖平台）+ L1 模块 `core-paths` 的 `ResourcePaths`（在基目录下预设 `config/`/`data/`/`resources/` 标准目录，`configFile`/`dataFile`/`resourceFile` 解析相对名，调用方引用预设不自算路径；相对名规范化后越界 / 绝对路径即拒、基目录为空失败快）。客户端 / 服务端共用同一份预设。纯 JVM 单测 8 例（预设位置 / 相对名解析 / 嵌套 / 越界拒绝 / 绝对路径拒绝 / 空白名 / 失败快 / 端口为空）。平台基目录实现待平台胶水按需提供。
 - 新增 **会话与心跳逻辑**（FR-28 起步，纯 JVM 平台无关）：`SessionRegistry`（服务端在线会话登记 / 查询 / 下线 / 在线列表，线程安全；core-server 接入 Lombok 用于 Session 值对象）+ `RttTracker`（客户端心跳 RTT 计算 + 超时清扫判疑似丢失，时钟可注入）。纯 JVM 单测 7 例（会话 3 + RTT 4）。周期发包与重连重同步联动由上层 / 平台驱动（后续）。
 - 新增 **协议包**（FR-21/22）：`ClientIdReportPacket`(C2S 0x81)、`ServerMessagePacket`(S2C 0x02)、`DisconnectPacket`(S2C 0x03)，注册进 PacketCodec、纳入往返一致测试。
