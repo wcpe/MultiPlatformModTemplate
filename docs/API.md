@@ -68,7 +68,8 @@ MPMT 作为脚手架 / 模板，其接口分三个面（玩法开发者在克隆
   - `ProtocolVersion`：`CURRENT` / `MIN_SUPPORTED` + `isCompatible(int)` 版本协商。
   - 编解码：`ProtocolBufWriter` / `ProtocolBufReader`（字节布局与 MC 线缆对齐：VarInt / UTF / long 大端 / byte / bytes）+ 默认实现 `ByteArrayProtocolWriter` / `ByteArrayProtocolReader`；非法 / 截断输入抛 `ProtocolException`、不崩溃。
   - `Packet`（`id()` + `encode`，约定对称 `static decode`）+ `PacketCodec`（帧头 `[protocolVersion:u8][packetId:u8]` + 按 id 注册表分发）。
-  - 包：`ClientHelloPacket` / `ServerHelloPacket`（握手）、`PingPacket` / `PongPacket`（往返）；其余包随网络特性增量添加。
+  - 包：`ClientHelloPacket` / `ServerHelloPacket`（握手）、`PingPacket` / `PongPacket`（往返）、`ClientIdReportPacket` / `ServerMessagePacket` / `DisconnectPacket`（标识 / 消息 / 断开）、`FragmentPacket`（分片）、`ServerHudMessagePacket`（S2C HUD：`HudKind`(TITLE/ACTIONBAR/TOAST/CHAT 稳定线缆码) + text + subtitle + durationMillis，FR-27）；其余包随网络特性增量添加。
+  - **HUD 下发服务（L1 `core-server`，FR-27 已落地）**：`HudMessageService`，`send(ConnectionHandle, HudKind, text[, subtitle, durationMillis])` / `sendTitle(...)`，把 HUD 编为 `ServerHudMessagePacket` 经 `PacketDispatcher` 下发；按玩家定位的重载待与会话注册表整合（FR-28）；客户端 L3 渲染待后续。
 
 ## 6. 共享基础设施（L1，面向玩法开发者）
 

@@ -20,6 +20,9 @@ public final class PacketIds {
     /** S2C 断开通知（携带原因）。 */
     public static final int DISCONNECT = 0x03;
 
+    /** S2C 跨端 HUD 消息（title / actionbar / toast / chat）。 */
+    public static final int SERVER_HUD_MESSAGE = 0x05;
+
     /** C2S 客户端标识上报（弱标识）。 */
     public static final int CLIENT_ID_REPORT = 0x81;
 

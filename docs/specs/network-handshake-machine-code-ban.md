@@ -51,6 +51,7 @@
 | `ClientIdReportPacket` | C2S | 0x81 | clientId:utf（弱标识，SHA-256 hex） |
 | `ServerMessagePacket` | S2C | 0x02 | text:utf |
 | `DisconnectPacket` | S2C | 0x03 | reason:utf |
+| `ServerHudMessagePacket` | S2C | 0x05 | kind:varint(HudKind 稳定线缆码), text:utf, subtitle:utf, durationMillis:long |
 | `FragmentPacket` | 双向 | 0x10 | seqId:varint, index:varint, total:varint, crc32:int, payload:bytes |
 | `ResyncRequestPacket` | C2S | 0x82 | sinceRevision:varint |
 | `PingPacket`/`PongPacket`（demo） | C2S/S2C | 0x83/0x04 | nonce:long |

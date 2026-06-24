@@ -14,6 +14,7 @@ import top.wcpe.mc.mpmt.protocol.packet.FragmentPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
 
 /**
@@ -36,6 +37,7 @@ public final class PacketCodec {
         register(PacketIds.CLIENT_HELLO, ClientHelloPacket::decode);
         register(PacketIds.SERVER_HELLO, ServerHelloPacket::decode);
         register(PacketIds.SERVER_MESSAGE, ServerMessagePacket::decode);
+        register(PacketIds.SERVER_HUD_MESSAGE, ServerHudMessagePacket::decode);
         register(PacketIds.DISCONNECT, DisconnectPacket::decode);
         register(PacketIds.CLIENT_ID_REPORT, ClientIdReportPacket::decode);
         register(PacketIds.PING, PingPacket::decode);
