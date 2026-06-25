@@ -21,6 +21,7 @@ include("core-runtime")
 include("core-server")
 include("core-client")
 include("core-paths")
+include("core-config")
 include("protocol")
 include("platform-spi")
 
