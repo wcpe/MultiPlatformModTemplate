@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
+import top.wcpe.mc.mpmt.platform.fabric.capability.FabricCapabilityBootstrap;
 import top.wcpe.mc.mpmt.platform.spi.PlatformProvider;
 
 /**
@@ -28,6 +29,8 @@ public final class MpmtFabricBootstrap implements ModInitializer {
         runtime.features()
                 .register(new ServerNetworkFeature(new BanRegistry(), () -> UUID.randomUUID().toString()));
         runtime.enable();
+        // 平台能力示例（FR-26）：服务端启动后装配 L3 端口 + 桥接玩家事件入总线
+        FabricCapabilityBootstrap.register();
         LOGGER.info("MPMT 已装配并启用，活跃平台：{}", PlatformProvider.get().platformId());
     }
 }
