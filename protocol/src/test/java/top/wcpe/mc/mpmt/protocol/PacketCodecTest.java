@@ -16,6 +16,7 @@ import top.wcpe.mc.mpmt.protocol.packet.DisconnectPacket;
 import top.wcpe.mc.mpmt.protocol.packet.FragmentPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ResyncRequestPacket;
 import top.wcpe.mc.mpmt.protocol.packet.HudKind;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
@@ -35,6 +36,9 @@ class PacketCodecTest {
                 new PingPacket(Long.MIN_VALUE),
                 new PingPacket(Long.MAX_VALUE),
                 new PongPacket(-1L),
+                new ResyncRequestPacket(0L),
+                new ResyncRequestPacket(Long.MAX_VALUE),
+                new ResyncRequestPacket(987654321L),
                 new ClientIdReportPacket("deadbeef-客户端标识"),
                 new ServerMessagePacket("欢迎来到 MPMT"),
                 new ServerHudMessagePacket(HudKind.TITLE, "标题", "副标题", 3000L),

@@ -53,7 +53,7 @@
 | `DisconnectPacket` | S2C | 0x03 | reason:utf |
 | `ServerHudMessagePacket` | S2C | 0x05 | kind:varint(HudKind 稳定线缆码), text:utf, subtitle:utf, durationMillis:long |
 | `FragmentPacket` | 双向 | 0x10 | seqId:varint, index:varint, total:varint, crc32:int, payload:bytes |
-| `ResyncRequestPacket` | C2S | 0x82 | sinceRevision:varint |
+| `ResyncRequestPacket` | C2S | 0x82 | sinceRevision:long（修订号用 long，8 字节大端） |
 | `PingPacket`/`PongPacket`（demo） | C2S/S2C | 0x83/0x04 | nonce:long |
 
 `ProtocolVersion.CURRENT=1`、`MIN_SUPPORTED=1`。

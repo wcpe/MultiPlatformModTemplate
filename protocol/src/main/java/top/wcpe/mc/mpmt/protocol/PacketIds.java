@@ -26,6 +26,9 @@ public final class PacketIds {
     /** C2S 客户端标识上报（弱标识）。 */
     public static final int CLIENT_ID_REPORT = 0x81;
 
+    /** C2S 重同步请求（可靠性层：连接重建 / 心跳超时后请求重发自某修订起的权威状态）。 */
+    public static final int RESYNC_REQUEST = 0x82;
+
     /** C2S 心跳 / 往返演示请求。 */
     public static final int PING = 0x83;
 
