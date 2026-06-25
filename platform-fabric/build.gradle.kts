@@ -93,8 +93,17 @@ dependencies {
 // realserver 验收的 Loom 运行配置（dev 环境，加载 gametest 源集的 mpmt-acceptance 测试 mod）。
 // 服务端可 headless 跑（runAcceptanceServer）；客户端需显示，由用户本机经 quickPlay 自连（runAcceptanceClient）。
 val acceptanceReportFile = layout.buildDirectory.file("acceptance/server-report.txt")
+val simReportFile = layout.buildDirectory.file("acceptance/sim-report.txt")
 loom {
     runs {
+        // 模拟服 GameTest 套件（FR-23①）：headless 起服跑 in-process 回环网络 GameTest，无外部客户端、可自动跑
+        create("simNetworkTest") {
+            server()
+            configName = "Sim Network GameTest"
+            source(gametest)
+            property("mpmt.simtest", "true")
+            property("mpmt.simtest.report", simReportFile.get().asFile.absolutePath)
+        }
         create("acceptanceServer") {
             server()
             configName = "Acceptance Server"
@@ -207,6 +216,26 @@ tasks.register("runRealServerAcceptance") {
             throw GradleException("[realserver] 验收未通过（末行非 RESULT PASS）：$resultLine")
         }
         logger.lifecycle("[realserver] 验收通过 ✓ RESULT PASS")
+    }
+}
+
+// 模拟服 GameTest 一键门禁（FR-23①）：起 headless 服跑 in-process 回环网络 GameTest → 读报告末行 RESULT PASS。
+tasks.register("runSimNetworkAcceptance") {
+    group = "verification"
+    description = "起 headless 服跑模拟服回环网络 GameTest，读报告末行 RESULT PASS"
+    dependsOn("runSimNetworkTest")
+    doLast {
+        val report = simReportFile.get().asFile
+        if (!report.exists()) {
+            throw GradleException("未找到模拟服报告（runSimNetworkTest 未写出）：${report.absolutePath}")
+        }
+        val text = report.readText()
+        logger.lifecycle("[sim] 模拟服 GameTest 权威报告：\n$text")
+        val resultLine = text.lineSequence().map { it.trim() }.lastOrNull { it.startsWith("RESULT") }
+        if (resultLine != "RESULT PASS") {
+            throw GradleException("[sim] 模拟服未通过（末行非 RESULT PASS）：$resultLine")
+        }
+        logger.lifecycle("[sim] 模拟服 GameTest 通过 ✓ RESULT PASS")
     }
 }
 
