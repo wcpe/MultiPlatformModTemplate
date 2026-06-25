@@ -9,6 +9,7 @@ import top.wcpe.mc.mpmt.core.client.ClientNetworkFeature;
 import top.wcpe.mc.mpmt.core.client.DefaultMachineCodeProvider;
 import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
+import top.wcpe.mc.mpmt.platform.fabric.capability.FabricHudRenderer;
 import top.wcpe.mc.mpmt.platform.fabric.net.FabricClientTransport;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricNetworkBindings;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricVersions;
@@ -36,6 +37,8 @@ public final class MpmtFabricClientBootstrap implements ClientModInitializer {
                 new ClientNetworkFeature(modVersion(), new DefaultMachineCodeProvider());
         runtime.features().register(feature);
         runtime.enable();
+        // 跨端 HUD 渲染（FR-27）：在客户端收发管线上注册 HUD 收包处理器
+        FabricHudRenderer.register(feature.dispatcher());
         // 客户端连入服务端后发起握手（连接事件在客户端线程触发）
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> feature.startHandshake());
         LOGGER.info("MPMT Fabric 客户端网络已装配（mod 版本 {}）", modVersion());

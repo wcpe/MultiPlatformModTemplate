@@ -25,6 +25,7 @@ public final class ClientNetworkFeature implements Feature {
     private final MachineCodeProvider machineCodeProvider;
 
     private HandshakeClientService handshakeClient;
+    private PacketDispatcher dispatcher;
 
     public ClientNetworkFeature(String modVersion, MachineCodeProvider machineCodeProvider) {
         this.modVersion = Objects.requireNonNull(modVersion, "modVersion 不能为空");
@@ -39,8 +40,16 @@ public final class ClientNetworkFeature implements Feature {
     @Override
     public void onEnable(RuntimeContext context) {
         TransportPort transport = context.port(TransportPort.class);
-        PacketDispatcher dispatcher = new PacketDispatcher(transport, new PacketCodec());
+        this.dispatcher = new PacketDispatcher(transport, new PacketCodec());
         this.handshakeClient = new HandshakeClientService(dispatcher, modVersion, machineCodeProvider);
+    }
+
+    /** 客户端收发管线（启用后可取，供平台注册收包处理器，如 HUD 渲染）。 */
+    public PacketDispatcher dispatcher() {
+        if (dispatcher == null) {
+            throw new IllegalStateException("客户端网络特性尚未启用");
+        }
+        return dispatcher;
     }
 
     /** 发起握手（客户端连入服务端后由平台触发）。 */

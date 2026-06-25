@@ -1,5 +1,6 @@
 package top.wcpe.mc.mpmt.platform.fabric.version;
 
+import net.minecraft.resources.ResourceLocation;
 import top.wcpe.mc.mpmt.platform.fabric.version.v1_20.V1_20ClientNetwork;
 import top.wcpe.mc.mpmt.platform.fabric.version.v1_20.V1_20ServerNetwork;
 
@@ -15,6 +16,9 @@ public final class FabricNetworkBindings {
     private static final String CHANNEL_NAMESPACE = "mpmt";
     /** 跨端通道路径（合为 {@code mpmt:main}，network spec §3.2）。 */
     private static final String CHANNEL_PATH = "main";
+
+    /** 产品跨端通道（{@code mpmt:main}）单一真源，供平台收发与验收场景共用。 */
+    public static final ResourceLocation PRODUCT_CHANNEL = new ResourceLocation(CHANNEL_NAMESPACE, CHANNEL_PATH);
 
     private FabricNetworkBindings() {
         // 工具类不实例化
