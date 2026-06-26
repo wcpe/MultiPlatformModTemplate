@@ -1,5 +1,6 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import java.util.zip.ZipFile
+import org.gradle.language.jvm.tasks.ProcessResources
 
 // L3 platform-bukkit（Bukkit/Spigot/Paper/Folia 单一构建，ADR-0007）：普通 Java + shadow。
 // 编译针对 Bukkit 基线（spigot-api，compileOnly），Paper/Folia 差异运行期经 FeatureGate 适配。
@@ -104,4 +105,48 @@ val verifyPackaging by tasks.registering {
 
 tasks.named("build") {
     dependsOn(tasks.named("shadowJar"), verifyPackaging)
+}
+
+// ============================================================================
+// realserver 验收驱动（独立 acceptance 源集 + 独立插件 jar，ADR-0014）
+// Bukkit 无 GameTest，故 realserver 是其唯一实机验收形态。验收驱动代码不入产品插件 jar：
+// 单独编译为 mpmt-acceptance 插件，仅在验收运行期放入服务端 plugins/。
+// ============================================================================
+val acceptance: SourceSet by sourceSets.creating
+
+dependencies {
+    // Bukkit 基线编译可见、运行期由服务端提供
+    "acceptanceCompileOnly"("org.spigotmc:spigot-api:$spigotApiVersion")
+    // 平台无关验收核心（控制协议 / 协调 / GameTest 框架 / 报告）+ 协议（编 HUD 包）
+    "acceptanceImplementation"(project(":acceptance"))
+    "acceptanceImplementation"(project(":protocol"))
+}
+
+// 验收插件 plugin.yml 的 ${version} 占位由构建注入
+tasks.named<ProcessResources>("processAcceptanceResources") {
+    inputs.property("version", project.version)
+    filesMatching("plugin.yml") {
+        expand("version" to project.version)
+    }
+}
+
+// 验收驱动插件 jar：shade acceptance/protocol/core-domain（均第一方、无第三方运行期依赖，无需 relocate）
+val acceptanceJar by tasks.registering(ShadowJar::class) {
+    group = "build"
+    description = "构建 realserver 验收驱动插件 mpmt-acceptance（仅验收运行期用，不入产品 jar）"
+    archiveBaseName.set("mpmt-acceptance")
+    archiveClassifier.set("")
+    from(acceptance.output)
+    configurations = listOf(project.configurations["acceptanceRuntimeClasspath"])
+    // 防御：spigot-api 为 compileOnly，不应进产物
+    dependencies { exclude(dependency("org.spigotmc:spigot-api")) }
+    exclude("META-INF/maven/**")
+    // shadow 改配置不刷新缓存指纹，令其确定性重跑（与产品 shadowJar 一致）
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
+}
+
+// 把验收源集纳入常规 build 的编译校验（只编译，不打包——打包由验收编排按需触发）
+tasks.named("build") {
+    dependsOn(tasks.named("acceptanceClasses"))
 }

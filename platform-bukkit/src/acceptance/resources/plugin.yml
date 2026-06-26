@@ -1,0 +1,12 @@
+# MPMT realserver 验收驱动插件描述（仅验收运行期加载，非产品插件，ADR-0014）。
+# 由独立 acceptance 构建产出、仅在 realserver 验收时放入服务端 plugins/；字段为 Bukkit 框架强制约定。
+name: mpmt-acceptance
+version: ${version}
+main: top.wcpe.mc.mpmt.platform.bukkit.acceptance.MpmtBukkitAcceptancePlugin
+# 目标 API 版本（锚点 1.20.1）
+api-version: '1.20'
+# 世界加载后再启用（驱动需调度器可用）
+load: POSTWORLD
+# 软依赖产品插件：存在则在其后加载（产品插件负责握手 / 产品收发），缺失不阻止本插件
+softdepend: [MultiPlatformModTemplate]
+description: MPMT realserver 验收驱动 —— 服务端驱动场景、客户端验证、单一权威报告
