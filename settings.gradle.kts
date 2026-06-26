@@ -39,3 +39,4 @@ include("platform-bukkit")
 // 各平台经其自身 includeBuild("..") 反向消费 core 共享坐标（依赖替换，见 ADR-0012）。
 includeBuild("platform-fabric")
 includeBuild("platform-forge")
+includeBuild("platform-neoforge")

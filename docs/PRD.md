@@ -53,7 +53,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | FR-12 | 多版本扩展：新增 1.21.1、1.12.2 版本适配，验证 L4 机制跨版本成立 | P2 | 计划 |
 | FR-13 | Folia 支持：并入 Bukkit 家族构建，经 FeatureGate 适配 RegionScheduler（验证特判机制，不拆独立构建） | P1 | 开发中 |
 | FR-14 | platform-sponge（SpongeGradle·独立 includeBuild）：基础网络与示例可用 | P1 | 计划 |
-| FR-15 | platform-neoforge（NeoGradle·独立 includeBuild；**NeoForge 无 1.20.1，锚点取 1.20.2**）：基础网络与示例可用 | P1 | 计划 |
+| FR-15 | platform-neoforge（NeoGradle·独立 includeBuild；**NeoForge 无 1.20.1，锚点取 1.20.2**）：基础网络与示例可用 | P1 | 开发中 |
 | FR-16 | 最新版本 26.2 适配（MC 今年最新版本号，新版号方案无 `1.` 前缀），验证架构前向可扩展 | P3 | 计划 |
 | FR-17 | 脚手架发布与版本化：作为模板仓库（如 GitHub Template）发布 + VERSION 注入各平台构建产物 + 版本化/标签 | P3 | 计划 |
 | FR-18 | 玩法开发者上手：克隆模板后如何在 L0 写玩法的文档 + 示例（非产品玩法） | P3 | 计划 |

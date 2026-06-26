@@ -1,0 +1,27 @@
+# MPMT NeoForge mod 描述（由 NeoForge 加载；字段为 NeoForge 框架强制约定）
+# 1.20.2 仍用 META-INF/mods.toml（neoforge.mods.toml 重命名是 20.5+）；modLoader javafml
+modLoader="javafml"
+loaderVersion="[1,)"
+license="MIT"
+
+# 模组条目
+[[mods]]
+modId="mpmt"
+version="${version}"
+displayName="MultiPlatformModTemplate"
+description="多平台 mod 玩法脚手架 —— NeoForge 平台胶水"
+
+# 依赖声明：依赖 neoforge（非 forge）+ Minecraft 1.20.2 区间。1.20.2 仍用 mandatory=（type="required" 是 20.5+）
+[[dependencies.mpmt]]
+modId="neoforge"
+mandatory=true
+versionRange="[20.2,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.mpmt]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.2,1.21)"
+ordering="NONE"
+side="BOTH"
