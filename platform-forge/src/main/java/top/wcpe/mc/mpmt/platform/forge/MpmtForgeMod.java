@@ -1,11 +1,16 @@
 package top.wcpe.mc.mpmt.platform.forge;
 
+import java.util.UUID;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
+import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
+import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
+import top.wcpe.mc.mpmt.platform.forge.net.ForgeServerTransport;
 import top.wcpe.mc.mpmt.platform.forge.proxy.ClientProxy;
 import top.wcpe.mc.mpmt.platform.forge.proxy.ServerProxy;
 import top.wcpe.mc.mpmt.platform.forge.proxy.SidedProxy;
@@ -23,8 +28,13 @@ public final class MpmtForgeMod {
 
     public MpmtForgeMod() {
         MpmtRuntime runtime = new MpmtRuntime();
-        // 通用装配（client/server 两端共用）：发现并装配唯一活跃平台、启用特性
+        // 通用装配（client/server 两端共用）：发现并装配唯一活跃平台
         PlatformProvider.boot(getClass().getClassLoader(), runtime);
+        // 服务端 TransportPort（FR-20）：Forge SimpleChannel 产品通道 mpmt:main，构造期建链路
+        runtime.ports().register(TransportPort.class, new ForgeServerTransport("mpmt", "main"));
+        // 登记平台无关的服务端网络特性（FR-19）：注入 TransportPort 即复用同一份握手 / 协商 / 收发装配
+        runtime.features()
+                .register(new ServerNetworkFeature(new BanRegistry(), () -> UUID.randomUUID().toString()));
         runtime.enable();
         // client/server 分离代理：按运行端选择并初始化（FR-09）
         SidedProxy proxy = FMLEnvironment.dist == Dist.CLIENT ? new ClientProxy() : new ServerProxy();

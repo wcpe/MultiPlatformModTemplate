@@ -18,6 +18,8 @@ val forgeVersion = "1.20.1-47.4.2"
 val snakeyamlVersion = "2.2"
 // 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经 includeBuild 依赖替换消费
 val spiCoordinate = "top.wcpe.mc.mpmt:platform-spi:$version"
+// 服务端公共网络特性（经 api 传递 protocol + core-runtime），各平台注入 TransportPort 后复用同一份装配
+val serverCoordinate = "top.wcpe.mc.mpmt:core-server:$version"
 
 base {
     archivesName.set("mpmt-forge")
@@ -48,6 +50,9 @@ dependencies {
     // 共享核心（platform-spi + 传递的 core-runtime/core-domain）：纯 Java、shade 进 mod jar
     implementation(spiCoordinate)
     shadowBundle(spiCoordinate)
+    // 服务端公共网络特性（FR-19）：纯 Java、shade 进 mod jar（传递 protocol）
+    implementation(serverCoordinate)
+    shadowBundle(serverCoordinate)
     // 第三方运行期依赖：shade 并 relocate（ADR-0012）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
