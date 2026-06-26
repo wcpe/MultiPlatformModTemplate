@@ -6,6 +6,7 @@ import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
 import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
+import top.wcpe.mc.mpmt.platform.bukkit.capability.BukkitCapabilityBootstrap;
 import top.wcpe.mc.mpmt.platform.bukkit.net.BukkitServerTransport;
 import top.wcpe.mc.mpmt.platform.spi.PlatformProvider;
 
@@ -28,6 +29,8 @@ public class MpmtBukkitPlugin extends JavaPlugin {
         runtime.features()
                 .register(new ServerNetworkFeature(new BanRegistry(), () -> UUID.randomUUID().toString()));
         runtime.enable();
+        // 平台能力示例（FR-26）：装配 L3 端口 + 桥接玩家进退事件入运行时自有 EventBus
+        BukkitCapabilityBootstrap.register(this, runtime.eventBus());
         getLogger().info("MPMT 已装配并启用，活跃平台：" + PlatformProvider.get().platformId());
     }
 
