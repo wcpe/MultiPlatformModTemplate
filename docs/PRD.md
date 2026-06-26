@@ -51,7 +51,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | FR-10 | L4 版本适配机制：version-api + vX_Y 运行期按 MC 版本装配（先落地 1.20.1） | P1 | 开发中 |
 | FR-11 | smoke 冒烟特性（两证）：① 同一份 L0 逻辑经端口在 Paper/Fabric/Forge 各端一致运行——证"逻辑/胶水完全分离"；② 异构客户端（Fabric/Forge mod）经 protocol 与异构服务端（Paper/Bukkit 插件）完成握手 + 版本协商 + 一次往返包——证"服务端软件 ↔ 模组加载器"桥接成立 | P1 | 开发中 |
 | FR-12 | 多版本扩展：新增 1.21.1、1.12.2 版本适配，验证 L4 机制跨版本成立 | P2 | 计划 |
-| FR-13 | Folia 支持：并入 Bukkit 家族构建，经 FeatureGate 适配 RegionScheduler（验证特判机制，不拆独立构建） | P1 | 计划 |
+| FR-13 | Folia 支持：并入 Bukkit 家族构建，经 FeatureGate 适配 RegionScheduler（验证特判机制，不拆独立构建） | P1 | 开发中 |
 | FR-14 | platform-sponge（SpongeGradle·独立 includeBuild）：基础网络与示例可用 | P1 | 计划 |
 | FR-15 | platform-neoforge（NeoGradle·独立 includeBuild；**NeoForge 无 1.20.1，锚点取 1.20.2**）：基础网络与示例可用 | P1 | 计划 |
 | FR-16 | 最新版本 26.2 适配（MC 今年最新版本号，新版号方案无 `1.` 前缀），验证架构前向可扩展 | P3 | 计划 |

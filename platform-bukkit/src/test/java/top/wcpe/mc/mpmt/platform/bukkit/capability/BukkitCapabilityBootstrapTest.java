@@ -46,7 +46,8 @@ class BukkitCapabilityBootstrapTest {
         MockPlugin plugin = MockBukkit.createMockPlugin();
 
         EventBusPort eventBus = new SimpleEventBus();
-        BukkitCapabilityBootstrap.register(plugin, eventBus);
+        // 非 Folia 环境（无 REGION_SCHEDULER 能力）：调度退化为主线程
+        BukkitCapabilityBootstrap.register(plugin, eventBus, capability -> false);
 
         PlayerMock player = server.addPlayer();
 
@@ -69,7 +70,8 @@ class BukkitCapabilityBootstrapTest {
         MockPlugin plugin = MockBukkit.createMockPlugin();
 
         EventBusPort eventBus = new SimpleEventBus();
-        BukkitCapabilityBootstrap.register(plugin, eventBus);
+        // 非 Folia 环境（无 REGION_SCHEDULER 能力）：调度退化为主线程
+        BukkitCapabilityBootstrap.register(plugin, eventBus, capability -> false);
 
         UUID uuid = UUID.randomUUID();
         server.addPlayer(new PlayerMock(server, "Repeater", uuid));

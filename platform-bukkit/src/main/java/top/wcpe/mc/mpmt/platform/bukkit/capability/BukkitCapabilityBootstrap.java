@@ -16,6 +16,7 @@ import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
 import top.wcpe.mc.mpmt.domain.capability.PlatformCapabilityExample;
 import top.wcpe.mc.mpmt.domain.capability.PlayerJoinedEvent;
 import top.wcpe.mc.mpmt.domain.capability.PlayerLeftEvent;
+import top.wcpe.mc.mpmt.platform.spi.FeatureGate;
 
 /**
  * Bukkit 平台能力示例装配（L3，FR-26）：装配 L3 端口实现（调度 / 持久化 / 消息 / 数据目录），
@@ -33,17 +34,20 @@ public final class BukkitCapabilityBootstrap {
     /**
      * 装配并接线平台能力示例。
      *
-     * @param plugin   插件实例（提供数据目录 / 调度 / 在线玩家 / 监听器注册）
-     * @param eventBus 运行时自有 EventBus（领域事件投递与订阅同一条总线）
+     * @param plugin      插件实例（提供数据目录 / 调度 / 在线玩家 / 监听器注册）
+     * @param eventBus    运行时自有 EventBus（领域事件投递与订阅同一条总线）
+     * @param featureGate 平台能力探测：据 {@code REGION_SCHEDULER}（Folia）选调度实现（FR-13 / ADR-0013）
      */
-    public static void register(Plugin plugin, EventBusPort eventBus) {
+    public static void register(Plugin plugin, EventBusPort eventBus, FeatureGate featureGate) {
         Objects.requireNonNull(plugin, "plugin 不能为空");
         Objects.requireNonNull(eventBus, "eventBus 不能为空");
+        Objects.requireNonNull(featureGate, "featureGate 不能为空");
 
         DataDirectoryPort dataDirectory = new BukkitDataDirectoryPort(plugin);
         PersistencePort persistence = new BukkitPersistencePort(dataDirectory);
         MessagePort message = new BukkitMessagePort();
-        SchedulerPort scheduler = new BukkitSchedulerPort(plugin);
+        // Folia→区域调度 / 非 Folia→主线程调度（按 FeatureGate 选用，FR-13）
+        SchedulerPort scheduler = BukkitSchedulers.create(plugin, featureGate);
 
         PlatformCapabilityExample example =
                 new PlatformCapabilityExample(persistence, message, scheduler, System::currentTimeMillis);

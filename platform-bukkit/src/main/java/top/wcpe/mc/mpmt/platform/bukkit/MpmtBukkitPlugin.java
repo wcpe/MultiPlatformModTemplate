@@ -29,8 +29,10 @@ public class MpmtBukkitPlugin extends JavaPlugin {
         runtime.features()
                 .register(new ServerNetworkFeature(new BanRegistry(), () -> UUID.randomUUID().toString()));
         runtime.enable();
-        // 平台能力示例（FR-26）：装配 L3 端口 + 桥接玩家进退事件入运行时自有 EventBus
-        BukkitCapabilityBootstrap.register(this, runtime.eventBus());
+        // 平台能力示例（FR-26）：装配 L3 端口 + 桥接玩家进退事件入运行时自有 EventBus；
+        // 传平台 FeatureGate 供调度端口按 Folia 能力选用（FR-13）
+        BukkitCapabilityBootstrap.register(
+                this, runtime.eventBus(), PlatformProvider.get().featureGate());
         getLogger().info("MPMT 已装配并启用，活跃平台：" + PlatformProvider.get().platformId());
     }
 

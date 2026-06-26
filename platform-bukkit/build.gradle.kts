@@ -3,7 +3,8 @@ import java.util.zip.ZipFile
 import org.gradle.language.jvm.tasks.ProcessResources
 
 // L3 platform-bukkit（Bukkit/Spigot/Paper/Folia 单一构建，ADR-0007）：普通 Java + shadow。
-// 编译针对 Bukkit 基线（spigot-api，compileOnly），Paper/Folia 差异运行期经 FeatureGate 适配。
+// 编译基线 paper-api（compileOnly，ADR-0019：spigot 超集，为接 Folia 区域调度 API），运行期仍 Bukkit 家族；
+// Paper/Folia 差异运行期经 FeatureGate 适配（paper-only API 调用一律经 FeatureGate 门控）。
 // 打包：shade 共享核心 + relocate snakeyaml 进插件 jar（ADR-0012，关闭 Bukkit 共享类加载空间的冲突）。
 
 plugins {
@@ -14,7 +15,8 @@ plugins {
 group = "top.wcpe.mc.mpmt"
 version = rootProject.file("VERSION").readText().trim()
 
-val spigotApiVersion = "1.20.1-R0.1-SNAPSHOT"
+// paper-api 版本沿用 1.20.1-R0.1-SNAPSHOT（与 spigot 同版号方案，PaperMC 仓库提供）
+val paperApiVersion = "1.20.1-R0.1-SNAPSHOT"
 val snakeyamlVersion = "2.2"
 
 java {
@@ -32,8 +34,8 @@ repositories {
 }
 
 dependencies {
-    // Bukkit 基线：编译可见、运行期由服务端提供（ADR-0007）
-    compileOnly("org.spigotmc:spigot-api:$spigotApiVersion")
+    // Bukkit 编译基线 paper-api（spigot 超集，含 Folia 区域调度 API）：编译可见、运行期由服务端提供（ADR-0007/0019）
+    compileOnly("io.papermc.paper:paper-api:$paperApiVersion")
 
     // 共享核心：shade 进插件 jar（platform-spi 经 api 传递 core-runtime + core-domain）
     implementation(project(":platform-spi"))
@@ -115,8 +117,8 @@ tasks.named("build") {
 val acceptance: SourceSet by sourceSets.creating
 
 dependencies {
-    // Bukkit 基线编译可见、运行期由服务端提供
-    "acceptanceCompileOnly"("org.spigotmc:spigot-api:$spigotApiVersion")
+    // Bukkit 编译基线 paper-api（spigot 超集）编译可见、运行期由服务端提供（ADR-0019）
+    "acceptanceCompileOnly"("io.papermc.paper:paper-api:$paperApiVersion")
     // 平台无关验收核心（控制协议 / 协调 / GameTest 框架 / 报告）+ 协议（编 HUD 包）
     "acceptanceImplementation"(project(":acceptance"))
     "acceptanceImplementation"(project(":protocol"))
@@ -138,8 +140,8 @@ val acceptanceJar by tasks.registering(ShadowJar::class) {
     archiveClassifier.set("")
     from(acceptance.output)
     configurations = listOf(project.configurations["acceptanceRuntimeClasspath"])
-    // 防御：spigot-api 为 compileOnly，不应进产物
-    dependencies { exclude(dependency("org.spigotmc:spigot-api")) }
+    // 防御：paper-api 为 compileOnly，不应进产物
+    dependencies { exclude(dependency("io.papermc.paper:paper-api")) }
     exclude("META-INF/maven/**")
     // shadow 改配置不刷新缓存指纹，令其确定性重跑（与产品 shadowJar 一致）
     outputs.upToDateWhen { false }

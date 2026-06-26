@@ -13,7 +13,8 @@ import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
  * （{@code runTask}）；异步走 {@code runTaskAsynchronously}；周期任务由 {@code runTaskTimer} 驱动、
  * 句柄经 {@link BukkitTask#cancel()} 取消释放。
  *
- * <p>Folia 区域调度的真机适配经 FeatureGate 分支属后续（FR-13），本实现覆盖普通 Bukkit 单主线程模型。
+ * <p>本实现是<b>非 Folia</b> 回退（普通 Bukkit/Spigot/Paper 单主线程模型）；Folia 区域调度由
+ * {@link FoliaSchedulerPort} 承担，二者经 {@link BukkitSchedulers#create} 按 {@code FeatureGate} 选用（FR-13）。
  */
 public final class BukkitSchedulerPort implements SchedulerPort {
 
