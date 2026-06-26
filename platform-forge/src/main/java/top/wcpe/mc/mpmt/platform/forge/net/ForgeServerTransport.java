@@ -84,6 +84,17 @@ public final class ForgeServerTransport implements TransportPort {
         return MAX_PAYLOAD;
     }
 
+    /**
+     * 暴露已注册的产品通道（{@code mpmt:main}），供客户端 HUD 侧在<b>同一通道</b>追加 {@code
+     * ClientCustomPayloadEvent} 监听收 S2C HUD 字节（FR-27）。
+     *
+     * <p>{@link NetworkRegistry} 同名通道只能注册一次，故客户端不能再 {@code newEventChannel}，只能
+     * {@code addListener} 复用本实例。
+     */
+    public EventNetworkChannel channel() {
+        return channel;
+    }
+
     /** 在网络线程立即读出全部可读字节（buf 随后释放）。 */
     private static byte[] readAll(FriendlyByteBuf buf) {
         byte[] data = new byte[buf.readableBytes()];

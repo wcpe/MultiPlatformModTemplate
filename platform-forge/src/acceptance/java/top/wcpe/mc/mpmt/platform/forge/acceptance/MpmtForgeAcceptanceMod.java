@@ -10,11 +10,13 @@ import java.util.List;
 import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.server.MinecraftServer;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.loading.FMLEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestRegistry;
@@ -23,6 +25,7 @@ import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
 import top.wcpe.mc.mpmt.acceptance.report.AcceptanceReport;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioResult;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioStatus;
+import top.wcpe.mc.mpmt.platform.forge.acceptance.client.ForgeAcceptanceClientInit;
 import top.wcpe.mc.mpmt.platform.forge.acceptance.scenario.ForgeSmokeServerScenario;
 
 /**
@@ -31,8 +34,9 @@ import top.wcpe.mc.mpmt.platform.forge.acceptance.scenario.ForgeSmokeServerScena
  * {@link ServerGameTestRunner}、写单一权威报告、收尾停服。看门狗绝对截止兜底 + CAS 单次收尾 + 硬退。
  *
  * <p>Forge dev run 因 FG6/FML 模块层不向 mod 暴露库依赖而不可用，故 Forge 与 Bukkit 同走 realserver：
- * 真实 Forge 专用服 + 独立 shaded acceptance mod jar。「客户端」复用我方 Fabric 验收伴侣连入真实 Forge 服
- * （异构互通，FR-11②）。
+ * 真实 Forge 专用服 + 独立 shaded acceptance mod jar。「客户端」用<b>真正的 Forge 客户端伴侣</b>
+ * （{@code ForgeAcceptanceClientCompanion}，仅 {@code Dist.CLIENT} 激活）连入真实 Forge 服——Forge↔Forge
+ * 走 FML 握手、mod 通道可用（vanilla/Fabric 客户端不做 FML 握手，跨栈通道不通，故不复用 Fabric 伴侣）。
  */
 @Mod("mpmt_acceptance")
 public final class MpmtForgeAcceptanceMod {
@@ -69,6 +73,10 @@ public final class MpmtForgeAcceptanceMod {
         // 服务端在 ServerStarted 再绑定。玩家断开监听用 Forge 事件总线。
         this.channel = new ForgeAcceptanceControlChannel();
         MinecraftForge.EVENT_BUS.register(this);
+        // 客户端侧：在同一验收通道上注册客户端伴侣（仅 Dist.CLIENT，客户端专有类不被服务端加载，ADR-0014）。
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            ForgeAcceptanceClientInit.activate(channel.channel());
+        }
         LOGGER.info("realserver Forge 验收驱动已激活，待服务端启动");
     }
 

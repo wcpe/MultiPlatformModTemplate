@@ -23,8 +23,8 @@ import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
  */
 public final class ForgeSmokeServerScenario extends ServerScenario {
 
-    /** 等客户端连入超时：realserver 客户端冷启动 + 连入需更长余量。 */
-    private static final long CLIENT_READY_TIMEOUT_MS = 180_000L;
+    /** 等客户端连入超时：realserver Forge dev 客户端冷启动极慢（实测可达 7.5 分钟到主菜单），留充足余量。 */
+    private static final long CLIENT_READY_TIMEOUT_MS = 600_000L;
 
     /** 验收用 HUD 文本（须与 Fabric 客户端验证器期望一致）。 */
     private static final String HUD_TEXT = "验收HUD";

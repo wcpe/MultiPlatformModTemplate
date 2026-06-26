@@ -36,6 +36,19 @@ java {
 minecraft {
     // 官方映射（ADR-0016：1.20.1 有官方映射）
     mappings("official", "1.20.1")
+
+    // realserver 验收用客户端运行配置：FG 负责装好 MC 客户端 + 原生 + 资源（headless 可渲染，同 Loom）。
+    // 不声明 mods{} dev 源（dev 源会撞 FG6/FML 不暴露 core 的 classpath 墙）；改把 reobf 后的 shaded jar
+    // （core 在 jar 内）放进 run-client/mods/，让 FML 当真实 jar mod 加载，绕过 dev classpath 墙。
+    runs {
+        create("client") {
+            workingDirectory(project.file("run-client"))
+            property("forge.logging.console.level", "info")
+            // 激活验收客户端伴侣（Dist.CLIENT）：伴侣到主菜单后程序化连入本机服务端
+            // （Forge dev 客户端不可靠处理 --quickPlayMultiplayer，故由伴侣自连，地址默认 127.0.0.1）。
+            property("mpmt.acceptance", "true")
+        }
+    }
 }
 
 repositories {

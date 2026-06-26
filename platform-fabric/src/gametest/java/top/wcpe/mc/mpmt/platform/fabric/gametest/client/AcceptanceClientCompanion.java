@@ -65,6 +65,11 @@ public final class AcceptanceClientCompanion {
         if (client.player == null) {
             return; // 未进世界
         }
+        // 修严重 bug：验收 gametest 客户端进世界后 MC 默认抓取鼠标光标（锁定到游戏窗口），会把用户鼠标
+        // 拉进窗口并占用焦点。验收全自动、无需用户在游戏内操作，故每 tick 释放被抓取的光标，杜绝抢占用户鼠标。
+        if (client.mouseHandler.isMouseGrabbed()) {
+            client.mouseHandler.releaseMouse();
+        }
         if (active == null) {
             active = inbound.poll();
             ticksInStep = 0;

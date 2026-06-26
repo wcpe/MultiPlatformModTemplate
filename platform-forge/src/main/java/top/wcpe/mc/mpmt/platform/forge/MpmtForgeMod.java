@@ -31,13 +31,18 @@ public final class MpmtForgeMod {
         // 通用装配（client/server 两端共用）：发现并装配唯一活跃平台
         PlatformProvider.boot(getClass().getClassLoader(), runtime);
         // 服务端 TransportPort（FR-20）：Forge SimpleChannel 产品通道 mpmt:main，构造期建链路
-        runtime.ports().register(TransportPort.class, new ForgeServerTransport("mpmt", "main"));
+        ForgeServerTransport transport = new ForgeServerTransport("mpmt", "main");
+        runtime.ports().register(TransportPort.class, transport);
         // 登记平台无关的服务端网络特性（FR-19）：注入 TransportPort 即复用同一份握手 / 协商 / 收发装配
         runtime.features()
                 .register(new ServerNetworkFeature(new BanRegistry(), () -> UUID.randomUUID().toString()));
         runtime.enable();
-        // client/server 分离代理：按运行端选择并初始化（FR-09）
-        SidedProxy proxy = FMLEnvironment.dist == Dist.CLIENT ? new ClientProxy() : new ServerProxy();
+        // client/server 分离代理：按运行端选择并初始化（FR-09）。客户端代理在<b>同一</b>产品通道上追加 HUD
+        // 入站监听（FR-27）：ClientProxy 仅在 Dist.CLIENT 实例化，客户端专有类不被服务端加载。
+        SidedProxy proxy =
+                FMLEnvironment.dist == Dist.CLIENT
+                        ? new ClientProxy(transport.channel())
+                        : new ServerProxy();
         proxy.init();
         LOGGER.info("MPMT 已装配并启用，活跃平台：{}", PlatformProvider.get().platformId());
     }

@@ -57,6 +57,17 @@ public final class ForgeAcceptanceControlChannel {
         return client;
     }
 
+    /**
+     * 暴露已注册的验收控制通道（{@code mpmt-test:acceptance}），供<b>客户端</b>伴侣在<b>同一通道</b>追加
+     * {@code ClientCustomPayloadEvent} 监听收 RunStep（ADR-0014）。
+     *
+     * <p>{@link NetworkRegistry} 同名通道只能注册一次，故客户端不能再 {@code newEventChannel}，只能
+     * {@code addListener} 复用本实例（与产品 HUD 通道复用同理）。
+     */
+    public EventNetworkChannel channel() {
+        return channel;
+    }
+
     /** 服务端收到客户端的裸控制 payload：读出字节解码后分派给协调器。 */
     private void onServerPayload(NetworkEvent.ServerCustomPayloadEvent event) {
         NetworkEvent.Context ctx = event.getSource().get();
