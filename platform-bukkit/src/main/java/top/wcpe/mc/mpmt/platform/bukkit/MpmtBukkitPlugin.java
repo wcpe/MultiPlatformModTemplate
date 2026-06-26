@@ -8,6 +8,7 @@ import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
 import top.wcpe.mc.mpmt.platform.bukkit.capability.BukkitCapabilityBootstrap;
 import top.wcpe.mc.mpmt.platform.bukkit.net.BukkitServerTransport;
+import top.wcpe.mc.mpmt.platform.spi.Capability;
 import top.wcpe.mc.mpmt.platform.spi.PlatformProvider;
 
 /**
@@ -33,6 +34,12 @@ public class MpmtBukkitPlugin extends JavaPlugin {
         // 传平台 FeatureGate 供调度端口按 Folia 能力选用（FR-13）
         BukkitCapabilityBootstrap.register(
                 this, runtime.eventBus(), PlatformProvider.get().featureGate());
+        // 融合服感知（FR-25 / ADR-0008）：CatServer 等 Forge+Bukkit 同进程时，以 Bukkit 入口绑定为唯一活跃平台、
+        // 不激活我方 Forge 入口（我方多入口同进程同时激活会在 PlatformProvider.boot 失败快）。
+        if (PlatformProvider.get().featureGate().supports(Capability.HYBRID_FORGE_BUKKIT)) {
+            getLogger()
+                    .info("检测到 Forge+Bukkit 融合服（CatServer 等），以 Bukkit 入口绑定为唯一活跃平台（ADR-0008）");
+        }
         getLogger().info("MPMT 已装配并启用，活跃平台：" + PlatformProvider.get().platformId());
     }
 
@@ -41,5 +48,7 @@ public class MpmtBukkitPlugin extends JavaPlugin {
         if (runtime != null && runtime.phase() == MpmtRuntime.Phase.ENABLED) {
             runtime.disable();
         }
+        // 释放进程级平台绑定，使同 JVM 内重新启用（/reload）能再次 boot（FR-25 / ADR-0008）
+        PlatformProvider.deactivate();
     }
 }

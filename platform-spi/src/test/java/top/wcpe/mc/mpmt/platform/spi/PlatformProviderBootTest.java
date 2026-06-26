@@ -57,4 +57,28 @@ class PlatformProviderBootTest {
         assertFalse(PlatformProvider.isBooted());
         assertThrows(IllegalStateException.class, PlatformProvider::get);
     }
+
+    @Test
+    @DisplayName("进程内已有我方活跃平台绑定：再激活第二入口失败快（融合服多入口，ADR-0008/FR-25）")
+    void 进程内多入口同时激活失败快() {
+        // 模拟同进程另一我方入口（如融合服上 Forge mod、不同类加载器）已激活：进程级标记已置、本类 instance 仍为 null。
+        // per-classloader 的 instance 检查跨类加载器拦不住，须由进程级系统属性把关。
+        System.setProperty(PlatformProvider.ACTIVE_PLATFORM_PROPERTY, "forge");
+        assertThrows(
+                PlatformAssemblyException.class,
+                () -> PlatformProvider.boot(getClass().getClassLoader(), new MpmtRuntime()));
+        // 标记清理在 @AfterEach 的 resetForTesting 内完成
+    }
+
+    @Test
+    @DisplayName("deactivate 后可重新激活：释放进程级绑定，支持同 JVM 重新启用（/reload）")
+    void deactivate后可重新激活() {
+        PlatformProvider.boot(getClass().getClassLoader(), new MpmtRuntime());
+        PlatformProvider.deactivate();
+        assertFalse(PlatformProvider.isBooted());
+        // 进程级标记已清，可再次 boot 不被误拦
+        PlatformProvider provider =
+                PlatformProvider.boot(getClass().getClassLoader(), new MpmtRuntime());
+        assertEquals("fake", provider.platformId());
+    }
 }
