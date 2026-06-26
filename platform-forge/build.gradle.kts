@@ -1,5 +1,6 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import java.util.zip.ZipFile
+import org.gradle.language.jvm.tasks.ProcessResources
 
 // platform-forge（L3）：独立 includeBuild，仅应用 ForgeGradle（ADR-0007）。
 // 打包链路（ADR-0012）：shade platform-spi + core + relocate snakeyaml 进 mod jar，再 reobf 到 SRG 供真实 Forge 运行。
@@ -122,4 +123,66 @@ tasks.named("build") {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+// ============================================================================
+// realserver 验收驱动（独立 acceptance 源集 + 独立 shaded+reobf mod jar，ADR-0014）
+// Forge dev run 因 FG6/FML 模块层不向 mod 暴露库依赖而不可用（已证），故 Forge 与 Bukkit 同走 realserver：
+// 真实 Forge 专用服 + 独立 acceptance mod jar。验收驱动代码不入产品 mod jar：单独打 mpmt-acceptance mod，
+// 仅在验收运行期放入服务端 mods/。
+// 编译期继承 main 的类路径（含 ForgeGradle 提供的 patched MC + Forge API）+ main 产物，并叠加 acceptance 核心 + protocol。
+// ============================================================================
+val acceptanceCoordinate = "top.wcpe.mc.mpmt:acceptance:$version"
+val protocolCoordinate = "top.wcpe.mc.mpmt:protocol:$version"
+
+val acceptance: SourceSet by sourceSets.creating {
+    compileClasspath += sourceSets["main"].compileClasspath + sourceSets["main"].output
+    runtimeClasspath += sourceSets["main"].runtimeClasspath + sourceSets["main"].output
+}
+configurations["acceptanceImplementation"].extendsFrom(configurations["implementation"])
+
+// 专用配置：需 shade 进验收 mod jar 的内容——**只含 acceptance 核心**（验收 jar 独有、不在产品 jar 里）。
+// protocol/core-domain 等已在产品 mod jar 内：Forge 的 FML 模块层禁止两个 mod 导出同名包（split package，
+// 否则 ResolutionException 启动失败），故验收 jar 不能再打 protocol/core-domain；运行期由产品 mod 提供
+// （FML mod 为自动模块，验收 mod 可读取产品 mod 的包）。protocol 仅作编译期依赖（compileOnly），不入产物。
+val acceptanceShadowBundle: Configuration by configurations.creating
+
+dependencies {
+    // 平台无关验收核心（控制协议 / 协调 / GameTest 框架 / 报告）：验收 jar 独有，shade 进去
+    "acceptanceImplementation"(acceptanceCoordinate)
+    acceptanceShadowBundle(acceptanceCoordinate)
+    // protocol（编 HUD 包用）：仅编译期可见，运行期由产品 mod 提供——绝不打进验收 jar（防 split package）
+    "acceptanceCompileOnly"(protocolCoordinate)
+}
+
+// 验收 mod mods.toml 的 ${version} 占位由构建注入
+tasks.named<ProcessResources>("processAcceptanceResources") {
+    inputs.property("version", project.version)
+    filesMatching("META-INF/mods.toml") {
+        expand("version" to project.version)
+    }
+}
+
+// 验收驱动 mod jar：shade acceptance/protocol/core-domain（均第一方、无第三方运行期依赖，无需 relocate），随后 reobf
+val acceptanceJar by tasks.registering(ShadowJar::class) {
+    group = "build"
+    description = "构建 realserver 验收驱动 mod mpmt-acceptance（仅验收运行期用，不入产品 jar）"
+    archiveBaseName.set("mpmt-acceptance-forge")
+    archiveClassifier.set("")
+    from(acceptance.output)
+    configurations = listOf(acceptanceShadowBundle)
+    exclude("META-INF/maven/**")
+    // shadow 改配置不刷新缓存指纹，令其确定性重跑（与产品 shadowJar 一致）
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
+}
+
+// 对验收 mod jar 同样 reobf（named → SRG），令其能在真实 Forge 服运行；生成 reobfAcceptanceJar
+reobf {
+    create("acceptanceJar")
+}
+
+// 把验收源集纳入常规 build 的编译校验（只编译，不打包——打包由验收编排按需触发）
+tasks.named("build") {
+    dependsOn(tasks.named("acceptanceClasses"))
 }

@@ -1,0 +1,36 @@
+# MPMT realserver 验收驱动 mod 描述（仅验收运行期加载，非产品 mod，ADR-0014）。
+# 由独立 acceptance 构建产出、仅在 realserver 验收时放入服务端 mods/；字段为 Forge 框架强制约定。
+# 使用 javafml 模组加载器，兼容 Forge 47（1.20.1）
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+# 模组条目：modId 须区别于产品 mpmt，避免同进程双 mod 冲突
+[[mods]]
+modId="mpmt_acceptance"
+version="${version}"
+displayName="MPMT Acceptance Driver"
+description="MPMT realserver 验收驱动 —— 服务端驱动场景、客户端验证、单一权威报告"
+
+# 依赖声明：要求 Forge 与 Minecraft 处于 1.20.1 区间；**强依赖产品 mpmt**（其后加载）：
+# 验收 jar 不打 protocol/core-domain（防 Forge 模块层 split package），运行期由产品 mod 提供这些类，故必需。
+[[dependencies.mpmt_acceptance]]
+modId="forge"
+mandatory=true
+versionRange="[47,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.mpmt_acceptance]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.21)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.mpmt_acceptance]]
+modId="mpmt"
+mandatory=true
+versionRange="[0,)"
+ordering="AFTER"
+side="BOTH"
