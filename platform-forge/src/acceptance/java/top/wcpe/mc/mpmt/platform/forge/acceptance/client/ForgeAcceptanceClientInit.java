@@ -2,7 +2,7 @@ package top.wcpe.mc.mpmt.platform.forge.acceptance.client;
 
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.network.event.EventNetworkChannel;
+import top.wcpe.mc.mpmt.platform.forge.acceptance.ForgeAcceptanceControlChannel;
 
 /**
  * 验收客户端伴侣装配接缝（仅客户端环境，ADR-0014）：在 {@code Dist.CLIENT} 上注册
@@ -21,9 +21,9 @@ public final class ForgeAcceptanceClientInit {
     /**
      * 在验收控制通道上注册客户端伴侣（含 verifier ServiceLoader 发现 + 客户端控制监听 + tick 服务）。
      *
-     * @param channel 验收控制通道（{@code mpmt-test:acceptance}），由服务端验收通道构造期注册并传入
+     * @param control 验收控制通道（{@code mpmt-test:acceptance}），由服务端验收通道构造期注册并传入
      */
-    public static void activate(EventNetworkChannel channel) {
-        new ForgeAcceptanceClientCompanion().register(channel);
+    public static void activate(ForgeAcceptanceControlChannel control) {
+        new ForgeAcceptanceClientCompanion().register(control);
     }
 }

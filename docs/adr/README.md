@@ -21,6 +21,7 @@
 | [0015](0015-domain-organization.md) | 功能域组织与拆分约定：域模板 + 注册 + 包→模块成长，不预建空壳 | 已接受 |
 | [0016](0016-mappings-policy.md) | 反混淆映射策略：锚点有官方映射用 Mojmap，无官方走各 loader 自带 | 已接受 |
 | [0017](0017-assembly-orchestration-in-l2.md) | 平台发现 / 装配编排归属 L2 platform-spi（细化 ADR-0002，守 L1⊄L2） | 已接受 |
+| [0018](0018-forge-mixin-raw-payload.md) | Forge 端用 Mixin 拦截裸 CustomPayload 统一裸字节收发（取代 SimpleChannel，打通 Forge 客户端↔Bukkit 服） | 已接受 |
 
 > 模板：状态 / 背景 / 决策 / 理由 / 后果 / 备选方案，见 [`_template.md`](_template.md)。
 

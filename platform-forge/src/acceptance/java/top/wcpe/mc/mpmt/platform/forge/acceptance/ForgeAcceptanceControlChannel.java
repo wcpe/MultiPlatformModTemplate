@@ -5,46 +5,43 @@ import java.util.List;
 import java.util.Objects;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkEvent;
-import net.minecraftforge.network.NetworkRegistry;
-import net.minecraftforge.network.event.EventNetworkChannel;
 import top.wcpe.mc.mpmt.acceptance.AcceptanceClient;
 import top.wcpe.mc.mpmt.acceptance.control.AcceptanceControlCodec;
 import top.wcpe.mc.mpmt.acceptance.control.AcceptanceControlPacket;
 import top.wcpe.mc.mpmt.acceptance.control.ClientReadyPacket;
 import top.wcpe.mc.mpmt.acceptance.control.StepResultPacket;
+import top.wcpe.mc.mpmt.platform.forge.net.ForgeRawPayloadRouter;
 
 /**
- * Forge 验收控制通道（realserver harness，ADR-0014）：用 Forge {@link EventNetworkChannel} 的<b>裸字节</b>
- * 把测试控制协议（ClientReady/RunStep/StepResult）桥接到平台无关 {@link AcceptanceClient}。
+ * Forge 验收控制通道（realserver harness，ADR-0014 / ADR-0018）：用<b>裸 vanilla {@code CustomPayload}</b> 把测试控制
+ * 协议（ClientReady/RunStep/StepResult）桥接到平台无关 {@link AcceptanceClient}。
  *
- * <p><b>必须用 EventNetworkChannel 而非 SimpleChannel</b>：SimpleChannel 会在 payload 前加消息索引帧字节，
- * 与 Fabric 验收伴侣的裸字节控制协议不兼容；EventNetworkChannel 收到 / 发出的均为裸字节，故可与 Fabric
- * 客户端伴侣按同一控制协议互通（异构互通，FR-11②）。收发写法对齐产品 {@code ForgeServerTransport}。
+ * <p><b>裸字节 + Mixin 收包</b>（ADR-0018）：服务端收包经 {@link ForgeRawPayloadRouter} 注册——Mixin 在原版
+ * {@code handleCustomPayload} 拦到本通道（{@code mpmt-test:acceptance}）裸包后切主线程分发到此；出站经原版
+ * {@link ClientboundCustomPayloadPacket} 裸发。与产品 {@code ForgeServerTransport} 同机制，且字节与 Fabric/Bukkit
+ * 验收伴侣一致（异构互通 FR-11②）。
  *
- * <p>入站（客户端→服务端）在网络线程触发，解码后分派 ClientReady/StepResult 给 {@link AcceptanceClient}；
- * 出站（服务端→客户端）由 {@link AcceptanceClient} 经注入回调触发，切主线程发给当前连入的单个测试客户端。
+ * <p>入站（客户端→服务端）分派 ClientReady/StepResult 给 {@link AcceptanceClient}；出站（服务端→客户端）由
+ * {@link AcceptanceClient} 经注入回调触发，切主线程发给当前连入的单个测试客户端。
  */
 public final class ForgeAcceptanceControlChannel {
 
-    /** 服务端在启动后绑定（出站发送定位玩家用）；通道注册须早于此，故不能在构造期要求 server。 */
+    /** 验收控制通道（{@code mpmt-test:acceptance}）。 */
+    private final ResourceLocation channelId = ForgeAcceptanceControlChannelId.CHANNEL;
+
+    /** 服务端在启动后绑定（出站发送定位玩家用）。 */
     private volatile MinecraftServer server;
 
     private final AcceptanceClient client;
-    private final EventNetworkChannel channel;
 
     public ForgeAcceptanceControlChannel() {
         // 注入出站回调：AcceptanceClient 要发字节时切主线程发给测试客户端
         this.client = new AcceptanceClient(this::sendToClient);
-        // **通道注册必须在 mod 构造期（Forge 注册阶段）**——注册阶段结束后 NetworkRegistry 会锁定，
-        // ServerStarted 再注册会抛「Registration of impl channels is locked」。与产品 ForgeServerTransport 同。
-        // 接受任意对端版本谓词一律放行（含 Fabric 客户端伴侣的缺省版本），支持异构互通。
-        this.channel =
-                NetworkRegistry.newEventChannel(
-                        ForgeAcceptanceControlChannelId.CHANNEL, () -> "1", v -> true, v -> true);
-        this.channel.addListener(this::onServerPayload);
+        // 向裸 payload 路由注册服务端收包：Mixin 拦到本通道裸包→主线程分发到此（ADR-0018）
+        ForgeRawPayloadRouter.registerServer(channelId, (player, data) -> onServerControl(data));
     }
 
     /** 服务端启动后绑定（供出站发送定位在线玩家）。 */
@@ -57,21 +54,15 @@ public final class ForgeAcceptanceControlChannel {
         return client;
     }
 
-    /**
-     * 暴露已注册的验收控制通道（{@code mpmt-test:acceptance}），供<b>客户端</b>伴侣在<b>同一通道</b>追加
-     * {@code ClientCustomPayloadEvent} 监听收 RunStep（ADR-0014）。
-     *
-     * <p>{@link NetworkRegistry} 同名通道只能注册一次，故客户端不能再 {@code newEventChannel}，只能
-     * {@code addListener} 复用本实例（与产品 HUD 通道复用同理）。
-     */
-    public EventNetworkChannel channel() {
-        return channel;
+    /** 验收控制通道资源位置（供客户端伴侣注册同一通道收包 + 裸发上报）。 */
+    public ResourceLocation channelId() {
+        return channelId;
     }
 
-    /** 服务端收到客户端的裸控制 payload：读出字节解码后分派给协调器。 */
-    private void onServerPayload(NetworkEvent.ServerCustomPayloadEvent event) {
-        NetworkEvent.Context ctx = event.getSource().get();
-        byte[] data = readAll(event.getPayload());
+    /** 服务端收到客户端控制字节（已在主线程，由路由切入）：解码后分派给协调器。 */
+    private void onServerControl(byte[] data) {
+        org.slf4j.LoggerFactory.getLogger("mpmt-acceptance")
+                .info("收到客户端控制 payload，{} 字节", data.length);
         try {
             AcceptanceControlPacket packet = AcceptanceControlCodec.decode(data);
             if (packet instanceof ClientReadyPacket) {
@@ -85,7 +76,6 @@ public final class ForgeAcceptanceControlChannel {
             org.slf4j.LoggerFactory.getLogger("mpmt-acceptance")
                     .warn("丢弃非法验收控制包：{}", e.getMessage());
         }
-        ctx.setPacketHandled(true);
     }
 
     /** 客户端断开：异常完成所有挂起步骤（由驱动监听 PlayerLoggedOut 调用）。 */
@@ -107,20 +97,10 @@ public final class ForgeAcceptanceControlChannel {
                         FriendlyByteBuf buf =
                                 new FriendlyByteBuf(Unpooled.buffer(data.length == 0 ? 1 : data.length));
                         buf.writeBytes(data);
-                        // 裸 CustomPayload（无 SimpleChannel 帧），与 Fabric 裸字节控制协议互通
                         players.get(0)
                                 .connection
-                                .send(
-                                        new ClientboundCustomPayloadPacket(
-                                                ForgeAcceptanceControlChannelId.CHANNEL, buf));
+                                .send(new ClientboundCustomPayloadPacket(channelId, buf));
                     }
                 });
-    }
-
-    /** 在网络线程立即读出全部可读字节（buf 随后释放）。 */
-    private static byte[] readAll(FriendlyByteBuf buf) {
-        byte[] data = new byte[buf.readableBytes()];
-        buf.readBytes(data);
-        return data;
     }
 }

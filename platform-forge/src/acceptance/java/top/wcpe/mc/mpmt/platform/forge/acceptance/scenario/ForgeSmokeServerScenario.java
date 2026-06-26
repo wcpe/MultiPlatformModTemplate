@@ -1,38 +1,33 @@
 package top.wcpe.mc.mpmt.platform.forge.acceptance.scenario;
 
-import io.netty.buffer.Unpooled;
 import java.util.List;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
+import top.wcpe.mc.mpmt.platform.forge.MpmtForgeMod;
 import top.wcpe.mc.mpmt.platform.forge.acceptance.ForgeServerGameTestContext;
+import top.wcpe.mc.mpmt.platform.forge.net.ForgeConnectionHandle;
 import top.wcpe.mc.mpmt.protocol.PacketCodec;
 import top.wcpe.mc.mpmt.protocol.packet.HudKind;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 
 /**
  * Forge 冒烟验收场景（realserver，ADR-0014）：等程序化客户端连入 → 服务端经产品通道发 ACTIONBAR HUD →
- * 客户端验证器断言渲染收到。与 Fabric/Bukkit 冒烟场景同覆盖（同 HUD 文本 / 同步骤 id），证 Fabric 客户端 ↔
- * Forge 服务端异构互通（FR-11②）。经 {@code ServiceLoader} 被驱动发现。
+ * 客户端验证器断言渲染收到。与 Fabric/Bukkit 冒烟场景同覆盖（同 HUD 文本 / 同步骤 id）。经 {@code ServiceLoader}
+ * 被驱动发现。
  *
- * <p><b>不重新注册产品通道 {@code mpmt:main}</b>：该通道归主 mod；本场景直接裸 {@link ClientboundCustomPayloadPacket}
- * 发产品 HUD 字节，避免两个 mod 各自注册同名通道导致冲突（裸字节与产品 {@code ForgeServerTransport} 一致）。
+ * <p><b>经产品传输发 HUD</b>：产品通道 {@code mpmt:main} 为主 mod 注册的 {@link
+ * top.wcpe.mc.mpmt.platform.forge.net.ForgeServerTransport SimpleChannel}（会给消息加帧字节），故本场景<b>不</b>裸发
+ * {@code ClientboundCustomPayloadPacket}（裸字节客户端 SimpleChannel 解不出），而是取主 mod 的活跃传输 Holder、经其
+ * {@code send} 发——既复用同一通道、又确保帧字节与客户端收包一致，且真正走产品收发链路（FR-27）。
  */
 public final class ForgeSmokeServerScenario extends ServerScenario {
 
     /** 等客户端连入超时：realserver Forge dev 客户端冷启动极慢（实测可达 7.5 分钟到主菜单），留充足余量。 */
     private static final long CLIENT_READY_TIMEOUT_MS = 600_000L;
 
-    /** 验收用 HUD 文本（须与 Fabric 客户端验证器期望一致）。 */
+    /** 验收用 HUD 文本（须与客户端验证器期望一致）。 */
     private static final String HUD_TEXT = "验收HUD";
-
-    /** 产品跨端通道命名空间（与各平台一致）。 */
-    private static final String PRODUCT_NAMESPACE = "mpmt";
-    /** 产品跨端通道路径。 */
-    private static final String PRODUCT_PATH = "main";
 
     @Override
     public String suite() {
@@ -50,7 +45,7 @@ public final class ForgeSmokeServerScenario extends ServerScenario {
         awaitClientReady(CLIENT_READY_TIMEOUT_MS);
 
         ForgeServerGameTestContext forge = (ForgeServerGameTestContext) context;
-        // 服务端裸发一个 HUD（onMain 块内访问在线玩家）：客户端 FabricHudRenderer 应渲染并记录
+        // 服务端经产品传输发一个 HUD（onMain 块内访问在线玩家）：客户端 ForgeHudRenderer 应渲染并记录
         context.onMain(
                 () -> {
                     List<ServerPlayer> players = forge.server().getPlayerList().getPlayers();
@@ -60,14 +55,9 @@ public final class ForgeSmokeServerScenario extends ServerScenario {
                                         .encode(
                                                 new ServerHudMessagePacket(
                                                         HudKind.ACTIONBAR, HUD_TEXT, "", 0L));
-                        FriendlyByteBuf buf =
-                                new FriendlyByteBuf(Unpooled.buffer(data.length == 0 ? 1 : data.length));
-                        buf.writeBytes(data);
-                        players.get(0)
-                                .connection
-                                .send(
-                                        new ClientboundCustomPayloadPacket(
-                                                new ResourceLocation(PRODUCT_NAMESPACE, PRODUCT_PATH), buf));
+                        // 经主 mod 活跃传输 Holder 发：复用产品 SimpleChannel（帧字节与客户端收包一致，FR-27）
+                        MpmtForgeMod.activeTransport()
+                                .send(new ForgeConnectionHandle(players.get(0)), data);
                     }
                 });
 

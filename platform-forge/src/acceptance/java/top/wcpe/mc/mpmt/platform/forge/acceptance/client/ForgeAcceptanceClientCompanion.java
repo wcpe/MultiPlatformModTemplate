@@ -1,6 +1,7 @@
 package top.wcpe.mc.mpmt.platform.forge.acceptance.client;
 
 import io.netty.buffer.Unpooled;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -11,14 +12,12 @@ import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.network.NetworkEvent;
-import net.minecraftforge.network.event.EventNetworkChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.wcpe.mc.mpmt.acceptance.control.AcceptanceControlCodec;
@@ -26,24 +25,24 @@ import top.wcpe.mc.mpmt.acceptance.control.AcceptanceControlPacket;
 import top.wcpe.mc.mpmt.acceptance.control.ClientReadyPacket;
 import top.wcpe.mc.mpmt.acceptance.control.RunStepPacket;
 import top.wcpe.mc.mpmt.acceptance.control.StepResultPacket;
-import top.wcpe.mc.mpmt.platform.forge.acceptance.ForgeAcceptanceControlChannelId;
+import top.wcpe.mc.mpmt.platform.forge.acceptance.ForgeAcceptanceControlChannel;
+import top.wcpe.mc.mpmt.platform.forge.net.ForgeRawPayloadRouter;
 
 /**
- * realserver 验收客户端伴侣（仅客户端环境，ADR-0014）：程序化客户端连入真实 Forge 服后，逐 tick 服务服务端
+ * realserver 验收客户端伴侣（仅客户端环境，ADR-0014 / ADR-0018）：程序化客户端连入真实服后，逐 tick 服务服务端
  * 下发的 {@link RunStepPacket}——经 {@link ClientVerifierRegistry} 找验证器轮询、判定后回 {@link StepResultPacket}。
  *
  * <p><b>仅客户端</b>（{@link OnlyIn}(Dist.CLIENT)）：引用 {@link Minecraft} 等客户端专有类型，服务端不得加载。
- * 加载到主菜单后<b>程序化连入</b>验收服务端（Forge dev 客户端不可靠处理 {@code --quickPlayMultiplayer}，故伴侣
- * 自连，地址取 {@code -Dmpmt.acceptance.server}，默认 {@code 127.0.0.1}）；客户端登入
- * （{@link ClientPlayerNetworkEvent.LoggingIn}）即上报 {@link ClientReadyPacket}。
+ * 加载到主菜单后<b>程序化连入</b>验收服务端（地址取 {@code -Dmpmt.acceptance.server}，默认 {@code 127.0.0.1}）；
+ * 进世界后逐 tick 上报 {@link ClientReadyPacket}（一次）。
  *
- * <p><b>通道复用</b>：验收控制通道 {@code mpmt-test:acceptance} 由服务端 {@code ForgeAcceptanceControlChannel}
- * 在构造期注册（同名通道只能注册一次），本伴侣只在<b>同一</b> {@link EventNetworkChannel} 上 {@code addListener}
- * 收 {@link NetworkEvent.ClientCustomPayloadEvent}（裸字节）。
+ * <p><b>裸字节 + Mixin 收包</b>（ADR-0018）：收包经 {@link ForgeRawPayloadRouter} 注册——Mixin 在原版客户端
+ * {@code handleCustomPayload} 拦到验收控制通道（{@code mpmt-test:acceptance}）裸包后切客户端线程分发到
+ * {@link #onClientControl}；出站经原版 {@link ServerboundCustomPayloadPacket} 裸发。**因拦截挂在原版收包入口、不看对端
+ * 是否 Forge，故连 Bukkit/Paper 服也能收**（Forge↔Bukkit，FR-11②）。
  *
- * <p><b>线程</b>：入站在网络线程入队、服务在客户端 tick 线程出队（队列并发安全；验证器只在 tick 线程读客户端态，
- * ADR-0013）。出站经裸 {@link ServerboundCustomPayloadPacket} 由 {@link ClientPacketListener#send} 发出，与服务端
- * {@code ServerCustomPayloadEvent} 接收对齐。
+ * <p><b>线程</b>：入站经路由切客户端线程入队、服务在客户端 tick 线程出队（队列并发安全；验证器只在 tick 线程读客户端态，
+ * ADR-0013）。
  */
 @OnlyIn(Dist.CLIENT)
 public final class ForgeAcceptanceClientCompanion {
@@ -54,37 +53,33 @@ public final class ForgeAcceptanceClientCompanion {
     private final ClientVerifierRegistry verifiers = new ClientVerifierRegistry();
     private final Queue<RunStepPacket> inbound = new ConcurrentLinkedQueue<>();
 
-    /** 登入仅上报一次 ClientReady（LoggingIn 事件去重）。 */
+    /** 登入仅上报一次 ClientReady（进世界后 tick 去重）。 */
     private final AtomicBoolean readyReported = new AtomicBoolean(false);
 
     /** 程序化连入只发起一次（Forge dev 客户端 quickPlay 不可靠，故由伴侣到主菜单后自连）。 */
     private final AtomicBoolean connectAttempted = new AtomicBoolean(false);
 
+    /** 验收控制通道资源位置（出站裸发 + 入站路由注册用）；register 时取得。 */
+    private ResourceLocation channelId;
+
     private RunStepPacket active;
     private int ticksInStep;
 
     /**
-     * 注册控制通道接收 + 客户端事件总线（登入上报 + 逐 tick 服务）。
+     * 注册控制通道接收 + 客户端事件总线（逐 tick 服务 + 进世界上报）。
      *
-     * @param channel 验收控制通道（{@code mpmt-test:acceptance}）实例，由服务端验收通道构造期注册并传入
+     * @param control 验收控制通道（{@code mpmt-test:acceptance}），由服务端验收通道构造期注册并传入
      */
-    public void register(EventNetworkChannel channel) {
-        // 在同一验收通道上追加客户端入站监听（不重注册通道）
-        channel.addListener(this::onClientPayload);
-        // 客户端 tick / 登入用 Forge 事件总线
+    public void register(ForgeAcceptanceControlChannel control) {
+        this.channelId = Objects.requireNonNull(control, "control 不能为空").channelId();
+        // 向裸 payload 路由注册客户端收包：Mixin 拦到本通道→客户端线程分发 onClientControl（ADR-0018）
+        ForgeRawPayloadRouter.registerClient(channelId, this::onClientControl);
+        // 客户端 tick 用 Forge 事件总线
         MinecraftForge.EVENT_BUS.register(this);
         LOGGER.info("realserver Forge 验收客户端伴侣已注册");
     }
 
-    /** 客户端登入：上报就绪（去重，避免重连重复上报）。 */
-    @SubscribeEvent
-    public void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
-        if (readyReported.compareAndSet(false, true)) {
-            send(new ClientReadyPacket(AcceptanceControlCodec.PROTOCOL_VERSION));
-        }
-    }
-
-    /** 客户端 tick（END 相）：逐 tick 服务一个待验证步骤。 */
+    /** 客户端 tick（END 相）：逐 tick 服务一个待验证步骤（含进世界后首次上报 ClientReady）。 */
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) {
@@ -119,10 +114,8 @@ public final class ForgeAcceptanceClientCompanion {
                 client.screen, client, ServerAddress.parseString(address), data, false);
     }
 
-    /** 收到服务端下发的裸控制 payload：解码 RunStep 入队（网络线程）。 */
-    private void onClientPayload(NetworkEvent.ClientCustomPayloadEvent event) {
-        NetworkEvent.Context ctx = event.getSource().get();
-        byte[] data = readAll(event.getPayload());
+    /** 收到服务端下发的控制字节（已在客户端线程，由路由切入）：解码 RunStep 入队。 */
+    private void onClientControl(byte[] data) {
         try {
             AcceptanceControlPacket packet = AcceptanceControlCodec.decode(data);
             if (packet instanceof RunStepPacket) {
@@ -131,7 +124,6 @@ public final class ForgeAcceptanceClientCompanion {
         } catch (RuntimeException e) {
             LOGGER.warn("丢弃非法验收控制包：{}", e.getMessage());
         }
-        ctx.setPacketHandled(true);
     }
 
     private void serveTick(Minecraft client) {
@@ -142,6 +134,11 @@ public final class ForgeAcceptanceClientCompanion {
         // 拉进窗口并占用焦点。验收全自动、无需用户在游戏内操作，故每 tick 释放被抓取的光标，杜绝抢占用户鼠标。
         if (client.mouseHandler.isMouseGrabbed()) {
             client.mouseHandler.releaseMouse();
+        }
+        // 进世界后上报一次 ClientReady（从 tick 上报：玩家已完全在世界、连接处于 PLAY，比 LoggingIn 事件更稳）
+        if (readyReported.compareAndSet(false, true)) {
+            LOGGER.info("已进世界，上报 ClientReady");
+            send(new ClientReadyPacket(AcceptanceControlCodec.PROTOCOL_VERSION));
         }
         if (active == null) {
             active = inbound.poll();
@@ -183,23 +180,16 @@ public final class ForgeAcceptanceClientCompanion {
         }
     }
 
-    /** 出站：裸 {@link ServerboundCustomPayloadPacket} 发给服务端（与服务端 ServerCustomPayloadEvent 对齐）。 */
-    private static void send(AcceptanceControlPacket packet) {
+    /** 出站：裸 {@link ServerboundCustomPayloadPacket} 发给服务端（ADR-0018，与服务端 Mixin 收包对齐）。 */
+    private void send(AcceptanceControlPacket packet) {
         ClientPacketListener connection = Minecraft.getInstance().getConnection();
-        if (connection == null) {
-            return; // 尚未连入（正常流程不会发生：发送都在登入 / tick 之后）
+        if (connection == null || channelId == null) {
+            return; // 尚未连入 / 未注册（正常流程不会发生）
         }
         byte[] data = AcceptanceControlCodec.encode(packet);
         FriendlyByteBuf buf =
                 new FriendlyByteBuf(Unpooled.buffer(data.length == 0 ? 1 : data.length));
         buf.writeBytes(data);
-        connection.send(
-                new ServerboundCustomPayloadPacket(ForgeAcceptanceControlChannelId.CHANNEL, buf));
-    }
-
-    private static byte[] readAll(FriendlyByteBuf buf) {
-        byte[] data = new byte[buf.readableBytes()];
-        buf.readBytes(data);
-        return data;
+        connection.send(new ServerboundCustomPayloadPacket(channelId, buf));
     }
 }

@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "top.wcpe.mc.mpmt.platform.forge.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "mpmt.refmap.json",
+  "mixins": [
+    "ServerGamePacketListenerImplMixin"
+  ],
+  "client": [
+    "ClientPacketListenerMixin"
+  ]
+}

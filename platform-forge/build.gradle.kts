@@ -1,16 +1,32 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import java.util.zip.ZipFile
 import org.gradle.language.jvm.tasks.ProcessResources
+import org.spongepowered.asm.gradle.plugins.MixinExtension
 
 // platform-forge（L3）：独立 includeBuild，仅应用 ForgeGradle（ADR-0007）。
 // 打包链路（ADR-0012）：shade platform-spi + core + relocate snakeyaml 进 mod jar，再 reobf 到 SRG 供真实 Forge 运行。
 // 映射用官方（ADR-0016）。core/snakeyaml 为纯 Java、无 MC 引用，reobf 不改写之。
+// Mixin（ADR-0018）：Forge 端裸 CustomPayload 收包经 Mixin 拦截原版 handleCustomPayload 路由到我方 receiver，
+// 打通 Forge↔Forge 与 Forge↔Bukkit。MixinGradle 无 Plugin-Portal marker，经 buildscript classpath + apply 应用。
+
+buildscript {
+    repositories {
+        maven("https://repo.spongepowered.org/repository/maven-public/")
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.spongepowered:mixingradle:0.7.+")
+    }
+}
 
 plugins {
     java
     id("net.minecraftforge.gradle") version "6.0.54"
     id("com.gradleup.shadow") version "8.3.3"
 }
+
+// MixinGradle 无 Plugin-Portal marker，只能经 buildscript classpath + 命令式 apply 应用（ADR-0018）
+apply(plugin = "org.spongepowered.mixin")
 
 group = "top.wcpe.mc.mpmt"
 version = file("../VERSION").readText().trim()
@@ -33,6 +49,13 @@ java {
     }
 }
 
+// MixinGradle 扩展（ADR-0018）：声明 main 源集→refmap 映射 + 配置名。config(...) 会把配置名写进 reobf jar 的
+// MixinConfigs 清单属性、并注入 dev run（runClient/runServer）。命令式 apply 不合成 mixin{} 访问器，故用 configure。
+configure<MixinExtension> {
+    add(sourceSets["main"], "mpmt.refmap.json")
+    config("mpmt.mixins.json")
+}
+
 minecraft {
     // 官方映射（ADR-0016：1.20.1 有官方映射）
     mappings("official", "1.20.1")
@@ -47,12 +70,29 @@ minecraft {
             // 激活验收客户端伴侣（Dist.CLIENT）：伴侣到主菜单后程序化连入本机服务端
             // （Forge dev 客户端不可靠处理 --quickPlayMultiplayer，故由伴侣自连，地址默认 127.0.0.1）。
             property("mpmt.acceptance", "true")
+            // dev↔dev 为 Mojmap 运行期，而 mods/ 内 jar 带的是生产 refmap（Mojmap→SRG）；jar 经 mods/ 加载、未走
+            // FG dev 源集的 refmap 回映射注入，故 dev 关闭 refmap、直接按注解里的 Mojmap 名解析（ADR-0018）。
+            // 生产（真实 Forge 服，SRG 运行期）不经本 run 配置、照常用 refmap，不受影响。
+            property("mixin.env.disableRefMap", "true")
+        }
+        // realserver 验收用服务端运行配置（dev 服）：与客户端同为 FG dev / Mojmap，使 FML 握手 dev↔dev 兼容
+        // （dev 客户端连真实生产服会握手不通）。同样从 run-server/mods 加载 shaded jar，绕过 dev classpath 墙。
+        create("server") {
+            workingDirectory(project.file("run-server"))
+            property("forge.logging.console.level", "info")
+            property("mpmt.acceptance", "true")
+            property("mpmt.acceptance.report", project.file("run-server/acceptance-report.txt").absolutePath)
+            property("mpmt.acceptance.deadlineMs", "660000")
+            // 同 client：dev↔dev Mojmap 运行期关闭 refmap，按 Mojmap 名解析（生产 SRG 不受影响，ADR-0018）
+            property("mixin.env.disableRefMap", "true")
         }
     }
 }
 
 repositories {
     mavenCentral()
+    // Mixin 注解处理器（processor 分类器 fat-jar）来源（ADR-0018）
+    maven("https://repo.spongepowered.org/repository/maven-public/")
 }
 
 // 专用配置：需 shade 进产物并 relocate 的内容（core/spi + 第三方运行期依赖），不参与 reobf
@@ -70,6 +110,8 @@ dependencies {
     // 第三方运行期依赖：shade 并 relocate（ADR-0012）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
+    // Mixin 注解处理器：编译期生成 refmap（Mojmap→SRG）供生产期解析；0.8.5 = Forge 47.x 内置 Mixin 版本（ADR-0018）
+    annotationProcessor("org.spongepowered:mixin:0.8.5:processor")
 
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -123,6 +165,9 @@ val verifyPackaging by tasks.registering {
         must(entries.none { it.startsWith("META-INF/maven/org.yaml/") }, "snakeyaml Maven 元数据残留")
         must(entries.contains("META-INF/mods.toml"), "缺少 META-INF/mods.toml")
         must(entries.contains("META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap"), "缺少 SPI services 声明")
+        // Mixin（ADR-0018）：配置 + refmap 须在产物内，否则生产期 mixin apply 失败（target method not found）
+        must(entries.contains("mpmt.mixins.json"), "缺少 Mixin 配置 mpmt.mixins.json")
+        must(entries.contains("mpmt.refmap.json"), "缺少 Mixin refmap（AP 未生成或未打包，生产期会 apply 失败）")
         must(entries.none { it.startsWith("net/minecraft/") }, "误把 Minecraft 类打入 mod jar")
         println("Forge 打包校验通过：")
         println("  产物 = ${jar.name}（条目数 ${entries.size}）")

@@ -69,13 +69,13 @@ public final class MpmtForgeAcceptanceMod {
             LOGGER.info("验收驱动未激活（-Dmpmt.acceptance=true 开启），mod 空载");
             return;
         }
-        // 控制通道须在 mod 构造期（注册阶段）注册 EventNetworkChannel，与产品 ForgeServerTransport 一致；
+        // 控制通道须在 mod 构造期（注册阶段）注册 SimpleChannel，与产品 ForgeServerTransport 一致；
         // 服务端在 ServerStarted 再绑定。玩家断开监听用 Forge 事件总线。
         this.channel = new ForgeAcceptanceControlChannel();
         MinecraftForge.EVENT_BUS.register(this);
         // 客户端侧：在同一验收通道上注册客户端伴侣（仅 Dist.CLIENT，客户端专有类不被服务端加载，ADR-0014）。
         if (FMLEnvironment.dist == Dist.CLIENT) {
-            ForgeAcceptanceClientInit.activate(channel.channel());
+            ForgeAcceptanceClientInit.activate(channel);
         }
         LOGGER.info("realserver Forge 验收驱动已激活，待服务端启动");
     }
