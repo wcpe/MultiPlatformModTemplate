@@ -1,7 +1,12 @@
 package top.wcpe.mc.mpmt.platform.bukkit;
 
+import java.util.UUID;
 import org.bukkit.plugin.java.JavaPlugin;
+import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
+import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
+import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
+import top.wcpe.mc.mpmt.platform.bukkit.net.BukkitServerTransport;
 import top.wcpe.mc.mpmt.platform.spi.PlatformProvider;
 
 /**
@@ -16,8 +21,12 @@ public class MpmtBukkitPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         runtime = new MpmtRuntime();
-        // 玩法特性随后续增量登记到 runtime.features()；当前先打通"发现 + 装配 + 启用"链路
         PlatformProvider.boot(getClass().getClassLoader(), runtime);
+        // 服务端 TransportPort（FR-20）需 JavaPlugin 实例做插件消息，故在入口注册（SPI assemble 无平台上下文）
+        runtime.ports().register(TransportPort.class, new BukkitServerTransport(this));
+        // 登记平台无关的服务端网络特性（FR-19）：各平台注入自己的 TransportPort 即复用同一份装配
+        runtime.features()
+                .register(new ServerNetworkFeature(new BanRegistry(), () -> UUID.randomUUID().toString()));
         runtime.enable();
         getLogger().info("MPMT 已装配并启用，活跃平台：" + PlatformProvider.get().platformId());
     }

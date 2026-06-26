@@ -35,6 +35,13 @@ class MpmtBukkitPluginTest {
         assertTrue(plugin.isEnabled(), "插件应已启用");
         assertTrue(PlatformProvider.isBooted(), "平台应已装配");
         assertEquals("bukkit", PlatformProvider.get().platformId());
+        // 服务端传输端口（FR-20）已接线：插件启用时注册了产品跨端通道 mpmt:main
+        assertTrue(
+                plugin.getServer().getMessenger().isOutgoingChannelRegistered(plugin, "mpmt:main"),
+                "插件应已注册产品跨端通道 mpmt:main 的出站方向");
+        assertTrue(
+                plugin.getServer().getMessenger().isIncomingChannelRegistered(plugin, "mpmt:main"),
+                "插件应已注册产品跨端通道 mpmt:main 的入站方向");
         // MockBukkit 非 Folia、非融合服、非集成服
         assertFalse(PlatformProvider.get().featureGate().supports(Capability.REGION_SCHEDULER));
         assertFalse(PlatformProvider.get().featureGate().supports(Capability.HYBRID_FORGE_BUKKIT));

@@ -36,6 +36,8 @@ dependencies {
 
     // 共享核心：shade 进插件 jar（platform-spi 经 api 传递 core-runtime + core-domain）
     implementation(project(":platform-spi"))
+    // 服务端公共网络特性（FR-19）：各平台注入 TransportPort 后复用同一份握手 / 协商 / 收发装配
+    implementation(project(":core-server"))
     // 第三方运行期依赖：shade 并 relocate（ADR-0012）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
 
