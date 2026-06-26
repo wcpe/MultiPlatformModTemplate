@@ -7,6 +7,7 @@ import top.wcpe.mc.mpmt.core.runtime.Feature;
 import top.wcpe.mc.mpmt.core.runtime.RuntimeContext;
 import top.wcpe.mc.mpmt.protocol.PacketCodec;
 import top.wcpe.mc.mpmt.protocol.PacketDispatcher;
+import top.wcpe.mc.mpmt.protocol.reliability.ResyncCoordinator;
 
 /**
  * 客户端网络装配特性（L1，FR-19）：把平台注入的 {@link TransportPort}（客户端方向）装配成客户端收发栈——
@@ -26,6 +27,7 @@ public final class ClientNetworkFeature implements Feature {
 
     private HandshakeClientService handshakeClient;
     private PacketDispatcher dispatcher;
+    private ResyncCoordinator resyncCoordinator;
 
     public ClientNetworkFeature(String modVersion, MachineCodeProvider machineCodeProvider) {
         this.modVersion = Objects.requireNonNull(modVersion, "modVersion 不能为空");
@@ -42,6 +44,24 @@ public final class ClientNetworkFeature implements Feature {
         TransportPort transport = context.port(TransportPort.class);
         this.dispatcher = new PacketDispatcher(transport, new PacketCodec());
         this.handshakeClient = new HandshakeClientService(dispatcher, modVersion, machineCodeProvider);
+        // 重连重同步（FR-24）：装配协调器供 requestResync 发请求；客户端不处理入站重同步请求（handler 空操作）
+        this.resyncCoordinator =
+                new ResyncCoordinator(dispatcher, (connection, sinceRevision) -> {
+                    // 客户端方向不处理入站重同步请求
+                });
+    }
+
+    /**
+     * 重连重同步（FR-24）：请求服务端重发自 {@code sinceRevision} 起的权威状态。
+     *
+     * <p>由平台在<b>重连 / 重新握手后</b>触发（如 Fabric 的重新 JOIN 事件），与 {@link #startHandshake()} 同为
+     * 平台驱动的连接生命周期钩子；{@code sinceRevision} 取客户端已知的最新权威修订号。
+     */
+    public void requestResync(long sinceRevision) {
+        if (resyncCoordinator == null) {
+            throw new IllegalStateException("客户端网络特性尚未启用");
+        }
+        resyncCoordinator.requestResync(sinceRevision);
     }
 
     /** 客户端收发管线（启用后可取，供平台注册收包处理器，如 HUD 渲染）。 */

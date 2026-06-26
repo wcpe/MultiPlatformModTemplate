@@ -18,6 +18,7 @@ import top.wcpe.mc.mpmt.protocol.PacketCodec;
 import top.wcpe.mc.mpmt.protocol.ProtocolVersion;
 import top.wcpe.mc.mpmt.protocol.packet.ClientHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ClientIdReportPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ResyncRequestPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
 
@@ -79,6 +80,18 @@ class ClientNetworkFeatureTest {
         feature = enabled(new FakeClientTransport());
         assertNotNull(feature.handshakeClient());
         assertEquals("client-network", feature.name());
+    }
+
+    @Test
+    @DisplayName("重连重同步：requestResync 发出携带 sinceRevision 的 ResyncRequest（FR-24）")
+    void 重连请求重同步发包() {
+        FakeClientTransport transport = new FakeClientTransport();
+        ClientNetworkFeature feature = enabled(transport);
+
+        feature.requestResync(987654321L);
+
+        ResyncRequestPacket sent = (ResyncRequestPacket) lastSent(transport);
+        assertEquals(987654321L, sent.getSinceRevision());
     }
 
     @Test

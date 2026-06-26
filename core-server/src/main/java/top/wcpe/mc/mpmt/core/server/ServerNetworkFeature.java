@@ -11,6 +11,8 @@ import top.wcpe.mc.mpmt.protocol.PacketDispatcher;
 import top.wcpe.mc.mpmt.protocol.PacketIds;
 import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
+import top.wcpe.mc.mpmt.protocol.reliability.ResyncCoordinator;
 
 /**
  * 服务端网络装配特性（L1，FR-19）：把平台注入的 {@link TransportPort} 装配成完整的服务端收发栈——
@@ -34,6 +36,7 @@ public final class ServerNetworkFeature implements Feature {
     private PacketDispatcher dispatcher;
     private HandshakeServerService handshakeService;
     private HudMessageService hudMessageService;
+    private ResyncCoordinator resyncCoordinator;
 
     public ServerNetworkFeature(BanRegistry banRegistry, Supplier<String> sessionIdSupplier) {
         this.banRegistry = Objects.requireNonNull(banRegistry, "banRegistry 不能为空");
@@ -56,11 +59,26 @@ public final class ServerNetworkFeature implements Feature {
                 PacketIds.PING,
                 (connection, packet) ->
                         dispatcher.send(connection, new PongPacket(((PingPacket) packet).getNonce())));
+        // 重连重同步（FR-24）：客户端重连后请求重发权威状态，服务端据修订号重发。脚手架以确认消息示意——
+        // 真实玩法在此回调内按 sinceRevision 查权威状态并重发（脚手架永不交付具体玩法）。
+        this.resyncCoordinator =
+                new ResyncCoordinator(
+                        dispatcher,
+                        (connection, sinceRevision) ->
+                                dispatcher.send(
+                                        connection,
+                                        new ServerMessagePacket(
+                                                "已按修订 " + sinceRevision + " 重同步（服务端重发权威状态）")));
     }
 
     /** 握手服务（启用后可取，供命令 / 其他特性使用）。 */
     public HandshakeServerService handshakeService() {
         return required(handshakeService);
+    }
+
+    /** 重连重同步协调器（启用后可取，FR-24）。 */
+    public ResyncCoordinator resyncCoordinator() {
+        return required(resyncCoordinator);
     }
 
     /** HUD 下发服务（启用后可取）。 */

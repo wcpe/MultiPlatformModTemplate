@@ -23,6 +23,7 @@ import top.wcpe.mc.mpmt.protocol.packet.ClientHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ClientIdReportPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ResyncRequestPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
 
@@ -92,6 +93,22 @@ class ServerNetworkFeatureTest {
         assertNotNull(feature.handshakeService());
         assertNotNull(feature.hudMessageService());
         assertEquals("server-network", feature.name());
+    }
+
+    @Test
+    @DisplayName("重连重同步：收到 ResyncRequest 后服务端据修订号重发权威状态（FR-24）")
+    void 重同步请求服务端重发状态() {
+        FakeServerTransport transport = new FakeServerTransport();
+        ServerNetworkFeature feature = enabled(transport);
+        ConnectionHandle c = conn();
+        assertNotNull(feature.resyncCoordinator());
+
+        transport.receive(c, codec.encode(new ResyncRequestPacket(42L)));
+
+        ServerMessagePacket resent = (ServerMessagePacket) lastSent(transport);
+        assertTrue(
+                resent.getText().contains("42"),
+                "应据 sinceRevision 重发权威状态，文本=" + resent.getText());
     }
 
     @Test
