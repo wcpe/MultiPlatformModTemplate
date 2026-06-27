@@ -3,6 +3,8 @@
 
 import org.gradle.api.plugins.quality.Checkstyle
 import org.gradle.api.plugins.quality.CheckstyleExtension
+import org.gradle.api.plugins.quality.Pmd
+import org.gradle.api.plugins.quality.PmdExtension
 import org.gradle.jvm.toolchain.JavaToolchainService
 
 val mpmtVersion: String = rootProject.file("VERSION").readText().trim()
@@ -26,6 +28,15 @@ subprojects {
         isIgnoreFailures = false
         maxWarnings = 0
     }
+    // 代码异味 / 源码规则：PMD（裁剪规则集，聚焦未用/空块/吞异常/线程等真实坏味道）
+    apply(plugin = "pmd")
+    configure<PmdExtension> {
+        toolVersion = "7.0.0"
+        isConsoleOutput = true
+        ruleSetConfig = resources.text.fromFile(rootProject.file("config/pmd/ruleset.xml"))
+        ruleSets = emptyList()
+        isIgnoreFailures = false
+    }
     // 分析工具运行 JVM 与被测模块目标字节码无关：L0–L2 编译工具链为 JDK 8，但 Checkstyle 10.x 需 JDK 11+，
     // 故把分析任务固定到 JDK 17 启动器运行（不影响模块自身的 Java 8 编译目标）。
     // 在 afterEvaluate 配置：JavaToolchainService 由模块自身的 java 插件注册、晚于本 subprojects 块。
@@ -34,6 +45,9 @@ subprojects {
         val analysisLauncher =
             toolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(17)) }
         tasks.withType(Checkstyle::class.java).configureEach {
+            javaLauncher.set(analysisLauncher)
+        }
+        tasks.withType(Pmd::class.java).configureEach {
             javaLauncher.set(analysisLauncher)
         }
     }

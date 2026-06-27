@@ -97,7 +97,8 @@ class PacketDispatcherTest {
     void 无处理器忽略() {
         FakeTransport transport = new FakeTransport();
         PacketCodec codec = new PacketCodec();
-        PacketDispatcher dispatcher = new PacketDispatcher(transport, codec);
+        // 构造即把 dispatcher 注册到 transport.onReceive（副作用），故无需持有引用
+        new PacketDispatcher(transport, codec);
 
         assertDoesNotThrow(() -> transport.receive(codec.encode(new PingPacket(1L))));
     }

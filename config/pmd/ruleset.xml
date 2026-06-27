@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<ruleset name="MPMT PMD 规则集"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+    <description>
+        MPMT PMD 规则集（裁剪版，严格门禁）。只取高信号、低误报的真实坏味道与缺陷类规则，
+        不取文档/格式/命名类（那些交给 Checkstyle 与人工 review），以便在存量干净代码上零违规门禁。
+    </description>
+
+    <!-- 最佳实践：聚焦"未用/无效"类真实坏味道 -->
+    <rule ref="category/java/bestpractices.xml/UnusedLocalVariable"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateField"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod"/>
+    <rule ref="category/java/bestpractices.xml/UnusedAssignment"/>
+    <!-- 不取 UnusedFormalParameter：本项目回调密集（dispatcher.on/EventBus 经方法引用传
+         (ConnectionHandle,Packet) 等固定签名），未用的回调形参是契约所需、删之破坏方法引用，
+         该规则对此固有误报，故不纳入 -->
+
+
+    <!-- 易错点：吞异常/空块/比较与流程等真实缺陷源（对齐反模式禁令第 7 条） -->
+    <rule ref="category/java/errorprone.xml/EmptyCatchBlock"/>
+    <!-- PMD 7 把空 if/while/finally/switch 等合并为 EmptyControlStatement（codestyle） -->
+    <rule ref="category/java/codestyle.xml/EmptyControlStatement"/>
+    <rule ref="category/java/errorprone.xml/UnconditionalIfStatement"/>
+    <rule ref="category/java/errorprone.xml/CompareObjectsWithEquals"/>
+    <rule ref="category/java/errorprone.xml/BrokenNullCheck"/>
+    <rule ref="category/java/errorprone.xml/MisplacedNullCheck"/>
+    <rule ref="category/java/errorprone.xml/CheckSkipResult"/>
+    <rule ref="category/java/errorprone.xml/DontUseFloatTypeForLoopIndices"/>
+    <rule ref="category/java/errorprone.xml/JumbledIncrementer"/>
+    <rule ref="category/java/errorprone.xml/ReturnFromFinallyBlock"/>
+    <rule ref="category/java/errorprone.xml/UnnecessaryConversionTemporary"/>
+
+    <!-- 多线程：本项目高风险区（线程/调度），取明确缺陷类 -->
+    <rule ref="category/java/multithreading.xml/AvoidThreadGroup"/>
+    <rule ref="category/java/multithreading.xml/DoubleCheckedLocking"/>
+    <rule ref="category/java/multithreading.xml/NonThreadSafeSingleton"/>
+
+    <!-- 性能：明确的低级性能坑 -->
+    <rule ref="category/java/performance.xml/BigIntegerInstantiation"/>
+</ruleset>

@@ -108,7 +108,7 @@ class BukkitServerTransportTest {
 
     @Test
     void 服务端不支持无连接发送() {
-        ServerMock server = MockBukkit.mock();
+        MockBukkit.mock();
         MockPlugin plugin = MockBukkit.createMockPlugin();
         BukkitServerTransport transport = new BukkitServerTransport(plugin);
 
@@ -117,7 +117,7 @@ class BukkitServerTransportTest {
 
     @Test
     void 单包上限取Bukkit插件消息上限() {
-        ServerMock server = MockBukkit.mock();
+        MockBukkit.mock();
         MockPlugin plugin = MockBukkit.createMockPlugin();
         BukkitServerTransport transport = new BukkitServerTransport(plugin);
 
