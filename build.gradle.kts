@@ -48,6 +48,30 @@ subprojects {
         ruleSets = emptyList()
         isIgnoreFailures = false
     }
+    // 测试覆盖率：JaCoCo（报告 + 覆盖率底线门禁）。底线 LINE 0.70 取各模块当前覆盖率（最低 77%）下方整数、防回退。
+    apply(plugin = "jacoco")
+    tasks.withType(org.gradle.testing.jacoco.tasks.JacocoReport::class.java).configureEach {
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+        }
+    }
+    tasks.withType(org.gradle.testing.jacoco.tasks.JacocoCoverageVerification::class.java)
+        .configureEach {
+            violationRules {
+                rule {
+                    limit {
+                        counter = "LINE"
+                        minimum = "0.70".toBigDecimal()
+                    }
+                }
+            }
+        }
+    tasks.withType(Test::class.java).configureEach {
+        finalizedBy(tasks.matching { it.name == "jacocoTestReport" })
+    }
+    tasks.matching { it.name == "check" }
+        .configureEach { dependsOn(tasks.matching { it.name == "jacocoTestCoverageVerification" }) }
     // 缺陷检测（字节码）+ 安全审查：SpotBugs + FindSecBugs（挂在 SpotBugs 上）
     apply(plugin = "com.github.spotbugs")
     configure<SpotBugsExtension> {
