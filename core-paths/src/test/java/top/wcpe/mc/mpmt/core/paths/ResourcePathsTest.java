@@ -8,7 +8,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.port.DataDirectoryPort;
 
 /** 资源路径预设穷举（FR-30 / ADR-0010）：预设位置、相对名解析、越界拒绝、失败快。 */
 class ResourcePathsTest {

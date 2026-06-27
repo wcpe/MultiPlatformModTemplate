@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+        "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+        "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  MPMT Checkstyle 规则集（裁剪版，严格门禁）。
+  聚焦高价值、与现有代码风格一致的检查：导入卫生、命名、基本结构与可读性；
+  不强制具体格式化（缩进/换行交给开发者与 IDE），以便在存量代码上零违规门禁。
+-->
+<module name="Checker">
+    <property name="charset" value="UTF-8"/>
+    <property name="severity" value="error"/>
+    <property name="fileExtensions" value="java, properties, xml"/>
+
+    <!-- 行尾留空白文件级检查 -->
+    <module name="FileTabCharacter">
+        <property name="eachLine" value="true"/>
+    </module>
+
+    <module name="TreeWalker">
+        <!-- 导入卫生：禁止未用导入、禁止 *、禁止冗余导入 -->
+        <module name="UnusedImports">
+            <property name="processJavadoc" value="true"/>
+        </module>
+        <module name="RedundantImport"/>
+        <module name="AvoidStarImport"/>
+
+        <!-- 命名规范（标准 Java 约定） -->
+        <module name="PackageName">
+            <property name="format" value="^[a-z]+(\.[a-z][a-z0-9]*)*$"/>
+        </module>
+        <module name="TypeName"/>
+        <!-- 方法名：生产代码用英文小驼峰；测试方法刻意用中文+下划线提升可读性（项目中文规范），
+             故放宽为允许中文起始与下划线，仍禁止大写起始等明显反例 -->
+        <module name="MethodName">
+            <property name="format" value="^[a-zA-Z一-龥][a-zA-Z0-9_一-龥]*$"/>
+        </module>
+        <module name="ConstantName"/>
+        <module name="StaticVariableName"/>
+        <module name="LocalVariableName"/>
+        <module name="MemberName"/>
+        <module name="ParameterName"/>
+
+        <!-- 结构与可读性 -->
+        <module name="OneTopLevelClass"/>
+        <module name="EqualsHashCode"/>
+        <module name="MissingSwitchDefault"/>
+        <module name="FallThrough"/>
+        <module name="SimplifyBooleanExpression"/>
+        <module name="SimplifyBooleanReturn"/>
+        <module name="StringLiteralEquality"/>
+        <module name="EmptyStatement"/>
+        <module name="DefaultComesLast"/>
+        <module name="UpperEll"/>
+        <module name="ModifierOrder"/>
+    </module>
+</module>
