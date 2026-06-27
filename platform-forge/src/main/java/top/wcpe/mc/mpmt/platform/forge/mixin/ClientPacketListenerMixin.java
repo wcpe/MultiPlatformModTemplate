@@ -24,6 +24,9 @@ import top.wcpe.mc.mpmt.platform.forge.net.ForgeRawPayloadRouter;
 @Mixin(net.minecraft.client.multiplayer.ClientPacketListener.class)
 public abstract class ClientPacketListenerMixin {
 
+    // PMD 误报：该方法不被 Java 代码调用，而由 Mixin 字节码变换器在运行期织入原版方法作回调（@Inject）；
+    // 静态分析看不到此调用链，故按构造精确抑制（static-analysis §3：@SuppressWarnings 配合说明）。
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
     @Inject(method = "handleCustomPayload", at = @At("HEAD"), cancellable = true)
     private void mpmt$onCustomPayload(ClientboundCustomPayloadPacket packet, CallbackInfo ci) {
         ResourceLocation channel = packet.getIdentifier();

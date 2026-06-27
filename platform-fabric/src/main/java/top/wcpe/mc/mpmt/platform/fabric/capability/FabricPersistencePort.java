@@ -58,7 +58,11 @@ public final class FabricPersistencePort implements PersistencePort {
     private void store(String namespace, Properties properties) {
         Path file = file(namespace);
         try {
-            Files.createDirectories(file.getParent());
+            // file.getParent() 在文件名无父路径时可能为 null，加空值卫语句避免 NPE
+            Path parent = file.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
             try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
                 properties.store(writer, "mpmt persistence");
             }

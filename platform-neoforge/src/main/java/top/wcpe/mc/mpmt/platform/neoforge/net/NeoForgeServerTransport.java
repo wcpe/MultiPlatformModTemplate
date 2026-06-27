@@ -5,7 +5,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.NetworkEvent;
 import net.neoforged.neoforge.network.NetworkRegistry;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.simple.SimpleChannel;

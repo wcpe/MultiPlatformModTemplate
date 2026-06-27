@@ -59,7 +59,11 @@ public final class NeoForgePersistencePort implements PersistencePort {
     private void store(String namespace, Properties properties) {
         Path file = file(namespace);
         try {
-            Files.createDirectories(file.getParent());
+            // file.getParent() 理论上可能为 null（根路径无父目录），加空值卫语句避免 NPE
+            Path parent = file.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
             try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
                 properties.store(writer, "mpmt persistence");
             }

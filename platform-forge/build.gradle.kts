@@ -1,7 +1,18 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import java.util.zip.ZipFile
+import com.github.spotbugs.snom.Confidence
+import com.github.spotbugs.snom.Effort
+import com.github.spotbugs.snom.SpotBugsExtension
+import com.github.spotbugs.snom.SpotBugsTask
+import org.gradle.api.plugins.quality.Checkstyle
+import org.gradle.api.plugins.quality.CheckstyleExtension
+import org.gradle.api.plugins.quality.Pmd
+import org.gradle.api.plugins.quality.PmdExtension
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
 import org.spongepowered.asm.gradle.plugins.MixinExtension
+import java.util.zip.ZipFile
 
 // platform-forge（L3）：独立 includeBuild，仅应用 ForgeGradle（ADR-0007）。
 // 打包链路（ADR-0012）：shade platform-spi + core + relocate snakeyaml 进 mod jar，再 reobf 到 SRG 供真实 Forge 运行。
@@ -23,6 +34,15 @@ plugins {
     java
     id("net.minecraftforge.gradle") version "6.0.54"
     id("com.gradleup.shadow") version "8.3.3"
+    // 静态分析 / 质量工具链（严格门禁，static-analysis.md）——与根构建同一套，共享 ../config 规则集。
+    // 核心 Gradle 插件（checkstyle/pmd/jacoco）直接 apply；外部分析插件经 plugins{} 声明。
+    id("com.github.spotbugs") version "6.0.26"
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
+    id("io.gitlab.arturbosch.detekt") version "1.23.7"
+    id("org.jetbrains.kotlinx.kover") version "0.8.3"
+    checkstyle
+    pmd
+    jacoco
 }
 
 // MixinGradle 无 Plugin-Portal marker，只能经 buildscript classpath + 命令式 apply 应用（ADR-0018）
@@ -154,6 +174,7 @@ val verifyPackaging by tasks.registering {
     doLast {
         val jar = tasks.named<ShadowJar>("shadowJar").get().archiveFile.get().asFile
         val entries = ZipFile(jar).use { zf -> zf.entries().asSequence().map { it.name }.toList() }
+
         fun must(cond: Boolean, msg: String) {
             if (!cond) throw GradleException("Forge 打包校验失败：$msg")
         }
@@ -181,6 +202,73 @@ tasks.named("build") {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+// ============================================================================
+// 静态分析 / 质量工具链配置（严格门禁，static-analysis.md）——照根构建 subprojects 同一套，
+// 共享 ../config 规则集（独立 includeBuild 经 rootProject.file("../config/...") 引用）；
+// 违规即失败构建（isIgnoreFailures=false）。本工程为单工程 includeBuild，故直接 apply、不用 subprojects 块。
+// ============================================================================
+// 样式审查：Checkstyle（共享裁剪规则集）
+configure<CheckstyleExtension> {
+    toolVersion = "10.17.0"
+    configFile = rootProject.file("../config/checkstyle/checkstyle.xml")
+    isIgnoreFailures = false
+    maxWarnings = 0
+}
+// 代码异味 / 源码规则：PMD（共享裁剪规则集）
+configure<PmdExtension> {
+    toolVersion = "7.0.0"
+    isConsoleOutput = true
+    ruleSetConfig = resources.text.fromFile(rootProject.file("../config/pmd/ruleset.xml"))
+    ruleSets = emptyList()
+    isIgnoreFailures = false
+}
+// 测试覆盖率：JaCoCo（报告 only——平台胶水覆盖率由 realserver 验收门保障，此处不设覆盖率底线、不并入 check）
+tasks.withType(org.gradle.testing.jacoco.tasks.JacocoReport::class.java).configureEach {
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+}
+tasks.withType(Test::class.java).configureEach {
+    finalizedBy(tasks.matching { it.name == "jacocoTestReport" })
+}
+// 缺陷检测（字节码）+ 安全审查：SpotBugs + FindSecBugs（挂在 SpotBugs 上）
+configure<SpotBugsExtension> {
+    ignoreFailures.set(false)
+    effort.set(Effort.MAX)
+    // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
+    reportLevel.set(Confidence.MEDIUM)
+    excludeFilter.set(rootProject.file("../config/spotbugs/exclude.xml"))
+}
+dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
+// 把 lombok.config 登记为编译输入：其改动须失效编译缓存（否则构建缓存会服旧的、缺 @Generated 的类，
+// 导致 SpotBugs/JaCoCo 仍对 Lombok 生成代码误报）。.editorconfig/lombok.config 在仓库根，自动向上查找。
+tasks.withType(JavaCompile::class.java).configureEach {
+    inputs.file(rootProject.file("../lombok.config"))
+        .withPropertyName("lombokConfig")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+// 分析工具运行 JVM 与被测模块目标字节码无关：Checkstyle 10.x 需 JDK 11+，故把 Checkstyle/Pmd 分析任务
+// 固定到 JDK 17 启动器运行。afterEvaluate：JavaToolchainService 由 java 插件注册、晚于本配置块。
+afterEvaluate {
+    val toolchains = extensions.getByType(JavaToolchainService::class.java)
+    val analysisLauncher =
+        toolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(17)) }
+    tasks.withType(Checkstyle::class.java).configureEach {
+        javaLauncher.set(analysisLauncher)
+    }
+    tasks.withType(Pmd::class.java).configureEach {
+        javaLauncher.set(analysisLauncher)
+    }
+    // SpotBugs worker 默认用守护 JVM（JDK 17），无需固定 launcher。
+    // 仅生产码（spotbugsMain）严格门禁；test / acceptance 等非 main 源集宽松（含 mock/反射等 SpotBugs 噪声）。
+    tasks.withType(SpotBugsTask::class.java).configureEach {
+        if (name != "spotbugsMain") {
+            ignoreFailures = true
+        }
+    }
 }
 
 // ============================================================================
