@@ -28,8 +28,12 @@ base {
 }
 
 java {
-    // SpongeAPI 11 最新制品与 SpongeVanilla 1.20.1 最新 RC 已要求 Java 21（按各 loader 最低 JDK 编译，ADR-0004）；
-    // shade 进来的 core 为 Java 8 字节码、与 21 运行期兼容。
+    // maven 上 spongeapi 11 唯二可用制品（release 11.0.0 与 SNAPSHOT 构建 50）均为 Java 21 字节码（major 65、
+    // GMM 锁 JVM21），故工具链取 21 以能编译（ADR-0004）；shade 的 core 为 Java 8 字节码、与 21 兼容。
+    // ⚠️ 上游制品错位（2026-06 实测）：最新可部署的 SpongeVanilla 1.20.1（RC1365）实为 **Java 17** 服、且内置
+    // spongeapi 为网络「连接」模型（重构前 RawPlayDataHandler<EngineConnection>），与当前 maven API（重构后
+    // 「连接状态」模型 ServerConnectionState.Game）不兼容——故 realserver 待上游放出与当前 API 同源的
+    // SpongeVanilla 1.20.1 服后再实跑（详见 CHANGELOG / docs/ARCHITECTURE）。
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
@@ -62,7 +66,7 @@ dependencies {
 
 // 插件元数据由 SpongeGradle 生成（不手写 META-INF/sponge_plugins.json）
 sponge {
-    // 1.20.1 对应 SpongeAPI 11 的 Java 17 制品为 11.0.0-SNAPSHOT（release 11.0.0 已是 Java 21）
+    // spongeapi 11 唯二可用制品 release 11.0.0 与 SNAPSHOT 构建 50 均 Java 21 字节码；取 SNAPSHOT 作编译基线
     apiVersion("11.0.0-SNAPSHOT")
     license("MIT")
     loader {
@@ -89,6 +93,59 @@ tasks.named<ShadowJar>("shadowJar") {
     // shadow 改配置不刷新缓存指纹，令其确定性重跑、不缓存（与其它平台一致）
     outputs.upToDateWhen { false }
     outputs.cacheIf { false }
+}
+
+// ============================================================================
+// realserver 验收驱动（独立 acceptance 源集 + 独立插件 jar，ADR-0014）
+// Sponge 无 GameTest，故 realserver 是其唯一实机验收形态；验收驱动代码不入产品插件 jar：
+// 单独打 mpmt-acceptance Sponge 插件，仅在验收运行期放入服务端。客户端复用我方 Fabric 验收伴侣（异构互通）。
+// 编译期继承 main 类路径（含 spongeapi + spi/server）+ main 产物，叠加 acceptance 核心 + protocol。
+// ============================================================================
+val acceptanceCoordinate = "top.wcpe.mc.mpmt:acceptance:$version"
+val protocolCoordinate = "top.wcpe.mc.mpmt:protocol:$version"
+
+val acceptance: SourceSet by sourceSets.creating {
+    compileClasspath += sourceSets["main"].compileClasspath + sourceSets["main"].output
+    runtimeClasspath += sourceSets["main"].runtimeClasspath + sourceSets["main"].output
+}
+configurations["acceptanceImplementation"].extendsFrom(configurations["implementation"])
+
+// 专用配置：需 shade 进验收插件 jar 的内容——acceptance 核心 + protocol（+ core-domain 传递）。
+// Sponge 插件类加载器隔离，故验收 jar 自包含（同 Bukkit），不依赖产品 jar 提供这些类。
+val acceptanceShadowBundle: Configuration by configurations.creating
+
+dependencies {
+    "acceptanceImplementation"(acceptanceCoordinate)
+    "acceptanceImplementation"(protocolCoordinate)
+    acceptanceShadowBundle(acceptanceCoordinate)
+    acceptanceShadowBundle(protocolCoordinate)
+}
+
+// 验收插件 sponge_plugins.json 的 ${version} 占位由构建注入
+tasks.named<ProcessResources>("processAcceptanceResources") {
+    inputs.property("version", project.version)
+    filesMatching("META-INF/sponge_plugins.json") {
+        expand("version" to project.version)
+    }
+}
+
+// 验收驱动插件 jar：shade acceptance 核心 + protocol + core-domain（均第一方、无第三方运行期依赖，无需 relocate）
+val acceptanceJar by tasks.registering(ShadowJar::class) {
+    group = "build"
+    description = "构建 realserver 验收驱动插件 mpmt-acceptance（仅验收运行期用，不入产品 jar）"
+    archiveBaseName.set("mpmt-acceptance")
+    archiveClassifier.set("")
+    from(acceptance.output)
+    configurations = listOf(acceptanceShadowBundle)
+    exclude("META-INF/maven/**")
+    // shadow 改配置不刷新缓存指纹，令其确定性重跑（与产品 shadowJar 一致）
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
+}
+
+// 把验收源集纳入常规 build 的编译校验（只编译，不打包——打包由验收编排按需触发）
+tasks.named("build") {
+    dependsOn(tasks.named("acceptanceClasses"))
 }
 
 tasks.test {

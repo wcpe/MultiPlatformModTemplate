@@ -1,0 +1,30 @@
+{
+  "loader": {
+    "name": "java_plain",
+    "version": "1.0"
+  },
+  "license": "MIT",
+  "plugins": [
+    {
+      "id": "mpmt-acceptance",
+      "entrypoint": "top.wcpe.mc.mpmt.platform.sponge.acceptance.MpmtSpongeAcceptancePlugin",
+      "name": "MPMT Acceptance Driver",
+      "description": "MPMT realserver 验收驱动（仅验收运行期用，非产品插件）",
+      "version": "${version}",
+      "dependencies": [
+        {
+          "id": "spongeapi",
+          "version": "11.0.0-SNAPSHOT",
+          "load-order": "after",
+          "optional": false
+        },
+        {
+          "id": "mpmt",
+          "version": "${version}",
+          "load-order": "after",
+          "optional": false
+        }
+      ]
+    }
+  ]
+}
