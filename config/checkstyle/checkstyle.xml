@@ -25,15 +25,24 @@
         <module name="RedundantImport"/>
         <module name="AvoidStarImport"/>
 
-        <!-- 命名规范（标准 Java 约定） -->
+        <!-- 命名规范（标准 Java 约定）。
+             例外：L4 版本适配子层按架构锚点版本命名 vX_Y（ADR-0003，如 v1_20 / v26_2），
+             含下划线；类名亦为 V1_20ServerNetwork 形态。属架构强制命名、非违规，故放宽：
+             - 包名段允许内部下划线（v1_20）；
+             - 类型名允许内部下划线（V1_20ServerNetwork），仍要求大写起始。 -->
         <module name="PackageName">
-            <property name="format" value="^[a-z]+(\.[a-z][a-z0-9]*)*$"/>
+            <property name="format" value="^[a-z]+(\.[a-z][a-z0-9_]*)*$"/>
         </module>
-        <module name="TypeName"/>
+        <module name="TypeName">
+            <property name="format" value="^[A-Z][a-zA-Z0-9_]*$"/>
+        </module>
         <!-- 方法名：生产代码用英文小驼峰；测试方法刻意用中文+下划线提升可读性（项目中文规范），
-             故放宽为允许中文起始与下划线，仍禁止大写起始等明显反例 -->
+             故放宽为允许中文起始与下划线，仍禁止大写起始等明显反例。
+             例外：Mixin @Inject/@Redirect 等注入回调按框架契约须用 prefix$method 命名（如 mpmt$onCustomPayload），
+             其中 $ 用于把注入成员命名空间化以避免与目标类成员冲突（ADR-0018），属框架强制命名、非违规，
+             故内部允许 $（仍禁止大写/非法起始）。 -->
         <module name="MethodName">
-            <property name="format" value="^[a-zA-Z一-龥][a-zA-Z0-9_一-龥]*$"/>
+            <property name="format" value="^[a-zA-Z一-龥][a-zA-Z0-9_$一-龥]*$"/>
         </module>
         <module name="ConstantName"/>
         <module name="StaticVariableName"/>

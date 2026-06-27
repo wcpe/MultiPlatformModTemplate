@@ -28,4 +28,42 @@
         <Package name="~top\.wcpe\.mc\.mpmt\.protocol\.packet"/>
         <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
     </Match>
+
+    <!-- 误报：SpotBugs 误判 Netty FriendlyByteBuf/ByteBuf 的 readBytes(byte[])/writeBytes(byte[]) 为
+         "无副作用"，实则二者会读写缓冲并推进读/写指针（返回 this 仅供链式调用，本不需要）。Forge 裸字节
+         收发（ADR-0018）正是依赖其副作用填充/写入缓冲。仅放行该两类 RV，业务侧真实 RV 仍照常检出。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.net.ForgeRawPayloadRouter"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.net.ForgeServerTransport"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+    <!-- 同上误报：Fabric L4 版本绑定经 FriendlyByteBuf.writeBytes/readBytes 收发裸字节，依赖其填充/
+         写入缓冲的副作用（返回 this 仅供链式调用，本不需要）。仅放行该两类 RV，业务侧真实 RV 仍照常检出。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.fabric.version.v1_20.V1_20ServerNetwork"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.fabric.version.v1_20.V1_20ClientNetwork"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+
+    <!-- 按设计：@Mod 入口由 Forge 启动期一次性实例化，其构造函数即平台装配点，把活跃传输发布到
+         volatile static Holder 供同进程验收驱动 mod 读取（ADR-0002 Holder 形态、启动期一次写入后只读）。
+         此 ST 为 Holder 模式的预期一次性写入，非可变全局状态滥用。仅放行该入口类。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.MpmtForgeMod"/>
+        <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
+    </Match>
+
+    <!-- 同上按设计：NeoForge @Mod 入口与 Forge 镜像同一 Holder 形态（ADR-0002，启动期一次写入后只读）：
+         构造期把活跃传输写入 volatile static Holder（ST），静态 getter 返回该传输供同进程验收驱动 mod 读取
+         （MS，传输对象本就需被同进程共享、非可变数组/集合的内部表示泄漏）。仅放行该入口类。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.neoforge.MpmtNeoForgeMod"/>
+        <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD,MS_EXPOSE_REP"/>
+    </Match>
 </FindBugsFilter>
