@@ -16,3 +16,13 @@ indent_style = tab
 
 [Makefile]
 indent_style = tab
+
+# Kotlin / Gradle Kotlin DSL：ktlint 规则。构建脚本含大量中文长注释，放宽行长与若干换行/格式规则，
+# 保留导入卫生等高价值规则；待第二期引入 Kotlin 源后按需收紧。
+[*.{kt,kts}]
+ktlint_standard_max-line-length = disabled
+ktlint_standard_no-consecutive-comments = disabled
+ktlint_standard_comment-wrapping = disabled
+ktlint_standard_function-signature = disabled
+ktlint_standard_parameter-list-wrapping = disabled
+ktlint_standard_argument-list-wrapping = disabled

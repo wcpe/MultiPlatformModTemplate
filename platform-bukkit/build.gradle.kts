@@ -1,6 +1,6 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import java.util.zip.ZipFile
 import org.gradle.language.jvm.tasks.ProcessResources
+import java.util.zip.ZipFile
 
 // L3 platform-bukkit（Bukkit/Spigot/Paper/Folia 单一构建，ADR-0007）：普通 Java + shadow。
 // 编译基线 paper-api（compileOnly，ADR-0019：spigot 超集，为接 Folia 区域调度 API），运行期仍 Bukkit 家族；
@@ -87,6 +87,7 @@ val verifyPackaging by tasks.registering {
     doLast {
         val jar = tasks.named<ShadowJar>("shadowJar").get().archiveFile.get().asFile
         val entries = ZipFile(jar).use { zf -> zf.entries().asSequence().map { it.name }.toList() }
+
         fun must(cond: Boolean, msg: String) {
             if (!cond) throw GradleException("Bukkit 打包校验失败：$msg")
         }

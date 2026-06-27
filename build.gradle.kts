@@ -16,6 +16,10 @@ import org.gradle.jvm.toolchain.JavaToolchainService
 // 外部分析插件挂 buildscript classpath（apply false），供 subprojects 统一 apply。
 plugins {
     id("com.github.spotbugs") version "6.0.26" apply false
+    // Kotlin 工具链（现接、前瞻就绪；当前仅 .gradle.kts 为 Kotlin，第二期引入 Kotlin 源即生效）
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.1" apply false
+    id("io.gitlab.arturbosch.detekt") version "1.23.7" apply false
+    id("org.jetbrains.kotlinx.kover") version "0.8.3" apply false
 }
 
 val mpmtVersion: String = rootProject.file("VERSION").readText().trim()
@@ -72,6 +76,13 @@ subprojects {
     }
     tasks.matching { it.name == "check" }
         .configureEach { dependsOn(tasks.matching { it.name == "jacocoTestCoverageVerification" }) }
+
+    // Kotlin 工具链（全装、前瞻就绪）：ktlint 检 .gradle.kts 构建脚本（.editorconfig 已放宽长注释场景，
+    // 严格门禁）；detekt 扫 Kotlin 源（现无源、近空扫）；Kover 备 Kotlin 覆盖率（现 Java 码由 JaCoCo 覆盖、
+    // Kover 待第二期 Kotlin 源生效）。三者均 Kotlin 源出现即自动生效。
+    apply(plugin = "org.jlleitschuh.gradle.ktlint")
+    apply(plugin = "io.gitlab.arturbosch.detekt")
+    apply(plugin = "org.jetbrains.kotlinx.kover")
     // 缺陷检测（字节码）+ 安全审查：SpotBugs + FindSecBugs（挂在 SpotBugs 上）
     apply(plugin = "com.github.spotbugs")
     configure<SpotBugsExtension> {
