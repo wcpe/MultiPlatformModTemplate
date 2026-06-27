@@ -1,0 +1,37 @@
+# MPMT realserver 验收驱动 mod 描述（仅验收运行期加载，非产品 mod，ADR-0014）。
+# 由独立 acceptance 构建产出、仅在 realserver 验收时放入服务端 mods/；字段为 NeoForge 框架强制约定。
+# 1.20.2 仍用 META-INF/mods.toml（neoforge.mods.toml 重命名是 20.5+）；modLoader javafml
+modLoader="javafml"
+loaderVersion="[1,)"
+license="MIT"
+
+# 模组条目：modId 须区别于产品 mpmt，避免同进程双 mod 冲突
+[[mods]]
+modId="mpmt_acceptance"
+version="${version}"
+displayName="MPMT Acceptance Driver"
+description="MPMT realserver 验收驱动 —— 服务端驱动场景、客户端验证、单一权威报告"
+
+# 依赖声明：要求 NeoForge 与 Minecraft 处于 1.20.2 区间；**强依赖产品 mpmt**（其后加载）：
+# 验收 jar 不打 protocol/core-domain（防 FML 模块层 split package），运行期由产品 mod 提供这些类，故必需。
+# 1.20.2 仍用 mandatory=（type="required" 是 20.5+）。
+[[dependencies.mpmt_acceptance]]
+modId="neoforge"
+mandatory=true
+versionRange="[20.2,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.mpmt_acceptance]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.2,1.21)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.mpmt_acceptance]]
+modId="mpmt"
+mandatory=true
+versionRange="[0,)"
+ordering="AFTER"
+side="BOTH"
