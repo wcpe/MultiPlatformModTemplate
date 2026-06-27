@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  MPMT SpotBugs 排除过滤器（严格门禁）。
+  仅登记确认为框架契约 / 生成代码 / 按设计行为的误报；每条注明原因（static-analysis §3：集中声明）。
+-->
+<FindBugsFilter>
+    <!-- Lombok @Value/@EqualsAndHashCode 生成的 equals/hashCode 含冗余空检查（RCN）。@lombok.Generated
+         已写入字节码（lombok.config），但 SpotBugs 4.8.6 默认未据此跳过——故按方法精确排除；
+         业务方法里的 RCN 仍照常检出。 -->
+    <Match>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+        <Or>
+            <Method name="equals"/>
+            <Method name="hashCode"/>
+        </Or>
+    </Match>
+
+    <!-- 连接句柄按设计在 L3 内部暴露平台原生对象（Bukkit Player / ServerPlayer 等），供 L3 传输解封后
+         发送；平台对象不泄漏进 L0/L1（ADR-0001）。此处 EI 为预期行为。 -->
+    <Match>
+        <Class name="~.*ConnectionHandle"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- 协议包为短生命周期传输 DTO（@Value），byte[] 载荷仅在可靠性层内部流转；对其 getter/构造做
+         防御性拷贝在分片热路径上不划算。protocol.packet 包内 EI/EI2 豁免。 -->
+    <Match>
+        <Package name="~top\.wcpe\.mc\.mpmt\.protocol\.packet"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+</FindBugsFilter>

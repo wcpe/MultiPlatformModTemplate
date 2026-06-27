@@ -30,9 +30,13 @@ public final class ConfigService {
     /** 按文件扩展名判别格式后加载。 */
     public <T> T load(Path file, Class<T> type) {
         Objects.requireNonNull(file, "file 不能为空");
+        Path fileName = file.getFileName();
+        if (fileName == null) {
+            throw new ConfigLoadException("无法判别配置格式（路径无文件名）：" + file);
+        }
         ConfigFormat format;
         try {
-            format = ConfigFormat.fromFileName(file.getFileName().toString());
+            format = ConfigFormat.fromFileName(fileName.toString());
         } catch (IllegalArgumentException e) {
             throw new ConfigLoadException("无法判别配置格式：" + file, e);
         }

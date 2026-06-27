@@ -1,11 +1,22 @@
 // 根构建脚本：仅定义全局坐标与版本，不承载任何平台插件。
 // 版本号唯一来源 = 根目录 VERSION 文件（testing-and-quality §3：VERSION 是版本号唯一来源）。
 
+import com.github.spotbugs.snom.Confidence
+import com.github.spotbugs.snom.Effort
+import com.github.spotbugs.snom.SpotBugsExtension
+import com.github.spotbugs.snom.SpotBugsTask
 import org.gradle.api.plugins.quality.Checkstyle
 import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.plugins.quality.Pmd
 import org.gradle.api.plugins.quality.PmdExtension
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
+
+// 外部分析插件挂 buildscript classpath（apply false），供 subprojects 统一 apply。
+plugins {
+    id("com.github.spotbugs") version "6.0.26" apply false
+}
 
 val mpmtVersion: String = rootProject.file("VERSION").readText().trim()
 
@@ -37,6 +48,23 @@ subprojects {
         ruleSets = emptyList()
         isIgnoreFailures = false
     }
+    // 缺陷检测（字节码）+ 安全审查：SpotBugs + FindSecBugs（挂在 SpotBugs 上）
+    apply(plugin = "com.github.spotbugs")
+    configure<SpotBugsExtension> {
+        ignoreFailures.set(false)
+        effort.set(Effort.MAX)
+        // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
+        reportLevel.set(Confidence.MEDIUM)
+        excludeFilter.set(rootProject.file("config/spotbugs/exclude.xml"))
+    }
+    dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
+    // 把 lombok.config 登记为编译输入：其改动须失效编译缓存（否则构建缓存会服旧的、缺 @Generated 的
+    // 类，导致 SpotBugs/JaCoCo 仍对 Lombok 生成代码误报）。
+    tasks.withType(JavaCompile::class.java).configureEach {
+        inputs.file(rootProject.file("lombok.config"))
+            .withPropertyName("lombokConfig")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    }
     // 分析工具运行 JVM 与被测模块目标字节码无关：L0–L2 编译工具链为 JDK 8，但 Checkstyle 10.x 需 JDK 11+，
     // 故把分析任务固定到 JDK 17 启动器运行（不影响模块自身的 Java 8 编译目标）。
     // 在 afterEvaluate 配置：JavaToolchainService 由模块自身的 java 插件注册、晚于本 subprojects 块。
@@ -49,6 +77,14 @@ subprojects {
         }
         tasks.withType(Pmd::class.java).configureEach {
             javaLauncher.set(analysisLauncher)
+        }
+        // SpotBugs worker 默认用守护 JVM（JDK 17），无需固定 launcher。
+        // 仅生产码（spotbugsMain）严格门禁；test / acceptance / gametest 等非 main 源集宽松
+        // （测试与验收 harness 常含 mock/反射等 SpotBugs 噪声，安全/缺陷分析重在生产码）。
+        tasks.withType(SpotBugsTask::class.java).configureEach {
+            if (name != "spotbugsMain") {
+                ignoreFailures = true
+            }
         }
     }
 }

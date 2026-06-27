@@ -58,7 +58,10 @@ public final class BukkitPersistencePort implements PersistencePort {
     private void store(String namespace, Properties properties) {
         Path file = file(namespace);
         try {
-            Files.createDirectories(file.getParent());
+            Path parent = file.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
             try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
                 properties.store(writer, "mpmt persistence");
             }
