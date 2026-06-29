@@ -5,6 +5,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
+import org.bukkit.Bukkit;
 import org.bukkit.Server;
 import org.bukkit.plugin.Plugin;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
@@ -20,6 +21,12 @@ public final class BukkitServerGameTestContext implements ServerGameTestContext 
 
     /** Minecraft 一个 tick 的毫秒数。 */
     private static final long MILLIS_PER_TICK = 50L;
+
+    /**
+     * 是否 Folia（区域化多线程、无全局主线程调度器）：探测标志类，与产品 {@code FeatureGate.REGION_SCHEDULER} 同源。
+     * Folia 上 {@code BukkitScheduler.runTask} 抛 {@code UnsupportedOperationException}，onMain 须改走全局区域调度器。
+     */
+    private static final boolean FOLIA = detectFolia();
 
     private final Plugin plugin;
 
@@ -37,20 +44,34 @@ public final class BukkitServerGameTestContext implements ServerGameTestContext 
         return plugin;
     }
 
+    /** 探测 Folia：标志类存在即 Folia（区域化调度），与 BukkitSchedulers/FeatureGate 同源判据。 */
+    private static boolean detectFolia() {
+        try {
+            Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
     @Override
     public <T> T onMain(Supplier<T> block) {
         CompletableFuture<T> future = new CompletableFuture<>();
-        plugin.getServer()
-                .getScheduler()
-                .runTask(
-                        plugin,
-                        () -> {
-                            try {
-                                future.complete(block.get());
-                            } catch (Throwable t) {
-                                future.completeExceptionally(t);
-                            }
-                        });
+        Runnable body =
+                () -> {
+                    try {
+                        future.complete(block.get());
+                    } catch (Throwable t) {
+                        future.completeExceptionally(t);
+                    }
+                };
+        if (FOLIA) {
+            // Folia 无全局主线程；onMain 的"服务端级 / 全局"语义落到全局区域线程
+            // （BukkitScheduler.runTask 在 Folia 抛 UnsupportedOperationException）。
+            Bukkit.getGlobalRegionScheduler().run(plugin, scheduled -> body.run());
+        } else {
+            plugin.getServer().getScheduler().runTask(plugin, body);
+        }
         try {
             return future.get();
         } catch (InterruptedException e) {

@@ -5,6 +5,8 @@ version: ${version}
 main: top.wcpe.mc.mpmt.platform.bukkit.acceptance.MpmtBukkitAcceptancePlugin
 # 目标 API 版本（锚点 1.20.1）
 api-version: '1.20'
+# 声明支持 Folia（验收驱动随产品插件在 Folia 上运行；仅起调度/发包、经 Bukkit API 兼容）
+folia-supported: true
 # 世界加载后再启用（驱动需调度器可用）
 load: POSTWORLD
 # 软依赖产品插件：存在则在其后加载（产品插件负责握手 / 产品收发），缺失不阻止本插件

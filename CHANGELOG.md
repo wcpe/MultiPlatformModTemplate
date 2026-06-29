@@ -6,6 +6,9 @@
 
 ## 未发布版本
 
+### 修复
+- **Folia realserver 验收过 RESULT PASS（修三处 Folia 不兼容，FR-13）**：真实 Folia 1.20.1 服跑 realserver 验收暴露——① 产品 `FoliaSchedulerPort.runForEntity` 用 `Bukkit.getEntity(uuid)` 解析实体，从非区域线程（L0 示例 `runAsync` 回调内）调用触发 `Asynchronous Chunk getEntities call!`，改用 `Bukkit.getPlayer(uuid)`（全局玩家表、任意线程安全）落其 `EntityScheduler`、非玩家实体退回全局区域线程；② realserver harness 的 `BukkitServerGameTestContext.onMain` 与 `BukkitAcceptanceControlChannel.sendToClient` 用全局 `BukkitScheduler.runTask`（Folia 抛 `UnsupportedOperationException`），探测 Folia 后改走 `GlobalRegionScheduler`；③ 验收驱动 `plugin.yml` 补 `folia-supported: true`（否则 Folia 拒载）。单元测试（MockBukkit 不支持 Folia）与 Paper realserver 均测不出，唯真实 Folia 暴露（ADR-0013）。非 Folia（Paper）路径不受影响。realserver 维度沙箱已过、待用户实机最终确认。
+
 ### 新增
 - 接入 **全项目静态分析 / 质量工具链（严格门禁）**：根构建经 `subprojects` 统一配置、4 个独立
   includeBuild 平台各自镜像同一套、共享仓库根 `config/` 规则集——**Checkstyle** 10.17.0（裁剪规则集，

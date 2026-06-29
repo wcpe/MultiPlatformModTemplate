@@ -5,7 +5,7 @@ import java.util.Objects;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
-import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
 import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
@@ -32,12 +32,17 @@ public final class FoliaSchedulerPort implements SchedulerPort {
 
     @Override
     public void runForEntity(EntityRef entity, Runnable task) {
-        Entity bukkitEntity = Bukkit.getEntity(entity.getId());
-        if (bukkitEntity != null) {
-            // 落到实体所属线程；实体已被移除（retired）则丢弃（retired 回调传 null）
-            bukkitEntity.getScheduler().run(plugin, scheduled -> task.run(), null);
+        // ⚠️ Folia 关键约束：不得从任意（尤其异步）线程调 Bukkit.getEntity(uuid)——它扫区块实体、
+        // 在非拥有区域线程会抛 IllegalStateException("Asynchronous Chunk getEntities call!")。
+        // 本端口须可从任意线程调用（L0 示例正是 runAsync 回调内 → runForEntity）。
+        // 玩家可经全局玩家表从任意线程安全解析，且 EntityScheduler.run 本身可从任意线程调用，
+        // 故按玩家解析、落到其所属线程；非玩家实体无法仅凭 UUID 从任意线程安全解析，退回全局区域线程。
+        Player player = Bukkit.getPlayer(entity.getId());
+        if (player != null) {
+            // 落到玩家所属区域 / 实体线程；玩家已退出（retired）则丢弃（retired 回调传 null）
+            player.getScheduler().run(plugin, scheduled -> task.run(), null);
         } else {
-            // 找不到实体（已卸载 / 跨区域不可见）：退回全局线程，至少不丢任务
+            // 非玩家实体或玩家不在线：退回全局区域线程，至少不丢任务、不触发异步区块访问
             Bukkit.getGlobalRegionScheduler().execute(plugin, task);
         }
     }
