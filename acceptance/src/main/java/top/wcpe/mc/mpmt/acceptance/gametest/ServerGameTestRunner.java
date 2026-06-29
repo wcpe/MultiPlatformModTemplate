@@ -58,7 +58,7 @@ public final class ServerGameTestRunner {
                 Thread.currentThread().interrupt();
             }
             status = ScenarioStatus.ERROR;
-            message = t.getClass().getSimpleName() + ": " + nullToEmpty(t.getMessage());
+            message = t.getClass().getSimpleName() + ": " + nullToEmpty(t.getMessage()) + originOf(t);
         }
         long durationMs = (System.nanoTime() - start) / NANOS_PER_MILLI;
         return new ScenarioResult(test.suite(), test.id(), status, durationMs, message);
@@ -66,5 +66,26 @@ public final class ServerGameTestRunner {
 
     private static String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    /**
+     * 提取异常出处供报告诊断：抛出点（栈顶帧）+ 首个我方（{@code top.wcpe.mc.mpmt}）调用帧。
+     * realserver ERROR 仅有类名不足以定位（尤其空消息异常如 Folia 的 UnsupportedOperationException），故附栈帧。
+     */
+    private static String originOf(Throwable t) {
+        StackTraceElement[] trace = t.getStackTrace();
+        if (trace.length == 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(" @ ").append(trace[0]);
+        for (StackTraceElement frame : trace) {
+            if (frame.getClassName().startsWith("top.wcpe.mc.mpmt")) {
+                if (!frame.equals(trace[0])) {
+                    sb.append(" <- ").append(frame);
+                }
+                break;
+            }
+        }
+        return sb.toString();
     }
 }
