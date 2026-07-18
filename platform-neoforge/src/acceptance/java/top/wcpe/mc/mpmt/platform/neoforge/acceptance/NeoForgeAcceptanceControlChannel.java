@@ -3,7 +3,6 @@ package top.wcpe.mc.mpmt.platform.neoforge.acceptance;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.NetworkRegistry;
