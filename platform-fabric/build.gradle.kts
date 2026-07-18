@@ -204,7 +204,9 @@ loom {
             // 独立运行目录，避免与服务端 run/ 并发冲突
             runDir("run-client")
             // 经 --quickPlayMultiplayer <服务端地址> 自连
-            programArgs("--quickPlayMultiplayer", "127.0.0.1")
+            val acceptanceServerAddr =
+                (project.findProperty("mpmt.acceptance.server") as String?) ?: "127.0.0.1"
+            programArgs("--quickPlayMultiplayer", acceptanceServerAddr)
         }
     }
 }

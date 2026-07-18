@@ -159,6 +159,10 @@ runs {
     }
     create("client") {
         workingDirectory(project.file("run-client"))
+        systemProperty(
+            "mpmt.acceptance.server",
+            (project.findProperty("mpmt.acceptance.server") as String?) ?: "127.0.0.1",
+        )
     }
     create("server") {
         workingDirectory(project.file("run-server"))
