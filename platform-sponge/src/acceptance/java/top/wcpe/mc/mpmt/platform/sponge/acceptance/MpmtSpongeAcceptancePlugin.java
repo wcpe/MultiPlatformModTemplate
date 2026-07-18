@@ -71,7 +71,7 @@ public final class MpmtSpongeAcceptancePlugin {
         }
         RawDataChannel control =
                 event.register(SpongeAcceptanceControlChannelId.CHANNEL, RawDataChannel.class);
-        channel = new SpongeAcceptanceControlChannel(logger);
+        channel = new SpongeAcceptanceControlChannel(logger, container);
         channel.register(control);
     }
 
@@ -186,8 +186,9 @@ public final class MpmtSpongeAcceptancePlugin {
         }
         try {
             Path file = Paths.get(path);
-            if (file.getParent() != null) {
-                Files.createDirectories(file.getParent());
+            Path parent = file.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
             }
             Files.write(file, report.getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {

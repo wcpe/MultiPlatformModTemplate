@@ -13,6 +13,7 @@ public final class AcceptanceGametestClientInit implements ClientModInitializer 
 
     @Override
     public void onInitializeClient() {
+        CapabilityMessageTracker.register();
         new AcceptanceClientCompanion().register();
     }
 }

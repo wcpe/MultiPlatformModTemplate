@@ -15,10 +15,12 @@ import org.spongepowered.api.network.channel.raw.RawDataChannel;
 import org.spongepowered.plugin.PluginContainer;
 import org.spongepowered.plugin.builtin.jvm.Plugin;
 import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
+import top.wcpe.mc.mpmt.core.domain.net.HandshakeStateMachine;
 import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
 import top.wcpe.mc.mpmt.platform.sponge.capability.SpongeCapabilityBootstrap;
+import top.wcpe.mc.mpmt.platform.sponge.net.SpongeConnectionHandle;
 import top.wcpe.mc.mpmt.platform.sponge.net.SpongeServerTransport;
 import top.wcpe.mc.mpmt.platform.spi.PlatformProvider;
 
@@ -44,6 +46,7 @@ public final class MpmtSpongePlugin {
     private final Path configDir;
 
     private MpmtRuntime runtime;
+    private ServerNetworkFeature serverNetworkFeature;
 
     @Inject
     MpmtSpongePlugin(
@@ -67,14 +70,28 @@ public final class MpmtSpongePlugin {
     public void onRegisterChannels(final RegisterChannelEvent event) {
         RawDataChannel channel = event.register(CHANNEL_KEY, RawDataChannel.class);
         // 服务端 TransportPort（FR-20）：用 RawDataChannel 收发裸字节
-        runtime.ports().register(TransportPort.class, new SpongeServerTransport(channel));
-        // 登记平台无关的服务端网络特性（FR-19）：各平台注入自己的 TransportPort 即复用同一份装配
-        runtime.features()
-                .register(new ServerNetworkFeature(new BanRegistry(), () -> UUID.randomUUID().toString()));
+        runtime.ports().register(TransportPort.class, new SpongeServerTransport(channel, container));
+        // 保存平台无关服务端网络特性，供只读验收接缝观察握手状态
+        serverNetworkFeature = new ServerNetworkFeature(new BanRegistry(), () -> UUID.randomUUID().toString());
+        runtime.features().register(serverNetworkFeature);
         runtime.enable();
         // 平台能力示例（FR-26/FR-27）：装配 L3 端口 + 桥接玩家进退事件入运行时自有 EventBus
         SpongeCapabilityBootstrap.register(container, configDir, runtime.eventBus());
         logger.info("MPMT 已启用，活跃平台：{}", PlatformProvider.get().platformId());
+    }
+
+    /** 查询指定玩家连接的握手状态；尚无会话时返回 null。 */
+    public HandshakeStateMachine.State handshakeState(UUID playerId) {
+        ServerNetworkFeature feature = this.serverNetworkFeature;
+        if (feature == null) {
+            throw new IllegalStateException("服务端网络特性尚未注册");
+        }
+        return feature.handshakeService().stateOf(new SpongeConnectionHandle(playerId));
+    }
+
+    /** 返回插件数据基目录的只读路径接缝，供验收场景观察平台持久化结果。 */
+    public Path dataDirectory() {
+        return configDir;
     }
 
     @Listener

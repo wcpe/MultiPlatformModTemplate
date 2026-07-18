@@ -72,15 +72,10 @@ public final class SpongeCapabilityBootstrap {
 
         @Listener
         public void onDisconnect(ServerSideConnectionEvent.Disconnect event) {
-            // 已完成登录的玩家断开才有 profile；早退（profile 缺失）无对应领域玩家，忽略
-            event.profile()
-                    .ifPresent(
-                            profile ->
-                                    eventBus.publish(
-                                            new PlayerLeftEvent(
-                                                    new PlayerRef(
-                                                            profile.uniqueId(),
-                                                            profile.name().orElse("")))));
+            var profile = event.profile();
+            eventBus.publish(
+                    new PlayerLeftEvent(
+                            new PlayerRef(profile.uniqueId(), profile.name().orElse(""))));
         }
     }
 }

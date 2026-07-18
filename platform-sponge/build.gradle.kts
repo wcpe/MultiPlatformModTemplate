@@ -35,6 +35,10 @@ group = "top.wcpe.mc.mpmt"
 version = file("../VERSION").readText().trim()
 
 val snakeyamlVersion = "2.2"
+// 插件元数据保持与 RC1365 清单一致，编译类路径固定到同源旧 API 制品。
+val spongeMetadataVersion = "11.0.0-SNAPSHOT"
+val spongeCompileVersion = "11.0.0-20230826.165715-4"
+// 官方旧 API SHA-256：1278386c819b2009d69241e3b9356b44c3be247e7da7ea21be42aceb444459e3
 // 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经 includeBuild 依赖替换消费
 val spiCoordinate = "top.wcpe.mc.mpmt:platform-spi:$version"
 // 服务端公共网络特性（经 api 传递 protocol + core-runtime）
@@ -45,14 +49,9 @@ base {
 }
 
 java {
-    // maven 上 spongeapi 11 唯二可用制品（release 11.0.0 与 SNAPSHOT 构建 50）均为 Java 21 字节码（major 65、
-    // GMM 锁 JVM21），故工具链取 21 以能编译（ADR-0004）；shade 的 core 为 Java 8 字节码、与 21 兼容。
-    // ⚠️ 上游制品错位（2026-06 实测）：最新可部署的 SpongeVanilla 1.20.1（RC1365）实为 **Java 17** 服、且内置
-    // spongeapi 为网络「连接」模型（重构前 RawPlayDataHandler<EngineConnection>），与当前 maven API（重构后
-    // 「连接状态」模型 ServerConnectionState.Game）不兼容——故 realserver 待上游放出与当前 API 同源的
-    // SpongeVanilla 1.20.1 服后再实跑（详见 CHANGELOG / docs/ARCHITECTURE）。
+    // RC1365 使用 Java 17，编译工具链与目标服务端保持一致。
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(17)
     }
 }
 
@@ -61,12 +60,25 @@ repositories {
     maven("https://repo.spongepowered.org/repository/maven-public/") { name = "Sponge" }
 }
 
+// SpongeGradle 仍以元数据版本声明依赖，仅将精确匹配的编译依赖固定到 RC1365 同源制品。
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (
+            requested.group == "org.spongepowered" &&
+            requested.name == "spongeapi" &&
+            requested.version == spongeMetadataVersion
+        ) {
+            useVersion(spongeCompileVersion)
+        }
+    }
+}
+
 // ============================================================================
 // 静态分析 / 质量工具链装配（严格门禁，static-analysis.md）——本独立 includeBuild 单工程直接 apply。
 // includeBuild 的 rootProject 即本目录，共享规则集在仓库根 config/，故引用 ../config/*；
 // .editorconfig / lombok.config 在仓库根，ktlint / Lombok 自动向上查找，无需额外配置。
 // 违规即失败构建（isIgnoreFailures=false），与根构建口径一致。
-// 注：本工程主工具链为 JDK 21（spongeapi 11 制品为 Java 21 字节码），但分析工具仅需 JDK 17 启动器即可运行。
+// 注：本工程主工具链与分析工具均使用 JDK 17。
 // ============================================================================
 // 样式审查：Checkstyle（共享裁剪规则集）
 apply(plugin = "checkstyle")
@@ -110,8 +122,8 @@ tasks.withType(JavaCompile::class.java).configureEach {
         .withPropertyName("lombokConfig")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
-// 分析任务固定 JDK 17 启动器：Checkstyle 10.x / PMD 7.x 需 JDK 11+；本工程主工具链是 JDK 21，
-// 但分析工具用 JDK 17 即可（17 满足 11+ 要求），与根构建口径一致。SpotBugs worker 用守护 JVM，无 javaLauncher 属性、不设。
+// 分析任务固定 JDK 17 启动器：Checkstyle 10.x / PMD 7.x 需 JDK 11+，与平台工具链及根构建口径一致。
+// SpotBugs worker 使用守护 JVM，无 javaLauncher 属性，不单独设置。
 val analysisToolchains = extensions.getByType(JavaToolchainService::class.java)
 val analysisLauncher =
     analysisToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(17)) }
@@ -147,12 +159,13 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly("org.spongepowered:spongeapi:$spongeMetadataVersion")
 }
 
 // 插件元数据由 SpongeGradle 生成（不手写 META-INF/sponge_plugins.json）
 sponge {
-    // spongeapi 11 唯二可用制品 release 11.0.0 与 SNAPSHOT 构建 50 均 Java 21 字节码；取 SNAPSHOT 作编译基线
-    apiVersion("11.0.0-SNAPSHOT")
+    // 插件元数据声明 RC1365 清单版本，时间戳版本仅用于固定编译类路径。
+    apiVersion(spongeMetadataVersion)
     license("MIT")
     loader {
         name(PluginLoaders.JAVA_PLAIN)
