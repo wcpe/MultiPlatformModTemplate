@@ -28,8 +28,11 @@ class PlatformProviderBootTest {
     @DisplayName("boot：发现唯一平台、注入端口、固化只读状态")
     void boot发现并装配() {
         MpmtRuntime runtime = new MpmtRuntime();
+        PlatformAssemblyContext context =
+                new PlatformAssemblyContext().register(String.class, "context-port");
 
-        PlatformProvider provider = PlatformProvider.boot(getClass().getClassLoader(), runtime);
+        PlatformProvider provider =
+                PlatformProvider.boot(getClass().getClassLoader(), runtime, context);
 
         assertSame(provider, PlatformProvider.get());
         assertTrue(PlatformProvider.isBooted());
@@ -40,7 +43,7 @@ class PlatformProviderBootTest {
         // 端口已被平台装配进运行时
         FakePort port = runtime.ports().get(FakePort.class);
         assertNotNull(port);
-        assertEquals("fake-port", port.id());
+        assertEquals("context-port", port.id());
     }
 
     @Test

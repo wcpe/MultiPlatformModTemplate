@@ -1,8 +1,9 @@
 package top.wcpe.mc.mpmt.platform.spi.fake;
 
-import top.wcpe.mc.mpmt.core.runtime.RuntimePorts;
+import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.platform.spi.Capability;
 import top.wcpe.mc.mpmt.platform.spi.FeatureGate;
+import top.wcpe.mc.mpmt.platform.spi.PlatformAssemblyContext;
 import top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap;
 
 /**
@@ -28,7 +29,8 @@ public final class FakePlatformBootstrap implements PlatformBootstrap {
     }
 
     @Override
-    public void assemble(RuntimePorts ports) {
-        ports.register(FakePort.class, () -> "fake-port");
+    public void assemble(PlatformAssemblyContext context, MpmtRuntime runtime) {
+        String portId = context.find(String.class).orElse("fake-port");
+        runtime.ports().register(FakePort.class, () -> portId);
     }
 }

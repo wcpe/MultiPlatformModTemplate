@@ -1,6 +1,6 @@
 package top.wcpe.mc.mpmt.platform.spi;
 
-import top.wcpe.mc.mpmt.core.runtime.RuntimePorts;
+import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 
 /**
  * 平台入口 SPI：每个平台胶水实现它，并经 {@code META-INF/services} 注册供 {@link java.util.ServiceLoader} 发现（ADR-0002）。
@@ -16,9 +16,9 @@ public interface PlatformBootstrap {
     FeatureGate featureGate();
 
     /**
-     * 装配：把本平台构造的端口实现注册进运行时端口表。
+     * 装配：从平台启动上下文取得原生对象，并在运行时启用前注册完整的服务端端口与事件桥接。
      *
-     * <p>仅注册端口，不在此写玩法逻辑（玩法在 L0/L1 特性里）。装配在启动期一次性完成。
+     * <p>只做平台适配与接线，不在此写玩法逻辑（玩法在 L0/L1 特性里）。装配在启动期一次性完成。
      */
-    void assemble(RuntimePorts ports);
+    void assemble(PlatformAssemblyContext context, MpmtRuntime runtime);
 }
