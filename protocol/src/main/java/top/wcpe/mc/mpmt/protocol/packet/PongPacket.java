@@ -7,7 +7,7 @@ import top.wcpe.mc.mpmt.protocol.codec.ProtocolBufReader;
 import top.wcpe.mc.mpmt.protocol.codec.ProtocolBufWriter;
 
 /**
- * S2C 心跳 / 往返演示应答：回送 {@link PingPacket} 的 nonce。
+ * C2S 心跳应答：客户端回送 {@link PingPacket} 的 nonce。
  */
 @Value
 public class PongPacket implements Packet {

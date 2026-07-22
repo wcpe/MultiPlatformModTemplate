@@ -14,9 +14,11 @@ import top.wcpe.mc.mpmt.protocol.packet.ClientHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ClientIdReportPacket;
 import top.wcpe.mc.mpmt.protocol.packet.DisconnectPacket;
 import top.wcpe.mc.mpmt.protocol.packet.FragmentPacket;
+import top.wcpe.mc.mpmt.protocol.packet.FragmentRetryRequestPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
 import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ResyncRequestPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ResyncRequiredPacket;
 import top.wcpe.mc.mpmt.protocol.packet.HudKind;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
@@ -39,6 +41,7 @@ class PacketCodecTest {
                 new ResyncRequestPacket(0L),
                 new ResyncRequestPacket(Long.MAX_VALUE),
                 new ResyncRequestPacket(987654321L),
+                new ResyncRequiredPacket(987654321L),
                 new ClientIdReportPacket("deadbeef-客户端标识"),
                 new ServerMessagePacket("欢迎来到 MPMT"),
                 new ServerHudMessagePacket(HudKind.TITLE, "标题", "副标题", 3000L),
@@ -46,7 +49,8 @@ class PacketCodecTest {
                 new ServerHudMessagePacket(HudKind.TOAST, "成就弹窗", "", 0L),
                 new ServerHudMessagePacket(HudKind.CHAT, "", "", Long.MAX_VALUE),
                 new DisconnectPacket("已被封禁"),
-                new FragmentPacket(7, 1, 3, 0x1234ABCD, new byte[] {1, 2, 3, -1, 127}));
+                new FragmentPacket(7, 1, 3, 0x1234ABCD, new byte[] {1, 2, 3, -1, 127}),
+                new FragmentRetryRequestPacket(7));
     }
 
     @ParameterizedTest
@@ -73,6 +77,21 @@ class PacketCodecTest {
         byte[] bytes = new PacketCodec().encode(new PingPacket(7L));
         assertEquals(ProtocolVersion.CURRENT, bytes[0] & 0xFF);
         assertEquals(PacketIds.PING, bytes[1] & 0xFF);
+    }
+
+    @Test
+    @DisplayName("稳定方向：服务端 Ping/重同步要求用低位，客户端 Pong/重同步请求用高位")
+    void 包方向可人工辨识() {
+        assertEquals(0x04, PacketIds.PING);
+        assertEquals(0x06, PacketIds.RESYNC_REQUIRED);
+        assertEquals(0x83, PacketIds.PONG);
+        assertEquals(0x82, PacketIds.RESYNC_REQUEST);
+    }
+
+    @Test
+    @DisplayName("分片重发请求使用稳定双向包 id 0x11")
+    void 分片重发请求id稳定() {
+        assertEquals(0x11, PacketIds.FRAGMENT_RETRY_REQUEST);
     }
 
     @Test

@@ -7,7 +7,7 @@ import top.wcpe.mc.mpmt.protocol.codec.ProtocolBufReader;
 import top.wcpe.mc.mpmt.protocol.codec.ProtocolBufWriter;
 
 /**
- * C2S 心跳 / 往返演示请求：携带一个 nonce，服务端原样回 {@link PongPacket} 以计算 RTT。
+ * S2C 心跳探测：携带一个 nonce，客户端原样回 {@link PongPacket} 供服务端计算 RTT。
  */
 @Value
 public class PingPacket implements Packet {

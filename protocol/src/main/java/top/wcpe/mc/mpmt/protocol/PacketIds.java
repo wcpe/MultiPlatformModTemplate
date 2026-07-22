@@ -29,14 +29,20 @@ public final class PacketIds {
     /** C2S 重同步请求（可靠性层：连接重建 / 心跳超时后请求重发自某修订起的权威状态）。 */
     public static final int RESYNC_REQUEST = 0x82;
 
-    /** C2S 心跳 / 往返演示请求。 */
-    public static final int PING = 0x83;
+    /** S2C 服务端心跳探测。 */
+    public static final int PING = 0x04;
 
-    /** S2C 心跳 / 往返演示应答。 */
-    public static final int PONG = 0x04;
+    /** C2S 客户端心跳应答。 */
+    public static final int PONG = 0x83;
+
+    /** S2C 服务端要求客户端发起重同步。 */
+    public static final int RESYNC_REQUIRED = 0x06;
 
     /** 双向 分片包（可靠性层：大包切片 + 重组）。 */
     public static final int FRAGMENT = 0x10;
+
+    /** 双向 分片重发请求（可靠性层：首次重组超时后请求完整重发）。 */
+    public static final int FRAGMENT_RETRY_REQUEST = 0x11;
 
     private PacketIds() {
         // 常量类不实例化
