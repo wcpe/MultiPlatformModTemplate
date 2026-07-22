@@ -1,20 +1,37 @@
 package top.wcpe.mc.mpmt.platform.sponge;
 
-import top.wcpe.mc.mpmt.core.runtime.RuntimePorts;
+import java.nio.file.Path;
+import java.util.Objects;
+import java.util.function.Supplier;
+import org.spongepowered.api.event.lifecycle.RegisterChannelEvent;
+import org.spongepowered.plugin.PluginContainer;
+import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
+import top.wcpe.mc.mpmt.platform.sponge.capability.SpongeCapabilityBootstrap;
+import top.wcpe.mc.mpmt.platform.sponge.net.SpongeConnectionRegistry;
+import top.wcpe.mc.mpmt.platform.sponge.net.SpongeServerTransport;
+import top.wcpe.mc.mpmt.platform.sponge.version.SpongeNetworkBindings;
+import top.wcpe.mc.mpmt.platform.sponge.version.SpongeServerNetwork;
+import top.wcpe.mc.mpmt.platform.sponge.version.SpongeVersions;
+import top.wcpe.mc.mpmt.platform.sponge.version.SupportedVersion;
 import top.wcpe.mc.mpmt.platform.spi.FeatureGate;
+import top.wcpe.mc.mpmt.platform.spi.PlatformAssemblyContext;
 import top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap;
 
-/**
- * Sponge 平台入口（SPI 实现），经 {@code META-INF/services} 注册供 ServiceLoader 发现。
- *
- * <p>端口实现随传输 / 调度等特性增量注入；当前装配阶段暂无端口（用到才建，scope-discipline）。Sponge 为纯服务端
- * 平台（SpongeVanilla，无客户端插件 API），故 FR-27 跨端 HUD 由 Sponge 服<b>下发</b>、客户端复用我方 Fabric
- * 伴侣渲染（异构互通 FR-11②，同 Bukkit 模式）。平台标识 {@code sponge}。
- */
+/** Sponge 平台入口：探测实际 MC 版本后装配对应 L4 网络适配器与平台能力。 */
 public final class SpongePlatformBootstrap implements PlatformBootstrap {
 
+    private final Supplier<SupportedVersion> versionDetector;
+    private final NetworkFactory networkFactory;
+
     public SpongePlatformBootstrap() {
-        // ServiceLoader 需要公开无参构造
+        this(SpongeVersions::detect, SpongeNetworkBindings::serverNetwork);
+    }
+
+    SpongePlatformBootstrap(
+            Supplier<SupportedVersion> versionDetector, NetworkFactory networkFactory) {
+        this.versionDetector = Objects.requireNonNull(versionDetector, "versionDetector 不能为空");
+        this.networkFactory = Objects.requireNonNull(networkFactory, "networkFactory 不能为空");
     }
 
     @Override
@@ -28,7 +45,30 @@ public final class SpongePlatformBootstrap implements PlatformBootstrap {
     }
 
     @Override
-    public void assemble(RuntimePorts ports) {
-        // 端口随后续特性（传输 / 调度 / 消息）增量注入；此处暂不注册
+    public void assemble(PlatformAssemblyContext context, MpmtRuntime runtime) {
+        PluginContainer plugin = context.get(PluginContainer.class);
+        Path configDir = context.get(Path.class);
+        SpongeConnectionRegistry connections = registerTransport(context, runtime);
+        SpongeCapabilityBootstrap.register(plugin, configDir, runtime, connections);
+    }
+
+    SpongeConnectionRegistry registerTransport(
+            PlatformAssemblyContext context, MpmtRuntime runtime) {
+        PluginContainer plugin = context.get(PluginContainer.class);
+        RegisterChannelEvent event = context.get(RegisterChannelEvent.class);
+        SpongeConnectionRegistry connections = new SpongeConnectionRegistry();
+        SupportedVersion version = versionDetector.get();
+        SpongeServerNetwork network = networkFactory.create(version, event, plugin, connections);
+        runtime.ports().register(TransportPort.class, new SpongeServerTransport(network));
+        return connections;
+    }
+
+    @FunctionalInterface
+    interface NetworkFactory {
+        SpongeServerNetwork create(
+                SupportedVersion version,
+                RegisterChannelEvent event,
+                PluginContainer plugin,
+                SpongeConnectionRegistry connections);
     }
 }

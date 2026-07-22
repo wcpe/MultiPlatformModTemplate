@@ -5,7 +5,7 @@ import net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -24,9 +24,9 @@ import top.wcpe.mc.mpmt.platform.forge.net.ForgeRawPayloadRouter;
 @Mixin(net.minecraft.server.network.ServerGamePacketListenerImpl.class)
 public abstract class ServerGamePacketListenerImplMixin {
 
-    /** 原版玩家字段（{@code public ServerPlayer player}），经其 {@code server} 取主线程执行器。 */
-    @Shadow
-    public ServerPlayer player;
+    /** 由 Mixin 生成字段访问器，避免 ForgeGradle 直接改写本类成员名。 */
+    @Accessor("player")
+    public abstract ServerPlayer mpmt$getPlayer();
 
     // PMD 误报：该方法不被 Java 代码调用，而由 Mixin 字节码变换器在运行期织入原版方法作回调（@Inject）；
     // 静态分析看不到此调用链，故按构造精确抑制（static-analysis §3：@SuppressWarnings 配合说明）。
@@ -39,7 +39,7 @@ public abstract class ServerGamePacketListenerImplMixin {
         }
         FriendlyByteBuf data = packet.getData();
         byte[] bytes = ForgeRawPayloadRouter.readAll(data);
-        ServerPlayer sender = this.player;
+        ServerPlayer sender = mpmt$getPlayer();
         sender.server.execute(() -> ForgeRawPayloadRouter.dispatchServer(sender, channel, bytes));
         ci.cancel();
     }

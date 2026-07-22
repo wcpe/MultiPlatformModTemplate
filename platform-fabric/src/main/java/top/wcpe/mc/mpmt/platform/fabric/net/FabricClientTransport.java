@@ -43,6 +43,11 @@ public final class FabricClientTransport implements TransportPort {
         network.registerReceiver(data -> handler.accept(SERVER, data));
     }
 
+    /** 客户端唯一服务端连接句柄，供断线时清理协议可靠性状态。 */
+    public ConnectionHandle serverConnection() {
+        return SERVER;
+    }
+
     @Override
     public int maxPayloadSize() {
         return network.maxPayloadSize();

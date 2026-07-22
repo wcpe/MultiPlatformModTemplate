@@ -6,7 +6,6 @@ import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
 import top.wcpe.mc.mpmt.platform.forge.MpmtForgeMod;
 import top.wcpe.mc.mpmt.platform.forge.acceptance.ForgeServerGameTestContext;
-import top.wcpe.mc.mpmt.platform.forge.net.ForgeConnectionHandle;
 import top.wcpe.mc.mpmt.protocol.PacketCodec;
 import top.wcpe.mc.mpmt.protocol.packet.HudKind;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
@@ -56,8 +55,7 @@ public final class ForgeSmokeServerScenario extends ServerScenario {
                                                 new ServerHudMessagePacket(
                                                         HudKind.ACTIONBAR, HUD_TEXT, "", 0L));
                         // 经主 mod 活跃传输 Holder 发：复用产品 SimpleChannel（帧字节与客户端收包一致，FR-27）
-                        MpmtForgeMod.activeTransport()
-                                .send(new ForgeConnectionHandle(players.get(0)), data);
+                        MpmtForgeMod.sendActive(players.get(0), data);
                     }
                 });
 

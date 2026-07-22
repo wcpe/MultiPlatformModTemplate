@@ -1,14 +1,18 @@
 package top.wcpe.mc.mpmt.platform.neoforge;
 
-import top.wcpe.mc.mpmt.core.runtime.RuntimePorts;
+import net.minecraft.server.MinecraftServer;
+import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
+import top.wcpe.mc.mpmt.platform.neoforge.capability.NeoForgeCapabilityBootstrap;
+import top.wcpe.mc.mpmt.platform.neoforge.net.NeoForgeServerTransport;
 import top.wcpe.mc.mpmt.platform.spi.FeatureGate;
+import top.wcpe.mc.mpmt.platform.spi.PlatformAssemblyContext;
 import top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap;
 
 /**
  * NeoForge 平台入口（SPI 实现），经 {@code META-INF/services} 注册供 ServiceLoader 发现。
  *
- * <p>端口实现随传输 / 调度等特性增量注入；当前装配阶段暂无端口（用到才建，scope-discipline）。镜像 Forge 结构，
- * 平台标识为 {@code neoforge}（与 Forge 区分，进程级单一活跃绑定见 ADR-0008）。
+ * <p>从启动上下文取得服务端与构造期已注册的产品传输，在运行时启用前统一注册全部服务端端口。
  */
 public final class NeoForgePlatformBootstrap implements PlatformBootstrap {
 
@@ -27,7 +31,10 @@ public final class NeoForgePlatformBootstrap implements PlatformBootstrap {
     }
 
     @Override
-    public void assemble(RuntimePorts ports) {
-        // 端口随后续特性（传输 / 调度 / 消息）增量注入；此处暂不注册
+    public void assemble(PlatformAssemblyContext context, MpmtRuntime runtime) {
+        MinecraftServer server = context.get(MinecraftServer.class);
+        NeoForgeServerTransport transport = context.get(NeoForgeServerTransport.class);
+        runtime.ports().register(TransportPort.class, transport);
+        NeoForgeCapabilityBootstrap.register(server, runtime);
     }
 }

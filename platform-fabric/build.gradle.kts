@@ -8,10 +8,12 @@ import org.gradle.api.plugins.quality.Checkstyle
 import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.plugins.quality.Pmd
 import org.gradle.api.plugins.quality.PmdExtension
+import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
+import java.security.MessageDigest
 import java.util.zip.ZipFile
 
 // platform-fabric（L3）：M0 阶段只验证构建骨架 + 打包链路，不含平台胶水逻辑。
@@ -211,6 +213,28 @@ loom {
     }
 }
 
+fun sha256(file: File): String =
+    MessageDigest.getInstance("SHA-256")
+        .digest(file.readBytes())
+        .joinToString("") { "%02x".format(it) }
+
+// 模拟服报告绑定当前提交、版本与实际产品 jar；故障注入类只来自 gametest 源集，不进入该产品 jar。
+tasks.named<JavaExec>("runSimNetworkTest") {
+    dependsOn(tasks.named("remapJar"))
+    doFirst {
+        val productJar = tasks.named<RemapJarTask>("remapJar").get().archiveFile.get().asFile
+        val commit =
+            providers.exec {
+                commandLine("git", "rev-parse", "HEAD")
+            }.standardOutput.asText.get().trim()
+        systemProperty("mpmt.simtest.commit", commit)
+        systemProperty("mpmt.simtest.version", project.version.toString())
+        systemProperty("mpmt.simtest.mcVersion", mcVersion)
+        systemProperty("mpmt.simtest.serverVersion", "Fabric headless $mcVersion")
+        systemProperty("mpmt.simtest.productJarSha256", sha256(productJar))
+    }
+}
+
 // fabric.mod.json 中 ${version} 占位由构建注入
 tasks.processResources {
     inputs.property("version", project.version)
@@ -307,10 +331,28 @@ tasks.register("runRealServerAcceptance") {
     }
 }
 
-// 模拟服 GameTest 一键门禁（FR-23①）：起 headless 服跑 in-process 回环网络 GameTest → 读报告末行 RESULT PASS。
+val simRequiredScenarios =
+    listOf(
+        "acceptance/handshake-success",
+        "acceptance/handshake-incompatible",
+        "acceptance/machine-code-session",
+        "acceptance/ban-reconnect",
+        "acceptance/unban-reconnect",
+        "acceptance/fragment-crc",
+        "acceptance/fragment-timeout-retry-resync",
+        "acceptance/session-heartbeat-rtt-timeout",
+        "acceptance/capability-eventbus",
+        "acceptance/hud-title",
+        "acceptance/hud-actionbar",
+        "acceptance/hud-toast",
+        "acceptance/hud-chat",
+        "acceptance/integrated-loopback",
+    )
+
+// 模拟服 GameTest 一键门禁：起 headless 服跑完整 P1 回环场景，并严格校验 acceptance v2 元数据与场景清单。
 tasks.register("runSimNetworkAcceptance") {
     group = "verification"
-    description = "起 headless 服跑模拟服回环网络 GameTest，读报告末行 RESULT PASS"
+    description = "起 headless 服跑完整 P1 模拟服场景并严格校验 acceptance v2 报告"
     dependsOn("runSimNetworkTest")
     doLast {
         val report = simReportFile.get().asFile
@@ -319,11 +361,44 @@ tasks.register("runSimNetworkAcceptance") {
         }
         val text = report.readText()
         logger.lifecycle("[sim] 模拟服 GameTest 权威报告：\n$text")
-        val resultLine = text.lineSequence().map { it.trim() }.lastOrNull { it.startsWith("RESULT") }
-        if (resultLine != "RESULT PASS") {
-            throw GradleException("[sim] 模拟服未通过（末行非 RESULT PASS）：$resultLine")
+        val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        if (lines.firstOrNull() != "SERVER-GAMETEST-REPORT v2") {
+            throw GradleException("[sim] 模拟服报告不是 acceptance v2")
         }
-        logger.lifecycle("[sim] 模拟服 GameTest 通过 ✓ RESULT PASS")
+        val metadata =
+            lines.filter { it.startsWith("META ") }.associate { line ->
+                val entry = line.removePrefix("META ")
+                val separator = entry.indexOf('=')
+                if (separator <= 0) throw GradleException("[sim] 非法元数据行：$line")
+                entry.substring(0, separator) to entry.substring(separator + 1)
+            }
+        val requiredMetadata =
+            listOf("commit", "VERSION", "platform", "mcVersion", "serverVersion", "productJarSha256", "scenarios")
+        if (requiredMetadata.any { metadata[it].isNullOrBlank() }) {
+            throw GradleException("[sim] 模拟服报告缺少 acceptance v2 必需元数据")
+        }
+        if (metadata["platform"] != "sim-fabric") {
+            throw GradleException("[sim] platform 元数据必须为 sim-fabric：${metadata["platform"]}")
+        }
+        if (!metadata.getValue("productJarSha256").matches(Regex("[0-9a-fA-F]{64}"))) {
+            throw GradleException("[sim] productJarSha256 元数据非法")
+        }
+        if (metadata["scenarios"] != simRequiredScenarios.joinToString(",")) {
+            throw GradleException("[sim] 报告场景声明不完整：${metadata["scenarios"]}")
+        }
+        val resultLines = lines.filter { it.startsWith("RESULT ") }
+        if (resultLines != listOf("RESULT PASS") || lines.last() != "RESULT PASS") {
+            throw GradleException("[sim] 模拟服报告必须仅有一个末行 RESULT PASS")
+        }
+        val scenarioLines = lines.filter { it.startsWith("PASS ") || it.startsWith("FAIL ") || it.startsWith("ERROR ") || it.startsWith("SKIP ") }
+        val scenarios = scenarioLines.associateBy { it.split(' ', limit = 3)[1] }
+        if (scenarios.size != scenarioLines.size || scenarios.keys != simRequiredScenarios.toSet()) {
+            throw GradleException("[sim] 实际场景与 P1 清单不一致：${scenarios.keys}")
+        }
+        if (scenarioLines.any { !it.startsWith("PASS ") }) {
+            throw GradleException("[sim] P1 场景存在非 PASS 结果")
+        }
+        logger.lifecycle("[sim] 模拟服 GameTest 通过：acceptance v2，${simRequiredScenarios.size} 项 P1 场景全部 PASS")
     }
 }
 

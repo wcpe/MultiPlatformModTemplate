@@ -3,6 +3,7 @@ package top.wcpe.mc.mpmt.platform.bukkit.net;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -16,16 +17,11 @@ import org.bukkit.plugin.messaging.Messenger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.platform.bukkit.version.v1_20.V1_20BukkitServerNetwork;
 
-/**
- * Bukkit 服务端传输（插件消息）单元测试（MockBukkit，无需真实服）。
- *
- * <p>穷举：收发通道注册 / 网络线程收包回上层 / 错通道与无回调的兜底 / 无连接发送拒绝 / 单包上限。
- * 真实跨端字节往返（Paper 服 ↔ 真实客户端）为实机维度，留 realserver harness（Round B）。
- */
+/** Bukkit 1.20.1 网络适配器与版本无关 TransportPort 的协作测试。 */
 class BukkitServerTransportTest {
 
-    /** 产品跨端通道，须与各平台一致（Fabric 亦为 {@code mpmt:main}）以支持异构互通。 */
     private static final String CHANNEL = "mpmt:main";
 
     @AfterEach
@@ -40,7 +36,7 @@ class BukkitServerTransportTest {
         ServerMock server = MockBukkit.mock();
         MockPlugin plugin = MockBukkit.createMockPlugin();
 
-        new BukkitServerTransport(plugin);
+        create(plugin, new BukkitConnectionRegistry());
 
         Messenger messenger = server.getMessenger();
         assertTrue(messenger.isOutgoingChannelRegistered(plugin, CHANNEL), "出站通道应已注册");
@@ -51,66 +47,67 @@ class BukkitServerTransportTest {
     void 收到插件消息回调上层并带连接句柄() {
         ServerMock server = MockBukkit.mock();
         MockPlugin plugin = MockBukkit.createMockPlugin();
-        BukkitServerTransport transport = new BukkitServerTransport(plugin);
+        BukkitConnectionRegistry connections = new BukkitConnectionRegistry();
+        V1_20BukkitServerNetwork network = network(plugin, connections);
+        BukkitServerTransport transport = new BukkitServerTransport(network);
         PlayerMock player = server.addPlayer();
-
         AtomicReference<byte[]> gotData = new AtomicReference<>();
         AtomicReference<ConnectionHandle> gotConn = new AtomicReference<>();
-        transport.onReceive(
-                (conn, data) -> {
-                    gotConn.set(conn);
-                    gotData.set(data);
-                });
+        AtomicReference<ConnectionHandle> handledConn = new AtomicReference<>();
+        transport.onHandled(handledConn::set);
+        transport.onReceive((conn, data) -> {
+            gotConn.set(conn);
+            gotData.set(data);
+        });
 
         byte[] payload = {1, 2, 3, 4};
-        transport.onPluginMessageReceived(CHANNEL, player, payload);
+        network.onPluginMessageReceived(CHANNEL, player, payload);
 
         assertArrayEquals(payload, gotData.get());
-        assertEquals(new BukkitConnectionHandle(player), gotConn.get(), "句柄应按 UUID 标识该玩家");
+        assertEquals(connections.handleOf(player), gotConn.get());
+        assertSame(gotConn.get(), handledConn.get(), "完成通知应复用同一物理连接句柄");
     }
 
     @Test
     void 未设收包回调时丢弃不报错() {
         ServerMock server = MockBukkit.mock();
         MockPlugin plugin = MockBukkit.createMockPlugin();
-        BukkitServerTransport transport = new BukkitServerTransport(plugin);
-        PlayerMock player = server.addPlayer();
+        V1_20BukkitServerNetwork network = network(plugin, new BukkitConnectionRegistry());
+        new BukkitServerTransport(network);
 
-        // 未调 onReceive 即收到消息：应安全丢弃，不抛异常
-        transport.onPluginMessageReceived(CHANNEL, player, new byte[] {9});
+        network.onPluginMessageReceived(CHANNEL, server.addPlayer(), new byte[] {9});
     }
 
     @Test
     void 非产品通道不回调上层() {
         ServerMock server = MockBukkit.mock();
         MockPlugin plugin = MockBukkit.createMockPlugin();
-        BukkitServerTransport transport = new BukkitServerTransport(plugin);
-        PlayerMock player = server.addPlayer();
-
+        V1_20BukkitServerNetwork network = network(plugin, new BukkitConnectionRegistry());
+        BukkitServerTransport transport = new BukkitServerTransport(network);
         AtomicBoolean called = new AtomicBoolean(false);
         transport.onReceive((conn, data) -> called.set(true));
 
-        transport.onPluginMessageReceived("other:channel", player, new byte[] {1});
+        network.onPluginMessageReceived("other:channel", server.addPlayer(), new byte[] {1});
 
         assertFalse(called.get(), "非产品通道不应触发上层回调");
     }
 
     @Test
-    void 向连接发送插件消息不抛异常() {
+    void 向当前连接发送插件消息不抛异常() {
         ServerMock server = MockBukkit.mock();
         MockPlugin plugin = MockBukkit.createMockPlugin();
-        BukkitServerTransport transport = new BukkitServerTransport(plugin);
+        BukkitConnectionRegistry connections = new BukkitConnectionRegistry();
+        BukkitServerTransport transport = create(plugin, connections);
         PlayerMock player = server.addPlayer();
 
-        // 出站通道已注册，向玩家发送插件消息应成立（真实字节投递为实机维度）
-        transport.send(new BukkitConnectionHandle(player), new byte[] {7, 7});
+        transport.send(connections.connected(player), new byte[] {7, 7});
     }
 
     @Test
     void 服务端不支持无连接发送() {
         MockBukkit.mock();
-        MockPlugin plugin = MockBukkit.createMockPlugin();
-        BukkitServerTransport transport = new BukkitServerTransport(plugin);
+        BukkitServerTransport transport =
+                create(MockBukkit.createMockPlugin(), new BukkitConnectionRegistry());
 
         assertThrows(UnsupportedOperationException.class, () -> transport.send(new byte[0]));
     }
@@ -118,9 +115,19 @@ class BukkitServerTransportTest {
     @Test
     void 单包上限取Bukkit插件消息上限() {
         MockBukkit.mock();
-        MockPlugin plugin = MockBukkit.createMockPlugin();
-        BukkitServerTransport transport = new BukkitServerTransport(plugin);
+        BukkitServerTransport transport =
+                create(MockBukkit.createMockPlugin(), new BukkitConnectionRegistry());
 
         assertEquals(Messenger.MAX_MESSAGE_SIZE, transport.maxPayloadSize());
+    }
+
+    private static BukkitServerTransport create(
+            MockPlugin plugin, BukkitConnectionRegistry connections) {
+        return new BukkitServerTransport(network(plugin, connections));
+    }
+
+    private static V1_20BukkitServerNetwork network(
+            MockPlugin plugin, BukkitConnectionRegistry connections) {
+        return new V1_20BukkitServerNetwork(plugin, connections, CHANNEL);
     }
 }

@@ -8,56 +8,69 @@ import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.network.ServerSideConnectionEvent;
 import org.spongepowered.plugin.PluginContainer;
 import top.wcpe.mc.mpmt.core.domain.event.EventBusPort;
+import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
 import top.wcpe.mc.mpmt.core.domain.port.DataDirectoryPort;
 import top.wcpe.mc.mpmt.core.domain.port.MessagePort;
 import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
+import top.wcpe.mc.mpmt.core.domain.port.PlayerPort;
 import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
+import top.wcpe.mc.mpmt.core.domain.port.WorldPort;
 import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.domain.capability.PlatformCapabilityExample;
 import top.wcpe.mc.mpmt.domain.capability.PlayerJoinedEvent;
 import top.wcpe.mc.mpmt.domain.capability.PlayerLeftEvent;
+import top.wcpe.mc.mpmt.platform.sponge.net.SpongeConnectionRegistry;
 
-/**
- * Sponge 平台能力示例装配（L3，FR-26）：装配 L3 端口实现（调度 / 持久化 / 消息 / 数据目录），
- * 把同一份 L0 {@link PlatformCapabilityExample} 接到运行时自有 EventBus，
- * 并把 Sponge 玩家进 / 退连接事件桥接为领域事件投递入总线（ADR-0011）。
- *
- * <p>这正是脚手架"一份 L0 逻辑经端口在各平台一致运行"的 Sponge 落地：与 Fabric / Bukkit / NeoForge 镜像同一份 L0。
- */
+/** Sponge 平台能力装配：注册服务端能力端口，并把连接事件桥接到运行时 EventBus。 */
 public final class SpongeCapabilityBootstrap {
 
     private SpongeCapabilityBootstrap() {
         // 工具类不实例化
     }
 
-    /**
-     * 装配并接线平台能力示例。
-     *
-     * @param plugin    插件容器（调度 / 玩家事件监听器注册）
-     * @param configDir 插件配置目录（数据基目录，经 {@code @ConfigDir} 注入）
-     * @param eventBus  运行时自有 EventBus（领域事件投递与订阅同一条总线）
-     */
-    public static void register(PluginContainer plugin, Path configDir, EventBusPort eventBus) {
+    /** 装配服务端能力端口与领域事件桥接。 */
+    public static void register(PluginContainer plugin, Path configDir, MpmtRuntime runtime) {
+        register(plugin, configDir, runtime, new SpongeConnectionRegistry());
+    }
+
+    /** 使用平台启动期共享的物理连接登记表装配能力端口。 */
+    public static void register(
+            PluginContainer plugin,
+            Path configDir,
+            MpmtRuntime runtime,
+            SpongeConnectionRegistry connectionRegistry) {
         Objects.requireNonNull(plugin, "plugin 不能为空");
         Objects.requireNonNull(configDir, "configDir 不能为空");
-        Objects.requireNonNull(eventBus, "eventBus 不能为空");
+        Objects.requireNonNull(runtime, "runtime 不能为空");
+        Objects.requireNonNull(connectionRegistry, "connectionRegistry 不能为空");
 
         DataDirectoryPort dataDirectory = new SpongeDataDirectoryPort(configDir);
         PersistencePort persistence = new SpongePersistencePort(dataDirectory);
         MessagePort message = new SpongeMessagePort();
+        ConnectionControlPort connections = new SpongeConnectionControlPort(connectionRegistry);
+        PlayerPort players = new SpongePlayerPort();
+        WorldPort worlds = new SpongeWorldPort();
         SchedulerPort scheduler = new SpongeSchedulerPort(plugin);
 
+        runtime.ports().register(DataDirectoryPort.class, dataDirectory);
+        runtime.ports().register(PersistencePort.class, persistence);
+        runtime.ports().register(MessagePort.class, message);
+        runtime.ports().register(ConnectionControlPort.class, connections);
+        runtime.ports().register(PlayerPort.class, players);
+        runtime.ports().register(WorldPort.class, worlds);
+        runtime.ports().register(SchedulerPort.class, scheduler);
+        runtime.ports().register(SpongeConnectionRegistry.class, connectionRegistry);
+
+        EventBusPort eventBus = runtime.eventBus();
         PlatformCapabilityExample example =
                 new PlatformCapabilityExample(persistence, message, scheduler, System::currentTimeMillis);
         example.register(eventBus);
-
-        // 平台事件 → 领域事件 → 自有 EventBus（ADR-0011）；不在 L3 写执行逻辑（ADR-0009）
         Sponge.eventManager().registerListeners(plugin, new PlayerConnectionBridge(eventBus));
     }
 
-    /** Sponge 玩家进 / 退连接事件桥接：转成领域事件投递到自有 EventBus。 */
+    /** Sponge 玩家连接事件桥接。 */
     public static final class PlayerConnectionBridge {
-
         private final EventBusPort eventBus;
 
         PlayerConnectionBridge(EventBusPort eventBus) {
@@ -72,7 +85,7 @@ public final class SpongeCapabilityBootstrap {
 
         @Listener
         public void onDisconnect(ServerSideConnectionEvent.Disconnect event) {
-            var profile = event.profile();
+            org.spongepowered.api.profile.GameProfile profile = event.profile();
             eventBus.publish(
                     new PlayerLeftEvent(
                             new PlayerRef(profile.uniqueId(), profile.name().orElse(""))));

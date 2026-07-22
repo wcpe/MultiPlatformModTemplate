@@ -39,8 +39,11 @@ public final class MpmtFabricClientBootstrap implements ClientModInitializer {
         runtime.enable();
         // 跨端 HUD 渲染（FR-27）：在客户端收发管线上注册 HUD 收包处理器
         FabricHudRenderer.register(feature.dispatcher());
-        // 客户端连入服务端后发起握手（连接事件在客户端线程触发）
+        // 客户端连入服务端后发起握手；断线时清理同一 dispatcher 的可靠性状态
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> feature.startHandshake());
+        ClientPlayConnectionEvents.DISCONNECT.register(
+                (handler, client) ->
+                        feature.dispatcher().onDisconnected(transport.serverConnection()));
         LOGGER.info("MPMT Fabric 客户端网络已装配（mod 版本 {}）", modVersion());
     }
 

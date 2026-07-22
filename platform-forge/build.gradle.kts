@@ -12,6 +12,7 @@ import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
 import org.spongepowered.asm.gradle.plugins.MixinExtension
+import java.security.MessageDigest
 import java.util.zip.ZipFile
 
 // platform-forge（L3）：独立 includeBuild，仅应用 ForgeGradle（ADR-0007）。
@@ -57,6 +58,8 @@ val snakeyamlVersion = "2.2"
 val spiCoordinate = "top.wcpe.mc.mpmt:platform-spi:$version"
 // 服务端公共网络特性（经 api 传递 protocol + core-runtime），各平台注入 TransportPort 后复用同一份装配
 val serverCoordinate = "top.wcpe.mc.mpmt:core-server:$version"
+// 客户端公共网络特性（握手、心跳与重同步），仅复用仓库现有第一方模块
+val clientCoordinate = "top.wcpe.mc.mpmt:core-client:$version"
 
 base {
     archivesName.set("mpmt-forge")
@@ -127,6 +130,9 @@ dependencies {
     // 服务端公共网络特性（FR-19）：纯 Java、shade 进 mod jar（传递 protocol）
     implementation(serverCoordinate)
     shadowBundle(serverCoordinate)
+    // 客户端公共网络特性（FR-22/FR-28）：纯 Java、shade 进同一产品 jar
+    implementation(clientCoordinate)
+    shadowBundle(clientCoordinate)
     // 第三方运行期依赖：shade 并 relocate（ADR-0012）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
@@ -135,6 +141,7 @@ dependencies {
 
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("top.wcpe.mc.mpmt:acceptance:$version")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -153,6 +160,8 @@ tasks.named<Jar>("jar") {
 // 最终 mod jar = shadowJar（shade core/spi + relocate snakeyaml），随后 reobf 到 SRG
 tasks.named<ShadowJar>("shadowJar") {
     archiveClassifier.set("")
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
     configurations = listOf(shadowBundle)
     relocate("org.yaml.snakeyaml", "top.wcpe.mc.mpmt.libs.org.yaml.snakeyaml")
     exclude("META-INF/maven/**")
@@ -172,12 +181,17 @@ val verifyPackaging by tasks.registering {
     description = "校验 Forge mod jar：核心 shade、snakeyaml relocate、mods.toml/services 在位、未打入 Minecraft"
     dependsOn("reobfShadowJar")
     doLast {
-        val jar = tasks.named<ShadowJar>("shadowJar").get().archiveFile.get().asFile
+        val shadow = tasks.named<ShadowJar>("shadowJar").get()
+        val plain = tasks.named<Jar>("jar").get()
+        val jar = shadow.archiveFile.get().asFile
         val entries = ZipFile(jar).use { zf -> zf.entries().asSequence().map { it.name }.toList() }
 
         fun must(cond: Boolean, msg: String) {
             if (!cond) throw GradleException("Forge 打包校验失败：$msg")
         }
+        must(plain.archiveFile.get().asFile != jar, "普通 jar 与最终 shadowJar 输出路径冲突")
+        must(!shadow.isPreserveFileTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
+        must(shadow.isReproducibleFileOrder, "最终产品未启用可复现文件顺序")
         must(entries.contains("top/wcpe/mc/mpmt/core/domain/Mpmt.class"), "核心类未 shade 进 mod jar")
         must(entries.contains("top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class"), "platform-spi 未 shade 进 mod jar")
         must(entries.contains("top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class"), "缺少 Forge mod 主类")
@@ -194,6 +208,10 @@ val verifyPackaging by tasks.registering {
         println("  产物 = ${jar.name}（条目数 ${entries.size}）")
         println("  核心已 shade、snakeyaml 已 relocate、mods.toml/services 在位、已 reobf、未打入 Minecraft")
     }
+}
+
+tasks.named("assemble") {
+    dependsOn(verifyPackaging)
 }
 
 tasks.named("build") {
@@ -287,6 +305,13 @@ val acceptance: SourceSet by sourceSets.creating {
 }
 configurations["acceptanceImplementation"].extendsFrom(configurations["implementation"])
 
+val acceptanceTest: SourceSet by sourceSets.creating {
+    compileClasspath += acceptance.output + sourceSets["main"].output
+    runtimeClasspath += output + compileClasspath
+}
+configurations["acceptanceTestImplementation"].extendsFrom(configurations["testImplementation"])
+configurations["acceptanceTestRuntimeOnly"].extendsFrom(configurations["testRuntimeOnly"])
+
 // 专用配置：需 shade 进验收 mod jar 的内容——**只含 acceptance 核心**（验收 jar 独有、不在产品 jar 里）。
 // protocol/core-domain 等已在产品 mod jar 内：Forge 的 FML 模块层禁止两个 mod 导出同名包（split package，
 // 否则 ResolutionException 启动失败），故验收 jar 不能再打 protocol/core-domain；运行期由产品 mod 提供
@@ -329,6 +354,60 @@ reobf {
 }
 
 // 把验收源集纳入常规 build 的编译校验（只编译，不打包——打包由验收编排按需触发）
-tasks.named("build") {
+val acceptanceContractTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "运行 Forge acceptance v2 与完整 P1 场景契约测试"
+    testClassesDirs = acceptanceTest.output.classesDirs
+    classpath = acceptanceTest.runtimeClasspath
+    useJUnitPlatform()
     dependsOn(tasks.named("acceptanceClasses"))
+}
+
+val simAcceptanceReport = layout.buildDirectory.file("acceptance/sim-report-v2.txt")
+val realAcceptanceReport =
+    providers.gradleProperty("mpmt.acceptance.report")
+        .map { file(it) }
+        .orElse(provider { file("run-server/acceptance-report.txt") })
+
+val runSimNetworkAcceptance by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "运行 Forge 1.20.1 完整 P1 模拟服套件并生成 acceptance v2 报告"
+    classpath = acceptance.runtimeClasspath
+    mainClass.set("top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeP1Simulation")
+    dependsOn(tasks.named("acceptanceClasses"), tasks.named("reobfShadowJar"))
+    systemProperty("mpmt.acceptance.report", simAcceptanceReport.get().asFile.absolutePath)
+    systemProperty("mpmt.acceptance.version", project.version.toString())
+    systemProperty("mpmt.acceptance.platform", "forge")
+    systemProperty("mpmt.acceptance.mcVersion", "1.20.1")
+    systemProperty("mpmt.acceptance.serverVersion", forgeVersion)
+    doFirst {
+        val product = tasks.named<ShadowJar>("shadowJar").get().archiveFile.get().asFile
+        val digest = MessageDigest.getInstance("SHA-256").digest(product.readBytes())
+        systemProperty("mpmt.acceptance.productJarSha256", digest.joinToString("") { byte -> "%02x".format(byte) })
+        val commit = providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim()
+        systemProperty("mpmt.acceptance.commit", commit)
+    }
+}
+
+val verifyAcceptanceReport by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "严格校验 Forge acceptance v2 报告，缺元数据、场景或 PASS 均失败"
+    classpath = acceptance.runtimeClasspath
+    mainClass.set("top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeP1Simulation")
+    dependsOn(tasks.named("acceptanceClasses"))
+    doFirst {
+        val report = realAcceptanceReport.get()
+        if (!report.isFile) {
+            throw GradleException("未找到 Forge 验收报告：${report.absolutePath}")
+        }
+        args("verify", report.absolutePath)
+    }
+}
+
+// 把验收源集与契约测试纳入常规 build/check，验收驱动仍不进入产品 jar。
+tasks.named("build") {
+    dependsOn(tasks.named("acceptanceClasses"), acceptanceContractTest)
+}
+tasks.named("check") {
+    dependsOn(acceptanceContractTest)
 }

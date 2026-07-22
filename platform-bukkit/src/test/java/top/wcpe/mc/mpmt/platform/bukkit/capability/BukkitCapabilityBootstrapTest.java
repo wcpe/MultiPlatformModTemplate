@@ -17,8 +17,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.event.EventBusPort;
-import top.wcpe.mc.mpmt.core.domain.event.SimpleEventBus;
+import top.wcpe.mc.mpmt.core.domain.port.PlayerPort;
+import top.wcpe.mc.mpmt.core.domain.port.WorldPort;
+import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 
 /**
  * Bukkit 平台能力示例桥接集成测试（MockBukkit，无需真实服，FR-23 / FR-26）。
@@ -45,9 +46,11 @@ class BukkitCapabilityBootstrapTest {
         ServerMock server = MockBukkit.mock();
         MockPlugin plugin = MockBukkit.createMockPlugin();
 
-        EventBusPort eventBus = new SimpleEventBus();
+        MpmtRuntime runtime = new MpmtRuntime();
         // 非 Folia 环境（无 REGION_SCHEDULER 能力）：调度退化为主线程
-        BukkitCapabilityBootstrap.register(plugin, eventBus, capability -> false);
+        BukkitCapabilityBootstrap.register(plugin, runtime, capability -> false);
+        assertTrue(runtime.ports().contains(PlayerPort.class));
+        assertTrue(runtime.ports().contains(WorldPort.class));
 
         PlayerMock player = server.addPlayer();
 
@@ -69,9 +72,11 @@ class BukkitCapabilityBootstrapTest {
         ServerMock server = MockBukkit.mock();
         MockPlugin plugin = MockBukkit.createMockPlugin();
 
-        EventBusPort eventBus = new SimpleEventBus();
+        MpmtRuntime runtime = new MpmtRuntime();
         // 非 Folia 环境（无 REGION_SCHEDULER 能力）：调度退化为主线程
-        BukkitCapabilityBootstrap.register(plugin, eventBus, capability -> false);
+        BukkitCapabilityBootstrap.register(plugin, runtime, capability -> false);
+        assertTrue(runtime.ports().contains(PlayerPort.class));
+        assertTrue(runtime.ports().contains(WorldPort.class));
 
         UUID uuid = UUID.randomUUID();
         server.addPlayer(new PlayerMock(server, "Repeater", uuid));

@@ -11,7 +11,9 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
+import org.spongepowered.api.event.lifecycle.RegisterChannelEvent;
 import org.spongepowered.api.network.ServerPlayerConnection;
 import org.spongepowered.api.network.channel.ChannelBuf;
 import org.spongepowered.api.network.channel.raw.RawDataChannel;
@@ -19,19 +21,25 @@ import org.spongepowered.api.network.channel.raw.play.RawPlayDataChannel;
 import org.spongepowered.api.network.channel.raw.play.RawPlayDataHandler;
 import org.spongepowered.plugin.PluginContainer;
 import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.platform.sponge.version.v1_20.V1_20SpongeServerNetwork;
 
+/** Sponge RC1365 网络适配器与版本无关 TransportPort 的协作测试。 */
 class SpongeServerTransportTest {
 
-    private static final PluginContainer CONTAINER = proxy(PluginContainer.class, SpongeServerTransportTest::defaultResult);
+    private static final PluginContainer CONTAINER =
+            proxy(PluginContainer.class, SpongeServerTransportTest::defaultResult);
 
     @Test
     void 旧版Play回调转交裸字节与玩家句柄() {
         AtomicReference<Class<?>> connectionType = new AtomicReference<>();
         AtomicReference<RawPlayDataHandler<?>> registeredHandler = new AtomicReference<>();
-        RawDataChannel channel = channel(connectionType, registeredHandler);
-        SpongeServerTransport transport = new SpongeServerTransport(channel, CONTAINER);
+        SpongeConnectionRegistry connections = new SpongeConnectionRegistry();
+        SpongeServerTransport transport =
+                transport(channel(connectionType, registeredHandler), connections);
         AtomicReference<ConnectionHandle> receivedConnection = new AtomicReference<>();
+        AtomicReference<ConnectionHandle> handledConnection = new AtomicReference<>();
         AtomicReference<byte[]> receivedData = new AtomicReference<>();
+        transport.onHandled(handledConnection::set);
         transport.onReceive((connection, data) -> {
             receivedConnection.set(connection);
             receivedData.set(data);
@@ -43,13 +51,14 @@ class SpongeServerTransportTest {
 
         assertSame(ServerPlayerConnection.class, connectionType.get());
         assertEquals(new SpongeConnectionHandle(playerId), receivedConnection.get());
+        assertSame(receivedConnection.get(), handledConnection.get());
         assertArrayEquals(payload, receivedData.get());
     }
 
     @Test
     void 未注入接收器时安全丢弃() {
         AtomicReference<RawPlayDataHandler<?>> registeredHandler = new AtomicReference<>();
-        new SpongeServerTransport(channel(new AtomicReference<>(), registeredHandler), CONTAINER);
+        transport(channel(new AtomicReference<>(), registeredHandler), new SpongeConnectionRegistry());
         AtomicInteger readCount = new AtomicInteger();
 
         assertDoesNotThrow(() ->
@@ -58,6 +67,28 @@ class SpongeServerTransportTest {
                         buffer(new byte[] {9, 8, 7}, readCount),
                         connection(UUID.randomUUID())));
         assertEquals(0, readCount.get());
+    }
+
+    @Test
+    void 单包上限由RC1365适配器提供() {
+        SpongeServerTransport transport =
+                transport(channel(new AtomicReference<>(), new AtomicReference<>()),
+                        new SpongeConnectionRegistry());
+
+        assertEquals(32767, transport.maxPayloadSize());
+    }
+
+    private static SpongeServerTransport transport(
+            RawDataChannel channel, SpongeConnectionRegistry connections) {
+        RegisterChannelEvent event = proxy(RegisterChannelEvent.class, (proxy, method, args) ->
+                method.getName().equals("register") ? channel : defaultResult(proxy, method, args));
+        V1_20SpongeServerNetwork network =
+                new V1_20SpongeServerNetwork(
+                        event,
+                        CONTAINER,
+                        connections,
+                        proxy(ResourceKey.class, SpongeServerTransportTest::defaultResult));
+        return new SpongeServerTransport(network);
     }
 
     private static RawDataChannel channel(

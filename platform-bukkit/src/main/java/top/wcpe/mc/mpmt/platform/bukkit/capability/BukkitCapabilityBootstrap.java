@@ -8,14 +8,19 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 import top.wcpe.mc.mpmt.core.domain.event.EventBusPort;
+import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
 import top.wcpe.mc.mpmt.core.domain.port.DataDirectoryPort;
 import top.wcpe.mc.mpmt.core.domain.port.MessagePort;
 import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
+import top.wcpe.mc.mpmt.core.domain.port.PlayerPort;
 import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
+import top.wcpe.mc.mpmt.core.domain.port.WorldPort;
 import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.domain.capability.PlatformCapabilityExample;
 import top.wcpe.mc.mpmt.domain.capability.PlayerJoinedEvent;
 import top.wcpe.mc.mpmt.domain.capability.PlayerLeftEvent;
+import top.wcpe.mc.mpmt.platform.bukkit.net.BukkitConnectionRegistry;
 import top.wcpe.mc.mpmt.platform.spi.FeatureGate;
 
 /**
@@ -35,20 +40,44 @@ public final class BukkitCapabilityBootstrap {
      * 装配并接线平台能力示例。
      *
      * @param plugin      插件实例（提供数据目录 / 调度 / 在线玩家 / 监听器注册）
-     * @param eventBus    运行时自有 EventBus（领域事件投递与订阅同一条总线）
+     * @param runtime     待注册端口并接入领域事件的运行时
      * @param featureGate 平台能力探测：据 {@code REGION_SCHEDULER}（Folia）选调度实现（FR-13 / ADR-0013）
      */
-    public static void register(Plugin plugin, EventBusPort eventBus, FeatureGate featureGate) {
+    public static void register(Plugin plugin, MpmtRuntime runtime, FeatureGate featureGate) {
+        register(plugin, runtime, featureGate, new BukkitConnectionRegistry());
+    }
+
+    /** 使用平台启动期共享的物理连接登记表装配能力端口。 */
+    public static void register(
+            Plugin plugin,
+            MpmtRuntime runtime,
+            FeatureGate featureGate,
+            BukkitConnectionRegistry connectionRegistry) {
         Objects.requireNonNull(plugin, "plugin 不能为空");
-        Objects.requireNonNull(eventBus, "eventBus 不能为空");
+        Objects.requireNonNull(runtime, "runtime 不能为空");
         Objects.requireNonNull(featureGate, "featureGate 不能为空");
+        Objects.requireNonNull(connectionRegistry, "connectionRegistry 不能为空");
 
         DataDirectoryPort dataDirectory = new BukkitDataDirectoryPort(plugin);
         PersistencePort persistence = new BukkitPersistencePort(dataDirectory);
         MessagePort message = new BukkitMessagePort();
+        ConnectionControlPort connections =
+                new BukkitConnectionControlPort(plugin, connectionRegistry);
+        PlayerPort players = new BukkitPlayerPort();
+        WorldPort worlds = new BukkitWorldPort();
         // Folia→区域调度 / 非 Folia→主线程调度（按 FeatureGate 选用，FR-13）
         SchedulerPort scheduler = BukkitSchedulers.create(plugin, featureGate);
 
+        runtime.ports().register(DataDirectoryPort.class, dataDirectory);
+        runtime.ports().register(PersistencePort.class, persistence);
+        runtime.ports().register(MessagePort.class, message);
+        runtime.ports().register(ConnectionControlPort.class, connections);
+        runtime.ports().register(PlayerPort.class, players);
+        runtime.ports().register(WorldPort.class, worlds);
+        runtime.ports().register(SchedulerPort.class, scheduler);
+        runtime.ports().register(BukkitConnectionRegistry.class, connectionRegistry);
+
+        EventBusPort eventBus = runtime.eventBus();
         PlatformCapabilityExample example =
                 new PlatformCapabilityExample(persistence, message, scheduler, System::currentTimeMillis);
         example.register(eventBus);

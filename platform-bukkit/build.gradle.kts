@@ -71,6 +71,8 @@ tasks.named<Jar>("jar") {
 // 最终插件 jar = shadowJar（无 classifier）：shade 核心 + relocate snakeyaml
 tasks.named<ShadowJar>("shadowJar") {
     archiveClassifier.set("")
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
     relocate("org.yaml.snakeyaml", "top.wcpe.mc.mpmt.libs.org.yaml.snakeyaml")
     // relocate 不动 META-INF/maven 元数据，剔除保持洁净
     exclude("META-INF/maven/**")
@@ -85,12 +87,17 @@ val verifyPackaging by tasks.registering {
     description = "校验 Bukkit 插件 jar：核心 shade、snakeyaml relocate、plugin.yml/services 在位、未打入 Bukkit API"
     dependsOn(tasks.named("shadowJar"))
     doLast {
-        val jar = tasks.named<ShadowJar>("shadowJar").get().archiveFile.get().asFile
+        val shadow = tasks.named<ShadowJar>("shadowJar").get()
+        val plain = tasks.named<Jar>("jar").get()
+        val jar = shadow.archiveFile.get().asFile
         val entries = ZipFile(jar).use { zf -> zf.entries().asSequence().map { it.name }.toList() }
 
         fun must(cond: Boolean, msg: String) {
             if (!cond) throw GradleException("Bukkit 打包校验失败：$msg")
         }
+        must(plain.archiveFile.get().asFile != jar, "普通 jar 与最终 shadowJar 输出路径冲突")
+        must(!shadow.isPreserveFileTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
+        must(shadow.isReproducibleFileOrder, "最终产品未启用可复现文件顺序")
         must(entries.contains("top/wcpe/mc/mpmt/core/domain/Mpmt.class"), "核心类未 shade 进插件 jar")
         must(entries.contains("top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class"), "platform-spi 未 shade 进插件 jar")
         must(entries.contains("top/wcpe/mc/mpmt/platform/bukkit/MpmtBukkitPlugin.class"), "缺少插件主类")
@@ -106,6 +113,10 @@ val verifyPackaging by tasks.registering {
     }
 }
 
+tasks.named("assemble") {
+    dependsOn(verifyPackaging)
+}
+
 tasks.named("build") {
     dependsOn(tasks.named("shadowJar"), verifyPackaging)
 }
@@ -117,12 +128,28 @@ tasks.named("build") {
 // ============================================================================
 val acceptance: SourceSet by sourceSets.creating
 
+// 纯 JVM 验收契约源集：验证 P1 清单与 acceptance v2 严格报告，不依赖真实服下载
+val acceptanceTest: SourceSet by sourceSets.creating {
+    compileClasspath += acceptance.output + acceptance.compileClasspath + sourceSets["main"].output
+    runtimeClasspath += output + acceptance.runtimeClasspath + compileClasspath
+}
+configurations["acceptanceTestImplementation"].extendsFrom(configurations["testImplementation"])
+configurations["acceptanceTestRuntimeOnly"].extendsFrom(configurations["testRuntimeOnly"])
+
 dependencies {
     // Bukkit 编译基线 paper-api（spigot 超集）编译可见、运行期由服务端提供（ADR-0019）
     "acceptanceCompileOnly"("io.papermc.paper:paper-api:$paperApiVersion")
     // 平台无关验收核心（控制协议 / 协调 / GameTest 框架 / 报告）+ 协议（编 HUD 包）
     "acceptanceImplementation"(project(":acceptance"))
     "acceptanceImplementation"(project(":protocol"))
+    // 纯 JVM P1 契约：复用核心服务端/客户端与协议，仅契约测试源集使用，不进验收插件 jar
+    "acceptanceTestImplementation"(project(":acceptance"))
+    "acceptanceTestImplementation"(project(":protocol"))
+    "acceptanceTestImplementation"(project(":core-server"))
+    "acceptanceTestImplementation"(project(":core-client"))
+    "acceptanceTestImplementation"(platform("org.junit:junit-bom:5.10.3"))
+    "acceptanceTestImplementation"("org.junit.jupiter:junit-jupiter")
+    "acceptanceTestRuntimeOnly"("org.junit.platform:junit-platform-launcher")
 }
 
 // 验收插件 plugin.yml 的 ${version} 占位由构建注入
@@ -149,7 +176,18 @@ val acceptanceJar by tasks.registering(ShadowJar::class) {
     outputs.cacheIf { false }
 }
 
-// 把验收源集纳入常规 build 的编译校验（只编译，不打包——打包由验收编排按需触发）
+val acceptanceContractTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "运行 Bukkit acceptance v2 与完整 P1 场景契约测试"
+    testClassesDirs = acceptanceTest.output.classesDirs
+    classpath = acceptanceTest.runtimeClasspath
+    useJUnitPlatform()
+}
+
+// 把验收源集与契约测试纳入常规 build/check（只编译/单测，真实服运行另触发）
 tasks.named("build") {
-    dependsOn(tasks.named("acceptanceClasses"))
+    dependsOn(tasks.named("acceptanceClasses"), acceptanceContractTest)
+}
+tasks.named("check") {
+    dependsOn(acceptanceContractTest)
 }

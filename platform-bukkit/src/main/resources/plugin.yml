@@ -8,3 +8,12 @@ api-version: '1.20'
 # 声明支持 Folia 区域调度（运行期经 FeatureGate 适配，ADR-0007）
 folia-supported: true
 description: 多平台 mod 玩法脚手架 —— Bukkit 家族平台胶水
+commands:
+  mpmt:
+    description: MPMT 管理命令
+    usage: /mpmt machinecode ban <code> [reason...] | unban <code> | list
+    permission: mpmt.machinecode.manage
+permissions:
+  mpmt.machinecode.manage:
+    description: 管理机器码封禁
+    default: op

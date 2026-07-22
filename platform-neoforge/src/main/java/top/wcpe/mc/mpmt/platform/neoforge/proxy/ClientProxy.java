@@ -1,33 +1,62 @@
 package top.wcpe.mc.mpmt.platform.neoforge.proxy;
 
 import java.util.Objects;
+import net.neoforged.fml.ModList;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.bus.api.SubscribeEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import top.wcpe.mc.mpmt.core.client.ClientNetworkFeature;
+import top.wcpe.mc.mpmt.core.client.DefaultMachineCodeProvider;
+import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.platform.neoforge.net.NeoForgeClientHudReceiver;
+import top.wcpe.mc.mpmt.platform.neoforge.net.NeoForgeClientTransport;
 import top.wcpe.mc.mpmt.platform.neoforge.net.NeoForgeServerTransport;
 
-/**
- * NeoForge 客户端代理：客户端发行环境下的端侧初始化接缝（FR-09）。
- *
- * <p>本类<b>仅在 {@code Dist.CLIENT}</b> 被 {@code MpmtNeoForgeMod} 实例化，故可安全引用客户端专有的
- * {@link NeoForgeClientHudReceiver}（不会被服务端加载）。{@link #init()} 向产品传输注入客户端 HUD 收包处理器
- * （收 S2C HUD 字节后渲染，FR-27）。
- */
+/** NeoForge 客户端代理：装配统一客户端网络特性、HUD、握手与断线清理。 */
 public final class ClientProxy implements SidedProxy {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("mpmt");
 
-    /** 产品服务端传输（持 {@code mpmt:main} SimpleChannel），由 mod 主类构造期传入。 */
-    private final NeoForgeServerTransport transport;
+    private final NeoForgeServerTransport serverTransport;
+    private ClientNetworkFeature feature;
+    private NeoForgeClientTransport transport;
 
-    public ClientProxy(NeoForgeServerTransport transport) {
-        this.transport = Objects.requireNonNull(transport, "transport 不能为空");
+    public ClientProxy(NeoForgeServerTransport serverTransport) {
+        this.serverTransport = Objects.requireNonNull(serverTransport, "serverTransport 不能为空");
     }
 
     @Override
     public void init() {
-        // 跨端 HUD 渲染（FR-27）：向产品传输注入客户端收包处理器，收 S2C HUD 字节后渲染
-        NeoForgeClientHudReceiver.register(transport);
-        LOGGER.info("MPMT NeoForge 客户端代理就绪（已注册 HUD 收包）");
+        transport = new NeoForgeClientTransport(serverTransport);
+        MpmtRuntime runtime = new MpmtRuntime();
+        runtime.ports().register(TransportPort.class, transport);
+        feature = new ClientNetworkFeature(modVersion(), new DefaultMachineCodeProvider());
+        runtime.features().register(feature);
+        runtime.enable();
+        NeoForgeClientHudReceiver.register(feature.dispatcher());
+        NeoForge.EVENT_BUS.register(this);
+        LOGGER.info("MPMT NeoForge 客户端网络已装配（mod 版本 {}）", modVersion());
+    }
+
+    /** 客户端进入 PLAY 阶段后发起握手。 */
+    @SubscribeEvent
+    public void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
+        feature.startHandshake();
+    }
+
+    /** 客户端断线时清理唯一 dispatcher 的连接可靠性状态。 */
+    @SubscribeEvent
+    public void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        feature.dispatcher().onDisconnected(transport.serverConnection());
+    }
+
+    private static String modVersion() {
+        return ModList.get()
+                .getModContainerById("mpmt")
+                .map(container -> container.getModInfo().getVersion().toString())
+                .orElse("unknown");
     }
 }

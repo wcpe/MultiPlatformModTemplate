@@ -12,6 +12,7 @@ import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.spongepowered.gradle.plugin.config.PluginLoaders
 import org.spongepowered.plugin.metadata.model.PluginDependency
+import java.util.zip.ZipFile
 
 // platform-sponge（L3）：独立 includeBuild，应用 SpongeGradle（ADR-0007，隔离加载器专属插件）。
 // 锚点 MC 1.20.1 / SpongeAPI 11.0.0（SpongeVanilla）。Sponge 为纯服务端平台（无客户端插件 API）：
@@ -43,6 +44,8 @@ val spongeCompileVersion = "11.0.0-20230826.165715-4"
 val spiCoordinate = "top.wcpe.mc.mpmt:platform-spi:$version"
 // 服务端公共网络特性（经 api 传递 protocol + core-runtime）
 val serverCoordinate = "top.wcpe.mc.mpmt:core-server:$version"
+// 客户端公共网络特性（握手 / 心跳），仅验收契约复用
+val clientCoordinate = "top.wcpe.mc.mpmt:core-client:$version"
 
 base {
     archivesName.set("mpmt-sponge")
@@ -182,15 +185,50 @@ sponge {
     }
 }
 
+tasks.named<Jar>("jar") {
+    archiveClassifier.set("plain")
+}
+
 // 最终插件 jar = shadowJar（shade core/spi + relocate snakeyaml）。Sponge 运行期不 remap、无 reobf。
 tasks.named<ShadowJar>("shadowJar") {
     archiveClassifier.set("")
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
     configurations = listOf(shadowBundle)
     relocate("org.yaml.snakeyaml", "top.wcpe.mc.mpmt.libs.org.yaml.snakeyaml")
     exclude("META-INF/maven/**")
     // shadow 改配置不刷新缓存指纹，令其确定性重跑、不缓存（与其它平台一致）
     outputs.upToDateWhen { false }
     outputs.cacheIf { false }
+}
+
+// 打包校验：最终插件必须与普通薄包分离，并完整包含核心、SPI、元数据和已 relocate 依赖。
+val verifyPackaging by tasks.registering {
+    group = "verification"
+    description = "校验 Sponge 插件 jar：最终产品自包含、输出不冲突、未打入 SpongeAPI"
+    dependsOn(tasks.named("shadowJar"))
+    doLast {
+        val shadow = tasks.named<ShadowJar>("shadowJar").get()
+        val plain = tasks.named<Jar>("jar").get()
+        val jar = shadow.archiveFile.get().asFile
+        val entries = ZipFile(jar).use { zf -> zf.entries().asSequence().map { it.name }.toList() }
+
+        fun must(cond: Boolean, msg: String) {
+            if (!cond) throw GradleException("Sponge 打包校验失败：$msg")
+        }
+        must(plain.archiveFile.get().asFile != jar, "普通 jar 与最终 shadowJar 输出路径冲突")
+        must(!shadow.isPreserveFileTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
+        must(shadow.isReproducibleFileOrder, "最终产品未启用可复现文件顺序")
+        must(entries.contains("top/wcpe/mc/mpmt/core/domain/Mpmt.class"), "核心类未 shade 进插件 jar")
+        must(entries.contains("top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class"), "platform-spi 未 shade 进插件 jar")
+        must(entries.contains("top/wcpe/mc/mpmt/platform/sponge/MpmtSpongePlugin.class"), "缺少插件主类")
+        must(entries.any { it.startsWith("top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/") }, "snakeyaml 未 relocate 到 libs.*")
+        must(entries.none { it.startsWith("org/yaml/snakeyaml/") }, "snakeyaml 原包名残留")
+        must(entries.none { it.startsWith("META-INF/maven/org.yaml/") }, "snakeyaml Maven 元数据残留")
+        must(entries.contains("META-INF/sponge_plugins.json"), "缺少 META-INF/sponge_plugins.json")
+        must(entries.contains("META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap"), "缺少 SPI services 声明")
+        must(entries.none { it.startsWith("org/spongepowered/api/") }, "误把 SpongeAPI 打入插件 jar（应由服务端提供）")
+    }
 }
 
 // ============================================================================
@@ -208,6 +246,14 @@ val acceptance: SourceSet by sourceSets.creating {
 }
 configurations["acceptanceImplementation"].extendsFrom(configurations["implementation"])
 
+// 纯 JVM 验收契约源集：验证 P1 清单与 acceptance v2 严格报告
+val acceptanceTest: SourceSet by sourceSets.creating {
+    compileClasspath += acceptance.output + acceptance.compileClasspath + sourceSets["main"].output
+    runtimeClasspath += output + acceptance.runtimeClasspath + compileClasspath
+}
+configurations["acceptanceTestImplementation"].extendsFrom(configurations["testImplementation"])
+configurations["acceptanceTestRuntimeOnly"].extendsFrom(configurations["testRuntimeOnly"])
+
 // 专用配置：需 shade 进验收插件 jar 的内容——acceptance 核心 + protocol（+ core-domain 传递）。
 // Sponge 插件类加载器隔离，故验收 jar 自包含（同 Bukkit），不依赖产品 jar 提供这些类。
 val acceptanceShadowBundle: Configuration by configurations.creating
@@ -217,6 +263,14 @@ dependencies {
     "acceptanceImplementation"(protocolCoordinate)
     acceptanceShadowBundle(acceptanceCoordinate)
     acceptanceShadowBundle(protocolCoordinate)
+    // 纯 JVM P1 契约依赖仅挂在 acceptanceTest，避免验收插件 jar 膨胀
+    "acceptanceTestImplementation"(acceptanceCoordinate)
+    "acceptanceTestImplementation"(protocolCoordinate)
+    "acceptanceTestImplementation"(serverCoordinate)
+    "acceptanceTestImplementation"(clientCoordinate)
+    "acceptanceTestImplementation"(platform("org.junit:junit-bom:5.10.3"))
+    "acceptanceTestImplementation"("org.junit.jupiter:junit-jupiter")
+    "acceptanceTestRuntimeOnly"("org.junit.platform:junit-platform-launcher")
 }
 
 // 验收插件 sponge_plugins.json 的 ${version} 占位由构建注入
@@ -241,9 +295,24 @@ val acceptanceJar by tasks.registering(ShadowJar::class) {
     outputs.cacheIf { false }
 }
 
-// 把验收源集纳入常规 build 的编译校验（只编译，不打包——打包由验收编排按需触发）
+tasks.named("assemble") {
+    dependsOn(verifyPackaging)
+}
+
+val acceptanceContractTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "运行 Sponge acceptance v2 与完整 P1 场景契约测试"
+    testClassesDirs = acceptanceTest.output.classesDirs
+    classpath = acceptanceTest.runtimeClasspath
+    useJUnitPlatform()
+}
+
+// 把验收源集与契约测试纳入常规 build/check
 tasks.named("build") {
-    dependsOn(tasks.named("acceptanceClasses"))
+    dependsOn(tasks.named("acceptanceClasses"), acceptanceContractTest)
+}
+tasks.named("check") {
+    dependsOn(acceptanceContractTest)
 }
 
 tasks.test {

@@ -11,6 +11,8 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
+import java.security.MessageDigest
+import java.util.zip.ZipFile
 
 // platform-neoforge（L3）：独立 includeBuild，应用 NeoGradle（ADR-0007，隔离加载器专属插件）。
 // 锚点 MC 1.20.2（NeoForge 无 1.20.1；PRD §7）。NeoForge 运行期用官方 Mojmap、无 SRG/reobf（区别于 Forge）；
@@ -38,6 +40,8 @@ val snakeyamlVersion = "2.2"
 val spiCoordinate = "top.wcpe.mc.mpmt:platform-spi:$version"
 // 服务端公共网络特性（经 api 传递 protocol + core-runtime）
 val serverCoordinate = "top.wcpe.mc.mpmt:core-server:$version"
+// 客户端公共网络特性（握手、心跳与重同步），仅复用仓库现有第一方模块
+val clientCoordinate = "top.wcpe.mc.mpmt:core-client:$version"
 
 base {
     archivesName.set("mpmt-neoforge")
@@ -135,6 +139,9 @@ dependencies {
     // 服务端公共网络特性（FR-19）：纯 Java、shade 进 mod jar（传递 protocol）
     implementation(serverCoordinate)
     shadowBundle(serverCoordinate)
+    // 客户端公共网络特性（FR-22/FR-28）：纯 Java、shade 进同一产品 jar
+    implementation(clientCoordinate)
+    shadowBundle(clientCoordinate)
     // 第三方运行期依赖：shade 并 relocate（ADR-0012）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
@@ -143,6 +150,7 @@ dependencies {
 
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("top.wcpe.mc.mpmt:acceptance:$version")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -206,12 +214,50 @@ tasks.named<Jar>("jar") {
 // 最终 mod jar = shadowJar（shade core/spi + relocate snakeyaml）。NeoForge 运行期 Mojmap、无 reobf。
 tasks.named<ShadowJar>("shadowJar") {
     archiveClassifier.set("")
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
     configurations = listOf(shadowBundle)
     relocate("org.yaml.snakeyaml", "top.wcpe.mc.mpmt.libs.org.yaml.snakeyaml")
     exclude("META-INF/maven/**")
     // shadow 改配置不刷新缓存指纹，令其确定性重跑、不缓存（与其它平台一致）
     outputs.upToDateWhen { false }
     outputs.cacheIf { false }
+}
+
+// 打包校验：最终产品必须是无 classifier 的 shadowJar，并包含运行所需核心与平台元数据。
+val verifyPackaging by tasks.registering {
+    group = "verification"
+    description = "校验 NeoForge mod jar：核心 shade、snakeyaml relocate、mods.toml/services 在位、未打入 Minecraft"
+    dependsOn(tasks.named("shadowJar"))
+    doLast {
+        val shadow = tasks.named<ShadowJar>("shadowJar").get()
+        val plain = tasks.named<Jar>("jar").get()
+        val jar = shadow.archiveFile.get().asFile
+        val entries = ZipFile(jar).use { zf -> zf.entries().asSequence().map { it.name }.toList() }
+
+        fun must(condition: Boolean, message: String) {
+            if (!condition) throw GradleException("NeoForge 打包校验失败：$message")
+        }
+        must(plain.archiveFile.get().asFile != jar, "普通 jar 与最终 shadowJar 输出路径冲突")
+        must(!shadow.isPreserveFileTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
+        must(shadow.isReproducibleFileOrder, "最终产品未启用可复现文件顺序")
+        must(entries.contains("top/wcpe/mc/mpmt/core/domain/Mpmt.class"), "核心类未 shade 进 mod jar")
+        must(entries.contains("top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class"), "platform-spi 未 shade 进 mod jar")
+        must(entries.contains("top/wcpe/mc/mpmt/platform/neoforge/MpmtNeoForgeMod.class"), "缺少 NeoForge mod 主类")
+        must(entries.any { it.startsWith("top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/") }, "snakeyaml 未 relocate 到 libs.*")
+        must(entries.none { it.startsWith("org/yaml/snakeyaml/") }, "snakeyaml 原包名残留")
+        must(entries.none { it.startsWith("META-INF/maven/org.yaml/") }, "snakeyaml Maven 元数据残留")
+        must(entries.contains("META-INF/mods.toml"), "缺少 META-INF/mods.toml")
+        must(entries.contains("META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap"), "缺少 SPI services 声明")
+        must(entries.none { it.startsWith("net/minecraft/") }, "误把 Minecraft 类打入 mod jar")
+        println("NeoForge 打包校验通过：")
+        println("  产物 = ${jar.name}（条目数 ${entries.size}）")
+        println("  核心已 shade、snakeyaml 已 relocate、mods.toml/services 在位、未打入 Minecraft")
+    }
+}
+
+tasks.named("assemble") {
+    dependsOn(verifyPackaging)
 }
 
 tasks.test {
@@ -233,6 +279,13 @@ val acceptance: SourceSet by sourceSets.creating {
     runtimeClasspath += sourceSets["main"].runtimeClasspath + sourceSets["main"].output
 }
 configurations["acceptanceImplementation"].extendsFrom(configurations["implementation"])
+
+val acceptanceTest: SourceSet by sourceSets.creating {
+    compileClasspath += acceptance.output + sourceSets["main"].output
+    runtimeClasspath += output + compileClasspath
+}
+configurations["acceptanceTestImplementation"].extendsFrom(configurations["testImplementation"])
+configurations["acceptanceTestRuntimeOnly"].extendsFrom(configurations["testRuntimeOnly"])
 
 // 专用配置：需 shade 进验收 mod jar 的内容——**只含 acceptance 核心**（验收 jar 独有、不在产品 jar 里）。
 // protocol/core-domain 等已在产品 mod jar 内：NeoForge 的 FML 模块层禁止两个 mod 导出同名包（split package，
@@ -271,6 +324,60 @@ val acceptanceJar by tasks.registering(ShadowJar::class) {
 }
 
 // 把验收源集纳入常规 build 的编译校验（只编译，不打包——打包由验收编排按需触发）
-tasks.named("build") {
+val acceptanceContractTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "运行 NeoForge acceptance v2 与完整 P1 场景契约测试"
+    testClassesDirs = acceptanceTest.output.classesDirs
+    classpath = acceptanceTest.runtimeClasspath
+    useJUnitPlatform()
     dependsOn(tasks.named("acceptanceClasses"))
+}
+
+val simAcceptanceReport = layout.buildDirectory.file("acceptance/sim-report-v2.txt")
+val realAcceptanceReport =
+    providers.gradleProperty("mpmt.acceptance.report")
+        .map { file(it) }
+        .orElse(provider { file("run-server/acceptance-report.txt") })
+
+val runSimNetworkAcceptance by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "运行 NeoForge 1.20.2 完整 P1 模拟服套件并生成 acceptance v2 报告"
+    classpath = acceptance.runtimeClasspath
+    mainClass.set("top.wcpe.mc.mpmt.platform.neoforge.acceptance.sim.NeoForgeP1Simulation")
+    dependsOn(tasks.named("acceptanceClasses"), tasks.named("shadowJar"))
+    systemProperty("mpmt.acceptance.report", simAcceptanceReport.get().asFile.absolutePath)
+    systemProperty("mpmt.acceptance.version", project.version.toString())
+    systemProperty("mpmt.acceptance.platform", "neoforge")
+    systemProperty("mpmt.acceptance.mcVersion", "1.20.2")
+    systemProperty("mpmt.acceptance.serverVersion", neoforgeVersion)
+    doFirst {
+        val product = tasks.named<ShadowJar>("shadowJar").get().archiveFile.get().asFile
+        val digest = MessageDigest.getInstance("SHA-256").digest(product.readBytes())
+        systemProperty("mpmt.acceptance.productJarSha256", digest.joinToString("") { byte -> "%02x".format(byte) })
+        val commit = providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim()
+        systemProperty("mpmt.acceptance.commit", commit)
+    }
+}
+
+val verifyAcceptanceReport by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "严格校验 NeoForge acceptance v2 报告，缺元数据、场景或 PASS 均失败"
+    classpath = acceptance.runtimeClasspath
+    mainClass.set("top.wcpe.mc.mpmt.platform.neoforge.acceptance.sim.NeoForgeP1Simulation")
+    dependsOn(tasks.named("acceptanceClasses"))
+    doFirst {
+        val report = realAcceptanceReport.get()
+        if (!report.isFile) {
+            throw GradleException("未找到 NeoForge 验收报告：${report.absolutePath}")
+        }
+        args("verify", report.absolutePath)
+    }
+}
+
+// 把验收源集与契约测试纳入常规 build/check，验收驱动仍不进入产品 jar。
+tasks.named("build") {
+    dependsOn(tasks.named("acceptanceClasses"), acceptanceContractTest)
+}
+tasks.named("check") {
+    dependsOn(acceptanceContractTest)
 }

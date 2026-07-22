@@ -30,6 +30,11 @@ public final class FabricConnectionHandle implements ConnectionHandle {
         return player;
     }
 
+    /** 玩家 UUID，用于断开前重新查询当前在线实体。 */
+    public UUID playerId() {
+        return playerId;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {

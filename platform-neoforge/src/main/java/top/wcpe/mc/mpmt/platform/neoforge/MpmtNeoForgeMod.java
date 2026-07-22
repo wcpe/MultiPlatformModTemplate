@@ -1,68 +1,147 @@
 package top.wcpe.mc.mpmt.platform.neoforge;
 
-import java.util.UUID;
+import java.util.Objects;
+import java.util.function.Supplier;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
-import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
-import top.wcpe.mc.mpmt.platform.neoforge.capability.NeoForgeCapabilityBootstrap;
+import top.wcpe.mc.mpmt.core.server.BanService;
+import top.wcpe.mc.mpmt.platform.neoforge.command.NeoForgeMachineCodeCommands;
+import top.wcpe.mc.mpmt.platform.neoforge.net.NeoForgeConnectionHandle;
 import top.wcpe.mc.mpmt.platform.neoforge.net.NeoForgeServerTransport;
 import top.wcpe.mc.mpmt.platform.neoforge.proxy.ClientProxy;
 import top.wcpe.mc.mpmt.platform.neoforge.proxy.ServerProxy;
 import top.wcpe.mc.mpmt.platform.neoforge.proxy.SidedProxy;
+import top.wcpe.mc.mpmt.platform.neoforge.version.NeoForgeNetworkBindings;
+import top.wcpe.mc.mpmt.platform.neoforge.version.NeoForgeServerNetwork;
+import top.wcpe.mc.mpmt.platform.neoforge.version.NeoForgeVersions;
+import top.wcpe.mc.mpmt.platform.neoforge.version.SupportedVersion;
+import top.wcpe.mc.mpmt.platform.spi.PlatformAssemblyContext;
 import top.wcpe.mc.mpmt.platform.spi.PlatformProvider;
 
-/**
- * NeoForge mod 入口（{@code @Mod}）：构造期驱动平台装配——发现并装配唯一活跃平台、注册产品传输、启用运行时，
- * 接线平台能力示例（FR-26），再按运行端选择分离代理初始化（FR-09 / FR-27）。
- *
- * <p>用本类的类加载器（NeoForge mod 加载器）做 ServiceLoader 发现，确保扫到本 mod 的 services（ADR-0002 注意项）。
- * 产品传输用 NeoForge {@link NeoForgeServerTransport}（SimpleChannel），通道在其构造期注册（NetworkRegistry 锁定前），
- * 故无需订阅事件。平台能力示例在服务端启动事件装配（需 MinecraftServer，见 {@link NeoForgeCapabilityBootstrap}）；
- * 客户端 HUD 收包经客户端代理向产品传输注入（仅 {@code Dist.CLIENT}）。
- */
+/** NeoForge mod 入口：探测当前锚点、装配服务端闭环与客户端代理。 */
 @Mod("mpmt")
 public final class MpmtNeoForgeMod {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("mpmt");
 
-    /**
-     * 活跃产品传输 Holder（启动期一次性装配、之后只读，ADR-0002）：供同进程内的<b>验收驱动 mod</b> 经产品通道发
-     * 服务端→客户端字节（如冒烟场景的跨端 HUD，FR-27）。
-     */
     private static volatile NeoForgeServerTransport activeTransport;
 
+    private final NeoForgeServerTransport transport;
+    private MpmtRuntime runtime;
+    private NeoForgeServerServices services;
+
     public MpmtNeoForgeMod() {
-        MpmtRuntime runtime = new MpmtRuntime();
-        // 通用装配：发现并装配唯一活跃平台（进程级单一活跃绑定见 ADR-0008 / FR-25）
-        PlatformProvider.boot(getClass().getClassLoader(), runtime);
-        // 服务端 TransportPort（FR-20）：NeoForge SimpleChannel 产品通道 mpmt:main，构造期建链路
-        NeoForgeServerTransport transport = new NeoForgeServerTransport("mpmt", "main");
+        NeoForgeServerNetwork network = detectServerNetwork();
+        transport = new NeoForgeServerTransport(network);
         activeTransport = transport;
-        runtime.ports().register(TransportPort.class, transport);
-        // 登记平台无关的服务端网络特性（FR-19）：注入 TransportPort 即复用同一份握手 / 协商 / 收发装配
-        runtime.features()
-                .register(new ServerNetworkFeature(new BanRegistry(), () -> UUID.randomUUID().toString()));
-        runtime.enable();
-        // 平台能力示例（FR-26）：服务端启动事件里装配端口 + L0 示例，桥接玩家进退事件入自有 EventBus
-        NeoForgeCapabilityBootstrap.register();
-        // client/server 分离代理：按运行端选择并初始化（FR-09）。客户端代理向产品传输注入 HUD 收包处理器
-        // （FR-27）：ClientProxy 仅在 Dist.CLIENT 实例化，客户端专有类不被服务端加载。
+        NeoForge.EVENT_BUS.register(this);
+
         SidedProxy proxy =
                 FMLEnvironment.dist == Dist.CLIENT
                         ? new ClientProxy(transport)
                         : new ServerProxy();
         proxy.init();
+        LOGGER.info("MPMT NeoForge 已选择网络适配锚点 {}", SupportedVersion.V1_20_2.mcVersion());
+    }
+
+    /** 运行期探测 Minecraft 版本并构造对应 L4 服务端网络适配器。 */
+    public static NeoForgeServerNetwork detectServerNetwork() {
+        return detectServerNetwork(NeoForgeVersions::probeMcVersion);
+    }
+
+    /** 使用注入探测源选择 L4 adapter（纯 JVM 测试入口）。 */
+    public static NeoForgeServerNetwork detectServerNetwork(Supplier<String> versionProbe) {
+        Objects.requireNonNull(versionProbe, "versionProbe 不能为空");
+        SupportedVersion version = NeoForgeVersions.detect(versionProbe);
+        LOGGER.info("MPMT NeoForge 探测到 Minecraft 版本 {}", version.mcVersion());
+        return NeoForgeNetworkBindings.serverNetwork(version);
+    }
+
+    /** 服务端已启动：在接收玩家前完成端口、封禁服务与网络特性的装配。 */
+    @SubscribeEvent
+    public void onServerStarted(ServerStartedEvent event) {
+        MinecraftServer server = event.getServer();
+        MpmtRuntime assembledRuntime = new MpmtRuntime();
+        PlatformAssemblyContext context =
+                new PlatformAssemblyContext()
+                        .register(MinecraftServer.class, server)
+                        .register(NeoForgeServerTransport.class, transport);
+        PlatformProvider.boot(getClass().getClassLoader(), assembledRuntime, context);
+        NeoForgeServerServices assembledServices = NeoForgeServerServices.install(assembledRuntime);
+        assembledRuntime.enable();
+        runtime = assembledRuntime;
+        services = assembledServices;
         LOGGER.info("MPMT 已装配并启用，活跃平台：{}", PlatformProvider.get().platformId());
     }
 
-    /** 取活跃产品传输（验收驱动经其发跨端字节）；启动期装配后非空。 */
-    public static NeoForgeServerTransport activeTransport() {
-        return activeTransport;
+    /** 注册 NeoForge 原生 Brigadier 运维命令。 */
+    @SubscribeEvent
+    public void onRegisterCommands(RegisterCommandsEvent event) {
+        NeoForgeMachineCodeCommands.register(event.getDispatcher(), this::currentBanService);
+    }
+
+    /** 玩家进入 PLAY 阶段时登记唯一物理连接。 */
+    @SubscribeEvent
+    public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        NeoForgeServerServices current = services;
+        if (current == null || !(event.getEntity() instanceof ServerPlayer)) {
+            return;
+        }
+        NeoForgeConnectionHandle connection =
+                transport.onConnected((ServerPlayer) event.getEntity());
+        current.networkFeature().onConnected(connection);
+    }
+
+    /** 玩家退出时清理该物理连接的握手、会话与可靠性状态。 */
+    @SubscribeEvent
+    public void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        NeoForgeServerServices current = services;
+        if (current == null || !(event.getEntity() instanceof ServerPlayer)) {
+            return;
+        }
+        NeoForgeConnectionHandle connection =
+                transport.onDisconnected((ServerPlayer) event.getEntity());
+        if (connection != null) {
+            current.networkFeature().onDisconnected(connection);
+        }
+    }
+
+    /** 服务端停止：停用运行时并释放连接与进程级平台绑定。 */
+    @SubscribeEvent
+    public void onServerStopped(ServerStoppedEvent event) {
+        MpmtRuntime current = runtime;
+        if (current != null && current.phase() == MpmtRuntime.Phase.ENABLED) {
+            current.disable();
+        }
+        transport.clearConnections();
+        runtime = null;
+        services = null;
+        PlatformProvider.deactivate();
+    }
+
+    /** 验收驱动经活跃产品传输发送跨端字节，不暴露可变传输实例。 */
+    public static void sendActive(ServerPlayer player, byte[] data) {
+        NeoForgeServerTransport current = activeTransport;
+        if (current == null) {
+            throw new IllegalStateException("NeoForge 产品传输尚未初始化");
+        }
+        current.send(current.onConnected(player), data);
+    }
+
+    private BanService currentBanService() {
+        NeoForgeServerServices current = services;
+        return current == null ? null : current.banService();
     }
 }

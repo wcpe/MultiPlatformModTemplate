@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.List;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.server.MinecraftServer;
@@ -14,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTest;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestRunner;
 import top.wcpe.mc.mpmt.acceptance.report.AcceptanceReport;
+import top.wcpe.mc.mpmt.acceptance.report.AcceptanceReportMetadata;
+import top.wcpe.mc.mpmt.acceptance.report.P1ScenarioMatrix;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioResult;
 import top.wcpe.mc.mpmt.platform.fabric.gametest.FabricServerGameTestContext;
 
@@ -30,6 +31,12 @@ public final class SimDriverBootstrap {
 
     private static final String ACTIVATION_PROPERTY = "mpmt.simtest";
     private static final String REPORT_PROPERTY = "mpmt.simtest.report";
+    private static final String COMMIT_PROPERTY = "mpmt.simtest.commit";
+    private static final String VERSION_PROPERTY = "mpmt.simtest.version";
+    private static final String MC_VERSION_PROPERTY = "mpmt.simtest.mcVersion";
+    private static final String SERVER_VERSION_PROPERTY = "mpmt.simtest.serverVersion";
+    private static final String PRODUCT_SHA_PROPERTY = "mpmt.simtest.productJarSha256";
+    private static final String PLATFORM = "sim-fabric";
     private static final long HALT_GRACE_MS = 8_000L;
 
     private SimDriverBootstrap() {
@@ -53,14 +60,37 @@ public final class SimDriverBootstrap {
     }
 
     private static void runAndReport(MinecraftServer server) {
-        List<ServerGameTest> tests = Arrays.asList(new LoopbackHandshakeGameTest());
+        List<ServerGameTest> tests = SimScenarioCatalog.all();
+        List<String> required = P1ScenarioMatrix.requiredFor(PLATFORM);
+        if (!required.equals(SimScenarioCatalog.scenarioIds())) {
+            throw new IllegalStateException("Fabric 模拟服场景目录与 P1 矩阵不一致");
+        }
         List<ScenarioResult> results =
                 ServerGameTestRunner.runAll(tests, test -> new FabricServerGameTestContext(server));
-        String report = AcceptanceReport.render(results);
+        String report = AcceptanceReport.render(metadata(required), results);
         writeReport(report);
         LOGGER.info("模拟服 GameTest 完成，权威报告：\n{}", report);
         server.halt(false);
         startHardHalt();
+    }
+
+    private static AcceptanceReportMetadata metadata(List<String> scenarios) {
+        return new AcceptanceReportMetadata(
+                property(COMMIT_PROPERTY),
+                property(VERSION_PROPERTY),
+                PLATFORM,
+                property(MC_VERSION_PROPERTY),
+                property(SERVER_VERSION_PROPERTY),
+                property(PRODUCT_SHA_PROPERTY),
+                scenarios);
+    }
+
+    private static String property(String name) {
+        String value = System.getProperty(name);
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalStateException("缺少模拟服报告元数据属性：" + name);
+        }
+        return value;
     }
 
     private static void startHardHalt() {

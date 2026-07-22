@@ -2,9 +2,12 @@ package top.wcpe.mc.mpmt.platform.bukkit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import be.seeseemelk.mockbukkit.MockBukkit;
+import be.seeseemelk.mockbukkit.ServerMock;
+import org.bukkit.command.PluginCommand;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,10 +32,16 @@ class MpmtBukkitPluginTest {
     @Test
     @DisplayName("插件启用后：平台装配为 bukkit，FeatureGate 在非 Folia/非集成服下正确分流")
     void 插件启用后平台装配为bukkit() {
-        MockBukkit.mock();
+        MockBukkit.mock(new AnchorServerMock());
         MpmtBukkitPlugin plugin = MockBukkit.load(MpmtBukkitPlugin.class);
 
         assertTrue(plugin.isEnabled(), "插件应已启用");
+        PluginCommand command = plugin.getCommand("mpmt");
+        assertNotNull(command, "应注册原生 /mpmt 命令");
+        assertEquals(
+                "mpmt.machinecode.manage",
+                command.getPermission(),
+                "机器码管理命令应声明权限");
         assertTrue(PlatformProvider.isBooted(), "平台应已装配");
         assertEquals("bukkit", PlatformProvider.get().platformId());
         // 服务端传输端口（FR-20）已接线：插件启用时注册了产品跨端通道 mpmt:main
@@ -46,5 +55,14 @@ class MpmtBukkitPluginTest {
         assertFalse(PlatformProvider.get().featureGate().supports(Capability.REGION_SCHEDULER));
         assertFalse(PlatformProvider.get().featureGate().supports(Capability.HYBRID_FORGE_BUKKIT));
         assertFalse(PlatformProvider.get().featureGate().supports(Capability.INTEGRATED_SERVER));
+    }
+
+    /** 仅覆盖 MockBukkit 固定返回 1.20.4，令装配测试模拟当前 1.20.1 锚点。 */
+    private static final class AnchorServerMock extends ServerMock {
+
+        @Override
+        public String getMinecraftVersion() {
+            return "1.20.1";
+        }
     }
 }
