@@ -102,6 +102,57 @@ class AcceptanceClientTest {
                         new StepResultPacket("s", "st", 999, StepStatus.OK, "{}", "")));
     }
 
+    @Test
+    @DisplayName("有挂起步骤的意外断线必须失败")
+    void 意外断线失败挂起步骤() throws Exception {
+        List<byte[]> sent = new CopyOnWriteArrayList<>();
+        AcceptanceClient client = new AcceptanceClient(sent::add);
+        client.onClientReady(new ClientReadyPacket(7));
+        ExecutorService exec = Executors.newSingleThreadExecutor();
+        try {
+            Future<StepResultPacket> pending = exec.submit(() -> client.runStep("sc", "st", "{}", 5000));
+            awaitRunStep(sent, 0);
+
+            client.onDisconnected("客户端意外断线");
+
+            ExecutionException ex = assertThrows(ExecutionException.class, () -> pending.get(2, TimeUnit.SECONDS));
+            assertTrue(ex.getCause() instanceof AcceptanceTimeoutException);
+        } finally {
+            exec.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("预先声明的重连保留挂起步骤并隔离旧 generation 回报")
+    void 预期重连隔离旧generation() throws Exception {
+        List<byte[]> sent = new CopyOnWriteArrayList<>();
+        AcceptanceClient client = new AcceptanceClient(sent::add);
+        client.onClientReady(new ClientReadyPacket(7));
+        long oldGeneration = client.generation();
+        client.expectReconnect();
+        ExecutorService exec = Executors.newSingleThreadExecutor();
+        try {
+            Future<StepResultPacket> pending = exec.submit(() -> client.runStep("reconnect", "verify", "{}", 5000));
+            RunStepPacket run = awaitRunStep(sent, 0);
+
+            client.onDisconnected("预期断线");
+            long newGeneration = client.generation();
+            assertTrue(newGeneration > oldGeneration);
+            assertFalse(pending.isDone(), "预期重连不应失败挂起步骤");
+
+            StepResultPacket result =
+                    new StepResultPacket("reconnect", "verify", run.getSeq(), StepStatus.OK, "{}", "ok");
+            client.onStepResult(oldGeneration, result);
+            assertFalse(pending.isDone(), "旧 generation 的迟到消息不得完成新 generation 步骤");
+
+            client.onClientReady(newGeneration, new ClientReadyPacket(7));
+            client.onStepResult(newGeneration, result);
+            assertEquals(result, pending.get(2, TimeUnit.SECONDS));
+        } finally {
+            exec.shutdownNow();
+        }
+    }
+
     /** 轮询等待第 index 个 RunStep 发出并解码（最多约 1 秒）。 */
     private static RunStepPacket awaitRunStep(List<byte[]> sent, int index) throws InterruptedException {
         for (int i = 0; i < 200 && sent.size() <= index; i++) {

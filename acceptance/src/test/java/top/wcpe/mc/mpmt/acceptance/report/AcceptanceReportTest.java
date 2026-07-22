@@ -17,6 +17,17 @@ class AcceptanceReportTest {
         return new ScenarioResult("acceptance", id, status, durationMs, message);
     }
 
+    private static AcceptanceReportMetadata metadata(List<String> scenarios) {
+        return new AcceptanceReportMetadata(
+                "0123456789abcdef",
+                "0.1.0",
+                "fabric",
+                "1.20.1",
+                "Fabric Server 1.20.1",
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                scenarios);
+    }
+
     @Test
     @DisplayName("全通过：RESULT PASS，TOTAL 统计正确，行格式正确")
     void 全通过() {
@@ -75,5 +86,65 @@ class AcceptanceReportTest {
         assertTrue(report.contains("第一行 第二行"), report);
         // 报告行数 = 头 + 1 结果 + TOTAL + RESULT = 4 行（消息内换行不得引入额外行）
         assertEquals(4, report.trim().split("\n").length, report);
+    }
+
+    @Test
+    @DisplayName("权威报告包含完整元数据、场景清单与唯一 RESULT")
+    void 权威报告元数据完整() {
+        List<String> scenarios = Arrays.asList("handshake-success", "real-round-trip");
+        List<ScenarioResult> results = Arrays.asList(
+                res("handshake-success", ScenarioStatus.PASS, "", 1),
+                res("real-round-trip", ScenarioStatus.PASS, "", 2));
+
+        String report = AcceptanceReport.render(metadata(scenarios), results);
+
+        assertTrue(report.startsWith(AcceptanceReport.HEADER_V2 + "\n"), report);
+        assertTrue(report.contains("META commit=0123456789abcdef\n"), report);
+        assertTrue(report.contains("META VERSION=0.1.0\n"), report);
+        assertTrue(report.contains("META platform=fabric\n"), report);
+        assertTrue(report.contains("META mcVersion=1.20.1\n"), report);
+        assertTrue(report.contains("META serverVersion=Fabric Server 1.20.1\n"), report);
+        assertTrue(report.contains("META productJarSha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n"), report);
+        assertTrue(report.contains("META scenarios=handshake-success,real-round-trip\n"), report);
+        assertEquals(1, countResultLines(report));
+        assertTrue(AcceptanceReport.isAcceptedReport(report));
+    }
+
+    @Test
+    @DisplayName("旧报告、缺元数据、重复 RESULT 与非 PASS 报告均拒绝")
+    void 严格拒绝无效报告() {
+        List<String> scenarios = Collections.singletonList("handshake-success");
+        List<ScenarioResult> pass = Collections.singletonList(res("handshake-success", ScenarioStatus.PASS, "", 1));
+        String valid = AcceptanceReport.render(metadata(scenarios), pass);
+
+        assertFalse(AcceptanceReport.isAcceptedReport(AcceptanceReport.render(pass)), "旧 v1 报告必须拒绝");
+        assertFalse(
+                AcceptanceReport.isAcceptedReport(valid.replace("META commit=0123456789abcdef\n", "")),
+                "缺元数据必须拒绝");
+        assertFalse(AcceptanceReport.isAcceptedReport(valid + AcceptanceReport.RESULT_PASS + "\n"), "重复 RESULT 必须拒绝");
+
+        List<ScenarioResult> fail = Collections.singletonList(res("handshake-success", ScenarioStatus.FAIL, "失败", 1));
+        assertFalse(AcceptanceReport.isAcceptedReport(AcceptanceReport.render(metadata(scenarios), fail)));
+    }
+
+    @Test
+    @DisplayName("聚合器发现元数据声明的适用场景缺失即失败")
+    void 缺适用场景失败() {
+        AcceptanceReportMetadata metadata = metadata(Arrays.asList("handshake-success", "real-round-trip"));
+        List<ScenarioResult> incomplete =
+                Collections.singletonList(res("handshake-success", ScenarioStatus.PASS, "", 1));
+
+        assertFalse(AcceptanceReport.isPass(metadata, incomplete));
+        assertTrue(AcceptanceReport.render(metadata, incomplete).endsWith(AcceptanceReport.RESULT_FAIL + "\n"));
+    }
+
+    private static int countResultLines(String report) {
+        int count = 0;
+        for (String line : report.split("\\r?\\n")) {
+            if (line.startsWith("RESULT ")) {
+                count++;
+            }
+        }
+        return count;
     }
 }
