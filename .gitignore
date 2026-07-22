@@ -32,3 +32,4 @@ crash-reports/
 
 # 环境与密钥（不入库）
 .env
+/.narrafork/
