@@ -34,7 +34,8 @@ public final class CapabilityServerScenario extends ServerScenario {
 
     @Override
     public void run(ServerGameTestContext context) {
-        awaitClientReady(180_000L);
+        // 客户端冷启动（Gradle + 资源加载）常超 3 分钟，与绝对截止对齐放宽
+        awaitClientReady(360_000L);
 
         // 取已连入玩家的 UUID（主线程读）
         UUID uuid =

@@ -196,8 +196,8 @@ loom {
             source(gametest)
             property("mpmt.acceptance", "true")
             property("mpmt.acceptance.report", acceptanceReportFile.get().asFile.absolutePath)
-            // 看门狗绝对截止（无客户端连入时由场景 awaitClientReady 先失败，这里是上限兜底）
-            property("mpmt.acceptance.deadlineMs", "300000")
+            // 看门狗绝对截止：须覆盖客户端冷启动 + 首场景 awaitClientReady（常 >3min）
+            property("mpmt.acceptance.deadlineMs", "660000")
         }
         create("acceptanceClient") {
             client()
@@ -205,9 +205,10 @@ loom {
             source(gametest)
             // 独立运行目录，避免与服务端 run/ 并发冲突
             runDir("run-client")
-            // 经 --quickPlayMultiplayer <服务端地址> 自连
+            // 经 --quickPlayMultiplayer <host:port> 自连。
+            // 默认对齐 platform-fabric/run/server.properties 的 server-port=25571（仅 host 会落到 25565 导致 Connection refused）。
             val acceptanceServerAddr =
-                (project.findProperty("mpmt.acceptance.server") as String?) ?: "127.0.0.1"
+                (project.findProperty("mpmt.acceptance.server") as String?) ?: "127.0.0.1:25571"
             programArgs("--quickPlayMultiplayer", acceptanceServerAddr)
         }
     }
