@@ -1,4 +1,4 @@
-package top.wcpe.mc.mpmt.platform.bukkit.acceptance;
+package top.wcpe.mc.mpmt.platform.bukkit.acceptance.sim;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -65,8 +65,11 @@ public final class BukkitP1Simulation {
         // 工具类不实例化
     }
 
-    /** 顺序执行 Forge 适用的完整 P1 清单。 */
-    public static List<ScenarioResult> run() {
+    /**
+     * realserver / 纯 JVM 共用的 13 项进程内回环（不含 real-round-trip）。
+     * 与 {@link P1ScenarioMatrix} REAL_REQUIRED 前 13 项 id 一致；真往返由驱动挂接真实客户端场景补第 14 项。
+     */
+    public static List<ScenarioResult> runLoopbackCore() {
         List<ScenarioResult> results = new ArrayList<>();
         scenario(results, P1ScenarioMatrix.HANDSHAKE_SUCCESS, BukkitP1Simulation::handshakeSuccess);
         scenario(results, P1ScenarioMatrix.HANDSHAKE_INCOMPATIBLE, BukkitP1Simulation::handshakeIncompatible);
@@ -81,6 +84,12 @@ public final class BukkitP1Simulation {
         scenario(results, P1ScenarioMatrix.HUD_ACTIONBAR, () -> hud(HudKind.ACTIONBAR, "actionbar-token"));
         scenario(results, P1ScenarioMatrix.HUD_TOAST, () -> hud(HudKind.TOAST, "toast-token"));
         scenario(results, P1ScenarioMatrix.HUD_CHAT, () -> hud(HudKind.CHAT, "chat-token"));
+        return results;
+    }
+
+    /** 顺序执行 Bukkit 适用的完整 P1 清单（13 回环 + 进程内假 round-trip，供契约/JavaExec）。 */
+    public static List<ScenarioResult> run() {
+        List<ScenarioResult> results = new ArrayList<>(runLoopbackCore());
         scenario(results, P1ScenarioMatrix.REAL_ROUND_TRIP, BukkitP1Simulation::roundTrip);
         return results;
     }

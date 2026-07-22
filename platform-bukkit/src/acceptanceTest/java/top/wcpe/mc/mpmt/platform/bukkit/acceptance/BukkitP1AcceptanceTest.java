@@ -14,6 +14,7 @@ import top.wcpe.mc.mpmt.acceptance.report.AcceptanceReportMetadata;
 import top.wcpe.mc.mpmt.acceptance.report.P1ScenarioMatrix;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioResult;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioStatus;
+import top.wcpe.mc.mpmt.platform.bukkit.acceptance.sim.BukkitP1Simulation;
 
 /** Bukkit 1.20.1 纯 JVM P1 清单与 acceptance v2 严格报告契约。 */
 class BukkitP1AcceptanceTest {

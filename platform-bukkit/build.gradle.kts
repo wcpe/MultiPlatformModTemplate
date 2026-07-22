@@ -139,10 +139,12 @@ configurations["acceptanceTestRuntimeOnly"].extendsFrom(configurations["testRunt
 dependencies {
     // Bukkit 编译基线 paper-api（spigot 超集）编译可见、运行期由服务端提供（ADR-0019）
     "acceptanceCompileOnly"("io.papermc.paper:paper-api:$paperApiVersion")
-    // 平台无关验收核心（控制协议 / 协调 / GameTest 框架 / 报告）+ 协议（编 HUD 包）
+    // 平台无关验收核心 + 协议 + 进程内回环所需 core（shade 进验收 jar；插件类加载器隔离，与产品 jar 分装可共存）
     "acceptanceImplementation"(project(":acceptance"))
     "acceptanceImplementation"(project(":protocol"))
-    // 纯 JVM P1 契约：复用核心服务端/客户端与协议，仅契约测试源集使用，不进验收插件 jar
+    "acceptanceImplementation"(project(":core-server"))
+    "acceptanceImplementation"(project(":core-client"))
+    // 纯 JVM P1 契约：复用 acceptance 源集输出（含 BukkitP1Simulation）
     "acceptanceTestImplementation"(project(":acceptance"))
     "acceptanceTestImplementation"(project(":protocol"))
     "acceptanceTestImplementation"(project(":core-server"))

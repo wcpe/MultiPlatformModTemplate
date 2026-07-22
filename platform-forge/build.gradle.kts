@@ -91,8 +91,13 @@ minecraft {
             workingDirectory(project.file("run-client"))
             property("forge.logging.console.level", "info")
             // 激活验收客户端伴侣（Dist.CLIENT）：伴侣到主菜单后程序化连入本机服务端
-            // （Forge dev 客户端不可靠处理 --quickPlayMultiplayer，故由伴侣自连，地址默认 127.0.0.1）。
+            // （Forge dev 客户端不可靠处理 --quickPlayMultiplayer，故由伴侣自连）。
+            // 默认 host:port 对齐 run-server/server.properties 的 25566；异构可 -Pmpmt.acceptance.server=host:port 覆盖。
             property("mpmt.acceptance", "true")
+            property(
+                "mpmt.acceptance.server",
+                (project.findProperty("mpmt.acceptance.server") as String?) ?: "127.0.0.1:25566",
+            )
             // dev↔dev 为 Mojmap 运行期，而 mods/ 内 jar 带的是生产 refmap（Mojmap→SRG）；jar 经 mods/ 加载、未走
             // FG dev 源集的 refmap 回映射注入，故 dev 关闭 refmap、直接按注解里的 Mojmap 名解析（ADR-0018）。
             // 生产（真实 Forge 服，SRG 运行期）不经本 run 配置、照常用 refmap，不受影响。
@@ -106,6 +111,19 @@ minecraft {
             property("mpmt.acceptance", "true")
             property("mpmt.acceptance.report", project.file("run-server/acceptance-report.txt").absolutePath)
             property("mpmt.acceptance.deadlineMs", "660000")
+            // v2 元数据：commit 配置期取 git；productJar 供驱动算 SHA（FG run 任务配置期可能尚不存在，勿用 afterEvaluate 绑 runServer）
+            property(
+                "mpmt.acceptance.commit",
+                providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim(),
+            )
+            property("mpmt.acceptance.version", project.version.toString())
+            property("mpmt.acceptance.platform", "forge")
+            property("mpmt.acceptance.mcVersion", "1.20.1")
+            property("mpmt.acceptance.serverVersion", forgeVersion)
+            property(
+                "mpmt.acceptance.productJar",
+                layout.buildDirectory.file("libs/mpmt-forge-${project.version}.jar").get().asFile.absolutePath,
+            )
             // 同 client：dev↔dev Mojmap 运行期关闭 refmap，按 Mojmap 名解析（生产 SRG 不受影响，ADR-0018）
             property("mixin.env.disableRefMap", "true")
         }

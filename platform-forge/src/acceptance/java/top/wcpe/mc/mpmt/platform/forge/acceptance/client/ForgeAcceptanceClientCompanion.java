@@ -106,7 +106,8 @@ public final class ForgeAcceptanceClientCompanion {
         if (!connectAttempted.compareAndSet(false, true)) {
             return; // 只发起一次
         }
-        String address = System.getProperty("mpmt.acceptance.server", "127.0.0.1");
+        // 默认对齐 run-server/server.properties 的 server-port=25566（仅 host 会落到 25565 导致 Connection refused）
+        String address = System.getProperty("mpmt.acceptance.server", "127.0.0.1:25566");
         LOGGER.info("realserver Forge 验收伴侣：程序化连入 {}", address);
         // 1.20.1 该构造为 (name, ip, isLan)；isLan=false（直连普通服）
         ServerData data = new ServerData("mpmt-acceptance", address, false);
