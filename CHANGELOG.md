@@ -4,7 +4,9 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## 未发布版本
+## [0.1.0] - 2026-07-22
+
+首个正式发布：跨端脚手架 MVP 闭环（模拟服 + realserver 全量门、异构互通 tip 复验、用户确认放行）。
 
 ### 修复
 - **Folia realserver 验收过 RESULT PASS（修三处 Folia 不兼容，FR-13）**：真实 Folia 1.20.1 服跑 realserver 验收暴露——① 产品 `FoliaSchedulerPort.runForEntity` 用 `Bukkit.getEntity(uuid)` 解析实体，从非区域线程（L0 示例 `runAsync` 回调内）调用触发 `Asynchronous Chunk getEntities call!`，改用 `Bukkit.getPlayer(uuid)`（全局玩家表、任意线程安全）落其 `EntityScheduler`、非玩家实体退回全局区域线程；② realserver harness 的 `BukkitServerGameTestContext.onMain` 与 `BukkitAcceptanceControlChannel.sendToClient` 用全局 `BukkitScheduler.runTask`（Folia 抛 `UnsupportedOperationException`），探测 Folia 后改走 `GlobalRegionScheduler`；③ 验收驱动 `plugin.yml` 补 `folia-supported: true`（否则 Folia 拒载）。单元测试（MockBukkit 不支持 Folia）与 Paper realserver 均测不出，唯真实 Folia 暴露（ADR-0013）。非 Folia（Paper）路径不受影响。realserver 维度沙箱已过，并于 2026-07-18 获用户实机确认。
@@ -96,12 +98,14 @@
 - 落地 **Forge realserver 验收 harness（编译级）**（FR-23 推进，ADR-0014）：Forge dev run 因 FG6/FML 模块层不向 mod 暴露库依赖而不可用（已证），故 Forge 与 Bukkit 同走 realserver——platform-forge 新增独立 `acceptance` 源集（不入产品 jar、单独打 `mpmt-acceptance-forge` mod，仅验收运行期放入服务端 mods/，shade acceptance/protocol/core-domain 后 reobf 到 SRG）：`ForgeServerGameTestContext`（`MinecraftServer.execute` 切主线程）+ `ForgeAcceptanceControlChannel`（**必须用 `EventNetworkChannel` 裸字节**收发控制通道 `mpmt-test:acceptance` ↔ 复用平台无关 `AcceptanceClient`——绝不能用 `SimpleChannel`，其消息索引帧字节与 Fabric 验收伴侣裸字节控制协议不兼容）+ `MpmtForgeAcceptanceMod`（独立 `@Mod("mpmt_acceptance")`，`-Dmpmt.acceptance=true` 激活 / `ServerStartedEvent` 后 `ServiceLoader` 发现场景 / 驱动线程跑 `ServerGameTestRunner` / 写单一权威报告 / 看门狗绝对截止 + CAS 单次收尾 + 硬退）+ `ForgeSmokeServerScenario`（**不重注册产品通道 `mpmt:main`**，直接裸 `ClientboundCustomPayloadPacket` 发 ACTIONBAR HUD「验收HUD」，文本与 Fabric `SmokeClientVerifier` 期望一致）；平台无关 acceptance 核心原样复用。**验证（编译级）**：`compileAcceptanceJava` + `acceptanceJar` + `reobfAcceptanceJar` 全绿、产品链路（`shadowJar`/`reobfShadowJar`/`verifyPackaging`/`build`）仍通过（产品 jar 381 条目不变、验收 jar 含 mods.toml/services、未泄漏 MC 类）。**真机验证待主控串行跑真实 Forge 专用服 + Fabric 验收伴侣**（沙箱端口受限，不在本任务内）。
 
 ### 变更
-<对现有功能的改动。>
-
-### 修复
-<本版本修复的缺陷。>
+- **Bukkit/Forge realserver 扩为 REAL_REQUIRED 全量 14 项 + acceptance v2 权威报告**：驱动改为 13 项进程内回环 + `real-round-trip` 真客户端往返；Forge 伴侣默认 `127.0.0.1:25566`、userdev 须用 named Mojmap jar；Bukkit 客户端就绪超时 600s。tip 实跑 Fabric/Forge/Paper 三端 v2 `TOTAL 14 PASS 14`；异构 Paper↔Fabric / Forge↔Forge / Paper↔Forge smoke 复验 PASS；用户确认后放行发版。
 
 ### 移除
-<被删除的功能。>
+无。
 
-> 发版时把"未发布版本"段切成 `## [X.Y.Z] - YYYY-MM-DD`，再新建空的"未发布版本"段。
+## 未发布版本
+
+### 新增
+### 变更
+### 修复
+### 移除

@@ -39,37 +39,37 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 
 | 编号 | 需求 | 优先级 | 状态 |
 |---|---|---|---|
-| FR-01 | L0 功能域骨架：领域模型（Lombok 值对象）+ 平台端口接口集（Player/World/Scheduler/Message/Persistence/Transport/DataDirectory）+ 自有 EventBus（订阅/发布接口 EventBusPort，L0 内核） | P1 | 开发中 |
-| FR-02 | L1 框架编排：生命周期、特性（Feature）注册、端口装配 | P1 | 开发中 |
-| FR-03 | L1 端逻辑骨架：core-server / core-client 公共逻辑分模块 | P1 | 开发中 |
-| FR-04 | protocol 跨端协议骨架：包定义单一真源 + 版本协商（CURRENT/MIN_SUPPORTED） | P1 | 开发中 |
-| FR-05 | platform-spi：SPI 接口集 + PlatformProvider(Holder) + ServiceLoader 发现装配 | P1 | 开发中 |
-| FR-06 | FeatureGate 能力探测机制：承载平台/版本"特判"，杜绝散落 if-else | P1 | 开发中 |
-| FR-07 | platform-bukkit 服务端胶水：Bukkit 家族单一构建覆盖 Bukkit/Spigot/Paper（Folia 能力见 FR-13），锚点 1.20.1 | P1 | 开发中 |
-| FR-08 | platform-fabric 胶水（Loom·独立 includeBuild）：客户端 + 服务端双端入口（锚点 1.20.1） | P1 | 开发中 |
-| FR-09 | platform-forge 胶水（ForgeGradle·独立 includeBuild）：客户端 / 服务端分离代理（锚点 1.20.1） | P1 | 开发中 |
-| FR-10 | L4 版本适配机制：version-api + vX_Y 运行期按 MC 版本装配（先落地 1.20.1） | P1 | 开发中 |
-| FR-11 | smoke 冒烟特性（两证）：① 同一份 L0 逻辑经端口在 Paper/Fabric/Forge 各端一致运行——证"逻辑/胶水完全分离"；② 异构客户端（Fabric/Forge mod）经 protocol 与异构服务端（Paper/Bukkit 插件）完成握手 + 版本协商 + 一次往返包——证"服务端软件 ↔ 模组加载器"桥接成立 | P1 | 开发中 |
+| FR-01 | L0 功能域骨架：领域模型（Lombok 值对象）+ 平台端口接口集（Player/World/Scheduler/Message/Persistence/Transport/DataDirectory）+ 自有 EventBus（订阅/发布接口 EventBusPort，L0 内核） | P1 | 已交付@v0.1.0 |
+| FR-02 | L1 框架编排：生命周期、特性（Feature）注册、端口装配 | P1 | 已交付@v0.1.0 |
+| FR-03 | L1 端逻辑骨架：core-server / core-client 公共逻辑分模块 | P1 | 已交付@v0.1.0 |
+| FR-04 | protocol 跨端协议骨架：包定义单一真源 + 版本协商（CURRENT/MIN_SUPPORTED） | P1 | 已交付@v0.1.0 |
+| FR-05 | platform-spi：SPI 接口集 + PlatformProvider(Holder) + ServiceLoader 发现装配 | P1 | 已交付@v0.1.0 |
+| FR-06 | FeatureGate 能力探测机制：承载平台/版本"特判"，杜绝散落 if-else | P1 | 已交付@v0.1.0 |
+| FR-07 | platform-bukkit 服务端胶水：Bukkit 家族单一构建覆盖 Bukkit/Spigot/Paper（Folia 能力见 FR-13），锚点 1.20.1 | P1 | 已交付@v0.1.0 |
+| FR-08 | platform-fabric 胶水（Loom·独立 includeBuild）：客户端 + 服务端双端入口（锚点 1.20.1） | P1 | 已交付@v0.1.0 |
+| FR-09 | platform-forge 胶水（ForgeGradle·独立 includeBuild）：客户端 / 服务端分离代理（锚点 1.20.1） | P1 | 已交付@v0.1.0 |
+| FR-10 | L4 版本适配机制：version-api + vX_Y 运行期按 MC 版本装配（先落地 1.20.1） | P1 | 已交付@v0.1.0 |
+| FR-11 | smoke 冒烟特性（两证）：① 同一份 L0 逻辑经端口在 Paper/Fabric/Forge 各端一致运行——证"逻辑/胶水完全分离"；② 异构客户端（Fabric/Forge mod）经 protocol 与异构服务端（Paper/Bukkit 插件）完成握手 + 版本协商 + 一次往返包——证"服务端软件 ↔ 模组加载器"桥接成立 | P1 | 已交付@v0.1.0 |
 | FR-12 | 多版本扩展：新增 1.21.1、1.12.2 版本适配，验证 L4 机制跨版本成立 | P2 | 计划 |
-| FR-13 | Folia 支持：并入 Bukkit 家族构建，经 FeatureGate 适配 RegionScheduler（验证特判机制，不拆独立构建） | P1 | 开发中 |
-| FR-14 | platform-sponge（SpongeGradle·独立 includeBuild）：基础网络与示例可用 | P1 | 开发中 |
-| FR-15 | platform-neoforge（NeoGradle·独立 includeBuild；**NeoForge 无 1.20.1，锚点取 1.20.2**）：基础网络与示例可用 | P1 | 开发中 |
+| FR-13 | Folia 支持：并入 Bukkit 家族构建，经 FeatureGate 适配 RegionScheduler（验证特判机制，不拆独立构建） | P1 | 已交付@v0.1.0 |
+| FR-14 | platform-sponge（SpongeGradle·独立 includeBuild）：基础网络与示例可用 | P1 | 已交付@v0.1.0 |
+| FR-15 | platform-neoforge（NeoGradle·独立 includeBuild；**NeoForge 无 1.20.1，锚点取 1.20.2**）：基础网络与示例可用 | P1 | 已交付@v0.1.0 |
 | FR-16 | 最新版本 26.2 适配（MC 今年最新版本号，新版号方案无 `1.` 前缀），验证架构前向可扩展 | P3 | 计划 |
 | FR-17 | 脚手架发布与版本化：作为模板仓库（如 GitHub Template）发布 + VERSION 注入各平台构建产物 + 版本化/标签 | P3 | 计划 |
 | FR-18 | 玩法开发者上手：克隆模板后如何在 L0 写玩法的文档 + 示例（非产品玩法） | P3 | 计划 |
-| FR-19 | 跨端网络收发框架：基于 protocol 的 C2S/S2C 收发管线 + 各平台经 `TransportPort` 注册通道（具体平台见 FR-20），附若干发包示例 | P1 | 开发中 |
-| FR-20 | 跨平台传输：Bukkit/Folia/Sponge（插件消息）+ Fabric/Forge/NeoForge 服务端（各网络 API）+ 单人世界（集成服内存回环）均实现 `TransportPort`；上层逻辑不变 | P1 | 开发中 |
-| FR-21 | 进服握手 + 客户端标识上报：握手协商后客户端上报**弱客户端标识**（默认基于可得弱硬件/系统属性 SHA-256，可伪造/可随机化，`MachineCodeProvider` 可插拔），服务端接收并回发消息 | P1 | 开发中 |
-| FR-22 | 标识封禁：服务端**原生命令**按标识封禁/解封，被封标识再次进服**尽快踢出**（Bukkit 仅能进服后踢；标识不可信、可缺席，封禁为威慑非安全保证） | P1 | 开发中 |
-| FR-23 | 测试与 MVP 验收门：纯 JVM 单测 + **mod 加载器 GameTest「模拟服套件」（单人/集成 headless，`gradle runGameTest`，in-process 回环自动跑）** + **「realserver 套件」（真实专用服，服务端驱动：等待程序化客户端进入 → 触发场景 → 客户端与服务端双重断言、客户端回报、服务端聚合单一权威报告 pass/fail，镜像 AllinCore-New ADR-0020、见 ADR-0014）**——**二者均须在 MVP 完成并通过、作为 MVP 验收门**；Bukkit 家族/Sponge（无 GameTest）用 MockBukkit/测试设施 + 真实服手测达同等覆盖。realserver 维度需用户实机确认 | P1 | 开发中 |
-| FR-24 | 网络可靠性层（L1·平台无关，`TransportPort` 之上）：分片 + 有序重组(+CRC) + 重连/重同步 + 重组超时重请求；所有平台共享 | P1 | 开发中 |
-| FR-25 | 融合服（CatServer 等 Forge+Bukkit）适配设计：以 Bukkit 入口加载 + FeatureGate HYBRID_FORGE_BUKKIT + 不变量细化（ADR-0008）；实跑需 1.12.2，属 P2 | P1 | 开发中 |
-| FR-26 | 平台能力示例：玩家事件（EventBusPort）+ 调度（SchedulerPort 含 Folia 区域经 FeatureGate）+ 持久化（PersistencePort），跨平台一致 | P1 | 开发中 |
-| FR-27 | 跨端消息/HUD 示例：server→client 下发 title/actionbar/toast/聊天消息 | P1 | 开发中 |
-| FR-28 | 会话 + 心跳示例：会话注册表/在线列表 + keepalive ping/pong + RTT（兼重连检测，联动重连重同步） | P1 | 开发中 |
-| FR-29 | 平台无关配置加载模块 `core-config`（共享 L1）：YAML / JSON 等配置文件加载为类型化模型 | P1 | 开发中 |
-| FR-30 | 客户端/服务端共享目录与资源路径模块 `core-paths` + `DataDirectoryPort`：预设标准位置，调用方引用、不自算路径 | P1 | 开发中 |
-| FR-31 | 自有 EventBus（L0 内核）：平台无关发布/订阅 + 域间事件转发，支撑功能域解耦与拆分；平台事件经适配器桥接入总线 | P1 | 开发中 |
+| FR-19 | 跨端网络收发框架：基于 protocol 的 C2S/S2C 收发管线 + 各平台经 `TransportPort` 注册通道（具体平台见 FR-20），附若干发包示例 | P1 | 已交付@v0.1.0 |
+| FR-20 | 跨平台传输：Bukkit/Folia/Sponge（插件消息）+ Fabric/Forge/NeoForge 服务端（各网络 API）+ 单人世界（集成服内存回环）均实现 `TransportPort`；上层逻辑不变 | P1 | 已交付@v0.1.0 |
+| FR-21 | 进服握手 + 客户端标识上报：握手协商后客户端上报**弱客户端标识**（默认基于可得弱硬件/系统属性 SHA-256，可伪造/可随机化，`MachineCodeProvider` 可插拔），服务端接收并回发消息 | P1 | 已交付@v0.1.0 |
+| FR-22 | 标识封禁：服务端**原生命令**按标识封禁/解封，被封标识再次进服**尽快踢出**（Bukkit 仅能进服后踢；标识不可信、可缺席，封禁为威慑非安全保证） | P1 | 已交付@v0.1.0 |
+| FR-23 | 测试与 MVP 验收门：纯 JVM 单测 + **mod 加载器 GameTest「模拟服套件」（单人/集成 headless，`gradle runGameTest`，in-process 回环自动跑）** + **「realserver 套件」（真实专用服，服务端驱动：等待程序化客户端进入 → 触发场景 → 客户端与服务端双重断言、客户端回报、服务端聚合单一权威报告 pass/fail，镜像 AllinCore-New ADR-0020、见 ADR-0014）**——**二者均须在 MVP 完成并通过、作为 MVP 验收门**；Bukkit 家族/Sponge（无 GameTest）用 MockBukkit/测试设施 + 真实服手测达同等覆盖。realserver 维度需用户实机确认 | P1 | 已交付@v0.1.0 |
+| FR-24 | 网络可靠性层（L1·平台无关，`TransportPort` 之上）：分片 + 有序重组(+CRC) + 重连/重同步 + 重组超时重请求；所有平台共享 | P1 | 已交付@v0.1.0 |
+| FR-25 | 融合服（CatServer 等 Forge+Bukkit）适配设计：以 Bukkit 入口加载 + FeatureGate HYBRID_FORGE_BUKKIT + 不变量细化（ADR-0008）；实跑需 1.12.2，属 P2 | P1 | 已交付@v0.1.0 |
+| FR-26 | 平台能力示例：玩家事件（EventBusPort）+ 调度（SchedulerPort 含 Folia 区域经 FeatureGate）+ 持久化（PersistencePort），跨平台一致 | P1 | 已交付@v0.1.0 |
+| FR-27 | 跨端消息/HUD 示例：server→client 下发 title/actionbar/toast/聊天消息 | P1 | 已交付@v0.1.0 |
+| FR-28 | 会话 + 心跳示例：会话注册表/在线列表 + keepalive ping/pong + RTT（兼重连检测，联动重连重同步） | P1 | 已交付@v0.1.0 |
+| FR-29 | 平台无关配置加载模块 `core-config`（共享 L1）：YAML / JSON 等配置文件加载为类型化模型 | P1 | 已交付@v0.1.0 |
+| FR-30 | 客户端/服务端共享目录与资源路径模块 `core-paths` + `DataDirectoryPort`：预设标准位置，调用方引用、不自算路径 | P1 | 已交付@v0.1.0 |
+| FR-31 | 自有 EventBus（L0 内核）：平台无关发布/订阅 + 域间事件转发，支撑功能域解耦与拆分；平台事件经适配器桥接入总线 | P1 | 已交付@v0.1.0 |
 
 > 状态取值：计划 / 开发中 / 已交付@vX.Y.Z。优先级：P1(MVP) / P2 / P3。
 > 标 `已交付` 有门：仅当该 FR 的 §6 / spec 验收标准全部满足、对应测试 + 实机验收通过后，由 `sdd-release-version` 发版时统一标 `已交付@vX.Y.Z`——开发/修复过程中不得自行预标。
