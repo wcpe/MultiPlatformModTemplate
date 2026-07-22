@@ -38,14 +38,18 @@ import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
 
-/** Fabric 模拟服 P1 场景目录；顺序与 acceptance v2 元数据声明保持一致。 */
-final class SimScenarioCatalog {
+/** Fabric 模拟服 / realserver 共享的 P1 场景目录；顺序与 acceptance v2 元数据声明保持一致。 */
+public final class SimScenarioCatalog {
 
     private SimScenarioCatalog() {
         // 工具类不实例化
     }
 
-    static List<ServerGameTest> all() {
+    /**
+     * realserver 与模拟服共用的 13 项进程内回环场景（不含 integrated-loopback / real-round-trip）。
+     * 与 {@link P1ScenarioMatrix} 中 REAL/SIM 公共前缀一致。
+     */
+    public static List<ServerGameTest> loopbackCore() {
         return Arrays.asList(
                 test(P1ScenarioMatrix.HANDSHAKE_SUCCESS, SimScenarioCatalog::handshakeSuccess),
                 test(P1ScenarioMatrix.HANDSHAKE_INCOMPATIBLE, SimScenarioCatalog::handshakeIncompatible),
@@ -59,11 +63,16 @@ final class SimScenarioCatalog {
                 hud(P1ScenarioMatrix.HUD_TITLE, HudKind.TITLE, "sim-title-token"),
                 hud(P1ScenarioMatrix.HUD_ACTIONBAR, HudKind.ACTIONBAR, "sim-actionbar-token"),
                 hud(P1ScenarioMatrix.HUD_TOAST, HudKind.TOAST, "sim-toast-token"),
-                hud(P1ScenarioMatrix.HUD_CHAT, HudKind.CHAT, "sim-chat-token"),
-                test(P1ScenarioMatrix.INTEGRATED_LOOPBACK, SimScenarioCatalog::integratedLoopback));
+                hud(P1ScenarioMatrix.HUD_CHAT, HudKind.CHAT, "sim-chat-token"));
     }
 
-    static List<String> scenarioIds() {
+    public static List<ServerGameTest> all() {
+        List<ServerGameTest> tests = new ArrayList<>(loopbackCore());
+        tests.add(test(P1ScenarioMatrix.INTEGRATED_LOOPBACK, SimScenarioCatalog::integratedLoopback));
+        return tests;
+    }
+
+    public static List<String> scenarioIds() {
         List<String> ids = new ArrayList<>();
         for (ServerGameTest test : all()) {
             ids.add(test.suite() + '/' + test.id());

@@ -236,6 +236,23 @@ tasks.named<JavaExec>("runSimNetworkTest") {
     }
 }
 
+// realserver v2 报告元数据：与模拟服同一套绑定（commit / 版本 / 产品 jar SHA）。
+tasks.named<JavaExec>("runAcceptanceServer") {
+    dependsOn(tasks.named("remapJar"))
+    doFirst {
+        val productJar = tasks.named<RemapJarTask>("remapJar").get().archiveFile.get().asFile
+        val commit =
+            providers.exec {
+                commandLine("git", "rev-parse", "HEAD")
+            }.standardOutput.asText.get().trim()
+        systemProperty("mpmt.acceptance.commit", commit)
+        systemProperty("mpmt.acceptance.version", project.version.toString())
+        systemProperty("mpmt.acceptance.mcVersion", mcVersion)
+        systemProperty("mpmt.acceptance.serverVersion", "Fabric realserver $mcVersion")
+        systemProperty("mpmt.acceptance.productJarSha256", sha256(productJar))
+    }
+}
+
 // fabric.mod.json 中 ${version} 占位由构建注入
 tasks.processResources {
     inputs.property("version", project.version)
@@ -309,26 +326,81 @@ tasks.named("build") {
     dependsOn("gametestClasses")
 }
 
-// realserver 验收门禁：读服务端写出的单一权威报告，末行非 RESULT PASS 即构建失败（ADR-0014）。
-// 实跑流程（须真实进程，客户端需显示）：① 一端跑 runAcceptanceServer（服务端 headless，等客户端连入）；
-// ② 另一端跑 runAcceptanceClient（客户端经 --quickPlayMultiplayer 自连，须显示）；③ 服务端聚合写报告后本任务判定。
+val realRequiredScenarios =
+    listOf(
+        "acceptance/handshake-success",
+        "acceptance/handshake-incompatible",
+        "acceptance/machine-code-session",
+        "acceptance/ban-reconnect",
+        "acceptance/unban-reconnect",
+        "acceptance/fragment-crc",
+        "acceptance/fragment-timeout-retry-resync",
+        "acceptance/session-heartbeat-rtt-timeout",
+        "acceptance/capability-eventbus",
+        "acceptance/hud-title",
+        "acceptance/hud-actionbar",
+        "acceptance/hud-toast",
+        "acceptance/hud-chat",
+        "acceptance/real-round-trip",
+    )
+
+// realserver 验收门禁：严格校验 acceptance v2 + P1 REAL_REQUIRED 全 PASS（ADR-0014）。
+// 实跑：① runAcceptanceServer ② runAcceptanceClient（须显示）③ 本任务读报告。
 tasks.register("runRealServerAcceptance") {
     group = "verification"
-    description = "读 realserver 验收权威报告，末行非 RESULT PASS 即失败"
+    description = "严格校验 Fabric realserver acceptance v2 报告与完整 P1 REAL_REQUIRED"
     doLast {
         val report = acceptanceReportFile.get().asFile
         if (!report.exists()) {
             throw GradleException(
-                "未找到验收报告（先跑 runAcceptanceServer + runAcceptanceClient 使服务端写出报告）：${report.absolutePath}",
+                "未找到验收报告（先跑 runAcceptanceServer + runAcceptanceClient）：${report.absolutePath}",
             )
         }
         val text = report.readText()
         logger.lifecycle("[realserver] 服务端权威验收报告：\n$text")
-        val resultLine = text.lineSequence().map { it.trim() }.lastOrNull { it.startsWith("RESULT") }
-        if (resultLine != "RESULT PASS") {
-            throw GradleException("[realserver] 验收未通过（末行非 RESULT PASS）：$resultLine")
+        val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        if (lines.firstOrNull() != "SERVER-GAMETEST-REPORT v2") {
+            throw GradleException("[realserver] 报告不是 acceptance v2")
         }
-        logger.lifecycle("[realserver] 验收通过 ✓ RESULT PASS")
+        val metadata =
+            lines.filter { it.startsWith("META ") }.associate { line ->
+                val entry = line.removePrefix("META ")
+                val separator = entry.indexOf('=')
+                if (separator <= 0) throw GradleException("[realserver] 非法元数据行：$line")
+                entry.substring(0, separator) to entry.substring(separator + 1)
+            }
+        val requiredMetadata =
+            listOf("commit", "VERSION", "platform", "mcVersion", "serverVersion", "productJarSha256", "scenarios")
+        if (requiredMetadata.any { metadata[it].isNullOrBlank() }) {
+            throw GradleException("[realserver] 报告缺少 acceptance v2 必需元数据")
+        }
+        if (metadata["platform"] != "fabric") {
+            throw GradleException("[realserver] platform 元数据必须为 fabric：${metadata["platform"]}")
+        }
+        if (!metadata.getValue("productJarSha256").matches(Regex("[0-9a-fA-F]{64}"))) {
+            throw GradleException("[realserver] productJarSha256 元数据非法")
+        }
+        if (metadata["scenarios"] != realRequiredScenarios.joinToString(",")) {
+            throw GradleException("[realserver] 报告场景声明不完整：${metadata["scenarios"]}")
+        }
+        val resultLines = lines.filter { it.startsWith("RESULT ") }
+        if (resultLines != listOf("RESULT PASS") || lines.last() != "RESULT PASS") {
+            throw GradleException("[realserver] 报告必须仅有一个末行 RESULT PASS")
+        }
+        val scenarioLines =
+            lines.filter {
+                it.startsWith("PASS ") || it.startsWith("FAIL ") || it.startsWith("ERROR ") || it.startsWith("SKIP ")
+            }
+        val scenarios = scenarioLines.associateBy { it.split(' ', limit = 3)[1] }
+        if (scenarios.size != scenarioLines.size || scenarios.keys != realRequiredScenarios.toSet()) {
+            throw GradleException("[realserver] 实际场景与 P1 REAL_REQUIRED 不一致：${scenarios.keys}")
+        }
+        if (scenarioLines.any { !it.startsWith("PASS ") }) {
+            throw GradleException("[realserver] P1 场景存在非 PASS 结果")
+        }
+        logger.lifecycle(
+            "[realserver] 验收通过 ✓ acceptance v2，${realRequiredScenarios.size} 项 REAL_REQUIRED 全部 PASS",
+        )
     }
 }
 

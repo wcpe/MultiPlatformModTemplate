@@ -6,44 +6,39 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
-import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestRegistry;
+import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTest;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestRunner;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
 import top.wcpe.mc.mpmt.acceptance.report.AcceptanceReport;
+import top.wcpe.mc.mpmt.acceptance.report.AcceptanceReportMetadata;
+import top.wcpe.mc.mpmt.acceptance.report.P1ScenarioMatrix;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioResult;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioStatus;
+import top.wcpe.mc.mpmt.platform.fabric.gametest.scenario.RealServerScenarioCatalog;
 
 /**
- * Fabric realserver 验收驱动引导（仅 gametest 接入层，ADR-0014）：经系统属性 {@code -Dmpmt.acceptance=true} 激活，
- * 在服务端启动后装配控制通道、经 {@code ServiceLoader} 发现并绑定全部 {@link ServerScenario}、驱动执行、
- * 聚合单一权威报告写文件、关停服务端。由 gametest 入口（{@code fabric.mod.json} main entrypoint）调用 {@link #register()}。
- *
- * <p>未激活则 NOP（不影响普通运行）。报告路径经 {@code -Dmpmt.acceptance.report=<path>} 指定，由 Gradle 任务读取
- * 末行 {@code RESULT PASS|FAIL} 作门禁（{@code runRealServerAcceptance}）。
- *
- * <p><b>绝对截止看门狗</b>（ADR-0014 §4）：守护线程到 {@code -Dmpmt.acceptance.deadlineMs} 截止仍未完成，则写 fallback
- * {@code RESULT FAIL} 报告并强制 {@code halt}，防场景在主线程死锁导致整体卡死无报告。收尾经 {@code finished} CAS 单次，
- * 驱动与看门狗谁先到谁写、另一方 no-op。
+ * Fabric realserver 验收驱动引导：{@code -Dmpmt.acceptance=true} 激活后跑完整 P1 REAL_REQUIRED（14 项），
+ * 输出 acceptance v2 权威报告。进程内回环场景不依赖客户端；{@code real-round-trip} 等客户端连入。
  */
 public final class AcceptanceDriverBootstrap {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("mpmt-acceptance");
 
-    /** 激活开关系统属性。 */
     private static final String ACTIVATION_PROPERTY = "mpmt.acceptance";
-    /** 报告输出路径系统属性。 */
     private static final String REPORT_PROPERTY = "mpmt.acceptance.report";
-    /** 绝对截止毫秒数系统属性。 */
     private static final String DEADLINE_PROPERTY = "mpmt.acceptance.deadlineMs";
-    /** 默认绝对截止（毫秒）。 */
-    private static final long DEFAULT_DEADLINE_MS = 300_000L;
-    /** 硬退兜底宽限期（毫秒）：halt 后仍未退则强制 halt JVM。 */
+    private static final String COMMIT_PROPERTY = "mpmt.acceptance.commit";
+    private static final String VERSION_PROPERTY = "mpmt.acceptance.version";
+    private static final String MC_VERSION_PROPERTY = "mpmt.acceptance.mcVersion";
+    private static final String SERVER_VERSION_PROPERTY = "mpmt.acceptance.serverVersion";
+    private static final String PRODUCT_SHA_PROPERTY = "mpmt.acceptance.productJarSha256";
+    private static final String PLATFORM = "fabric";
+    private static final long DEFAULT_DEADLINE_MS = 660_000L;
     private static final long HALT_GRACE_MS = 8_000L;
 
     private AcceptanceDriverBootstrap() {
@@ -56,41 +51,59 @@ public final class AcceptanceDriverBootstrap {
             return;
         }
         ServerLifecycleEvents.SERVER_STARTED.register(AcceptanceDriverBootstrap::onServerStarted);
-        LOGGER.info("realserver 验收驱动已激活，待服务端启动");
+        LOGGER.info("realserver 验收驱动已激活，待服务端启动（P1 REAL_REQUIRED + v2 报告）");
     }
 
     private static void onServerStarted(MinecraftServer server) {
         FabricAcceptanceControlChannel channel = new FabricAcceptanceControlChannel(server);
         channel.register();
 
-        ServerGameTestRegistry registry = new ServerGameTestRegistry();
-        for (ServerScenario scenario :
-                ServiceLoader.load(ServerScenario.class, AcceptanceDriverBootstrap.class.getClassLoader())) {
-            scenario.bindClient(channel.client());
-            registry.register(scenario);
+        RealServerScenarioCatalog.assertMatchesMatrix();
+        List<ServerGameTest> tests = RealServerScenarioCatalog.all();
+        for (ServerGameTest test : tests) {
+            if (test instanceof ServerScenario) {
+                ((ServerScenario) test).bindClient(channel.client());
+            }
         }
 
-        // 收尾单次门闩：驱动正常完成 / 看门狗超时，谁先到谁写报告 + halt
         AtomicBoolean finished = new AtomicBoolean(false);
 
-        Thread driver =
-                new Thread(() -> runAndReport(server, registry, finished), "mpmt-acceptance-driver");
+        Thread driver = new Thread(() -> runAndReport(server, tests, finished), "mpmt-acceptance-driver");
         driver.setDaemon(true);
         driver.start();
 
         long deadlineMs = deadlineMs();
-        Thread watchdog =
-                new Thread(() -> watchdog(server, finished, deadlineMs), "mpmt-acceptance-watchdog");
+        Thread watchdog = new Thread(() -> watchdog(server, finished, deadlineMs), "mpmt-acceptance-watchdog");
         watchdog.setDaemon(true);
         watchdog.start();
     }
 
     private static void runAndReport(
-            MinecraftServer server, ServerGameTestRegistry registry, AtomicBoolean finished) {
+            MinecraftServer server, List<ServerGameTest> tests, AtomicBoolean finished) {
         List<ScenarioResult> results =
-                ServerGameTestRunner.runAll(
-                        registry.all(), test -> new FabricServerGameTestContext(server));
-        finishOnce(server, finished, AcceptanceReport.render(results));
+                ServerGameTestRunner.runAll(tests, test -> new FabricServerGameTestContext(server));
+        List<String> scenarios = P1ScenarioMatrix.requiredFor(PLATFORM);
+        String report = AcceptanceReport.render(metadata(scenarios), results);
+        finishOnce(server, finished, report);
+    }
+
+    private static AcceptanceReportMetadata metadata(List<String> scenarios) {
+        return new AcceptanceReportMetadata(
+                property(COMMIT_PROPERTY),
+                property(VERSION_PROPERTY),
+                PLATFORM,
+                property(MC_VERSION_PROPERTY),
+                property(SERVER_VERSION_PROPERTY),
+                property(PRODUCT_SHA_PROPERTY),
+                scenarios);
+    }
+
+    private static String property(String name) {
+        String value = System.getProperty(name);
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalStateException("缺少 realserver 报告元数据属性：" + name);
+        }
+        return value;
     }
 
     private static void watchdog(MinecraftServer server, AtomicBoolean finished, long deadlineMs) {
@@ -100,7 +113,6 @@ public final class AcceptanceDriverBootstrap {
             Thread.currentThread().interrupt();
             return;
         }
-        // 到点仍未收尾：写 fallback RESULT FAIL 报告（复用渲染器保格式一致）并强制收尾
         List<ScenarioResult> timeout =
                 Collections.singletonList(
                         new ScenarioResult(
@@ -109,12 +121,13 @@ public final class AcceptanceDriverBootstrap {
                                 ScenarioStatus.ERROR,
                                 deadlineMs,
                                 "验收绝对截止超时 " + deadlineMs + "ms"));
+        // 看门狗 fallback 仍走 v1 渲染避免缺元数据再抛；正常路径必须是 v2
         finishOnce(server, finished, AcceptanceReport.render(timeout));
     }
 
     private static void finishOnce(MinecraftServer server, AtomicBoolean finished, String report) {
         if (!finished.compareAndSet(false, true)) {
-            return; // 已被另一方收尾
+            return;
         }
         writeReport(report);
         LOGGER.info("realserver 验收收尾，权威报告：\n{}", report);
@@ -122,7 +135,6 @@ public final class AcceptanceDriverBootstrap {
         startHardHalt();
     }
 
-    /** 硬退兜底：halt 后宽限期内仍未退出 JVM，则强制 halt，防优雅停机卡死。 */
     private static void startHardHalt() {
         Thread hardHalt =
                 new Thread(
