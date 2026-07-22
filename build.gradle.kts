@@ -124,12 +124,24 @@ subprojects {
     }
 }
 
+// 发布产物结构门：即使平台 build 生命周期以后发生调整，根聚合仍显式校验五平台最终可部署包。
+val verifyReleasePackaging by tasks.registering {
+    group = "verification"
+    description = "校验五平台最终自包含发布产物"
+    dependsOn(":platform-bukkit:verifyPackaging")
+    dependsOn(gradle.includedBuild("platform-fabric").task(":verifyPackaging"))
+    dependsOn(gradle.includedBuild("platform-forge").task(":verifyPackaging"))
+    dependsOn(gradle.includedBuild("platform-neoforge").task(":verifyPackaging"))
+    dependsOn(gradle.includedBuild("platform-sponge").task(":verifyPackaging"))
+}
+
 // 一键全量构建：复合构建的 includeBuild 默认不并入根 build 生命周期，这里聚合
-// 根构建各子模块 + 各独立 includeBuild 平台的 build，便于本地 / CI 全量验证。
+// 根构建各子模块 + 各独立 includeBuild 平台的 build，并显式执行最终发布产物结构门。
 tasks.register("buildAll") {
     group = "build"
-    description = "构建根构建所有模块 + 各 includeBuild 平台产物"
+    description = "构建全部模块并校验各平台最终发布产物"
     dependsOn(subprojects.map { "${it.path}:build" })
     dependsOn(gradle.includedBuilds.map { it.task(":build") })
+    dependsOn(verifyReleasePackaging)
 }
 
