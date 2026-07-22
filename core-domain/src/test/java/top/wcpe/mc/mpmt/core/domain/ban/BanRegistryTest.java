@@ -2,8 +2,10 @@ package top.wcpe.mc.mpmt.core.domain.ban;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Arrays;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -58,5 +60,19 @@ class BanRegistryTest {
         BanRegistry registry = new BanRegistry();
         registry.unban(code("nope"));
         assertFalse(registry.isBanned(code("nope")));
+    }
+
+    @Test
+    @DisplayName("原子替换后旧快照完全不可见并可查询条目")
+    void 原子替换与查询() {
+        BanRegistry registry = new BanRegistry();
+        registry.ban(code("old"), "旧原因");
+
+        registry.replaceAll(Arrays.asList(new BanEntry(code("a"), "原因一"), new BanEntry(code("b"), "原因二")));
+
+        assertFalse(registry.find(code("old")).isPresent());
+        assertEquals("原因一", registry.find(code("a")).get().getReason());
+        assertEquals(2, registry.list().size());
+        assertThrows(UnsupportedOperationException.class, () -> registry.list().clear());
     }
 }

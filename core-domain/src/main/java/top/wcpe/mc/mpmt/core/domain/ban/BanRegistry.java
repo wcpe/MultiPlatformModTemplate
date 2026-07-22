@@ -1,10 +1,14 @@
 package top.wcpe.mc.mpmt.core.domain.ban;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Optional;
 
 /**
  * 封禁表（L0 纯逻辑，线程安全）：按弱客户端标识封禁 / 解封 / 查询。
@@ -14,29 +18,58 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class BanRegistry {
 
-    private final Map<MachineCode, BanEntry> bans = new ConcurrentHashMap<>();
+    private volatile Map<MachineCode, BanEntry> bans = Collections.emptyMap();
 
     /** 封禁某标识（重复封禁覆盖原因）。 */
-    public void ban(MachineCode code, String reason) {
+    public synchronized void ban(MachineCode code, String reason) {
         Objects.requireNonNull(code, "code 不能为空");
         Objects.requireNonNull(reason, "reason 不能为空");
-        bans.put(code, new BanEntry(code, reason));
+        Map<MachineCode, BanEntry> updated = new HashMap<>(bans);
+        updated.put(code, new BanEntry(code, reason));
+        bans = immutable(updated);
     }
 
     /** 解封某标识（未封禁则无操作）。 */
-    public void unban(MachineCode code) {
+    public synchronized void unban(MachineCode code) {
         Objects.requireNonNull(code, "code 不能为空");
-        bans.remove(code);
+        if (!bans.containsKey(code)) {
+            return;
+        }
+        Map<MachineCode, BanEntry> updated = new HashMap<>(bans);
+        updated.remove(code);
+        bans = immutable(updated);
+    }
+
+    /** 原子替换全部封禁条目。 */
+    public synchronized void replaceAll(Collection<BanEntry> entries) {
+        Objects.requireNonNull(entries, "entries 不能为空");
+        Map<MachineCode, BanEntry> replacement = new HashMap<>();
+        for (BanEntry entry : entries) {
+            BanEntry value = Objects.requireNonNull(entry, "entry 不能为空");
+            replacement.put(value.getCode(), value);
+        }
+        bans = immutable(replacement);
+    }
+
+    /** 查询某标识的封禁条目。 */
+    public Optional<BanEntry> find(MachineCode code) {
+        Objects.requireNonNull(code, "code 不能为空");
+        return Optional.ofNullable(bans.get(code));
     }
 
     /** 是否被封禁。 */
     public boolean isBanned(MachineCode code) {
-        Objects.requireNonNull(code, "code 不能为空");
-        return bans.containsKey(code);
+        return find(code).isPresent();
     }
 
-    /** 当前全部封禁条目（快照）。 */
+    /** 当前全部封禁条目（按机器码排序的不可变快照）。 */
     public List<BanEntry> list() {
-        return new ArrayList<>(bans.values());
+        List<BanEntry> snapshot = new ArrayList<>(bans.values());
+        snapshot.sort(Comparator.comparing(entry -> entry.getCode().getValue()));
+        return Collections.unmodifiableList(snapshot);
+    }
+
+    private static Map<MachineCode, BanEntry> immutable(Map<MachineCode, BanEntry> source) {
+        return Collections.unmodifiableMap(source);
     }
 }
