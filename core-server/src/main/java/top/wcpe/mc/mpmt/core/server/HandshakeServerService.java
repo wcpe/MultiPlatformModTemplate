@@ -3,6 +3,8 @@ package top.wcpe.mc.mpmt.core.server;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
@@ -19,64 +21,195 @@ import top.wcpe.mc.mpmt.protocol.packet.DisconnectPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
 
-/**
- * 服务端握手服务（平台无关）：
- * 收 ClientHello → 版本协商 → 回 ServerHello；客户端上报标识 → 封禁校验 → 欢迎建立会话 / 告知封禁并通知断开。
- *
- * <p>每连接一台 {@link HandshakeStateMachine}。会话建立时序：版本兼容则 ServerHello(accepted)，
- * 收到 ClientIdReport 后若未封禁则 ESTABLISHED + 欢迎，封禁则 REJECTED + Disconnect（真实踢出由平台 L3 调度执行）。
- */
+/** 服务端握手服务：版本协商、封禁门禁、会话登记及拒绝断开请求。 */
 public final class HandshakeServerService {
 
+    /** 拒绝握手后的真实断开请求；执行前必须调用 currentCheck 重检物理连接上下文。 */
+    @FunctionalInterface
+    public interface DisconnectHandler {
+        void disconnect(ConnectionHandle connection, String reason, BooleanSupplier currentCheck);
+    }
+
     private static final Logger LOGGER = Logger.getLogger(HandshakeServerService.class.getName());
+    private static final String BANNED_MESSAGE = "你的客户端标识已被封禁";
+    private static final String NOT_READY_MESSAGE = "封禁服务尚未就绪，请稍后重试";
+    private static final DisconnectHandler NOOP_DISCONNECT = (connection, reason, currentCheck) -> {
+    };
 
     private final PacketDispatcher dispatcher;
     private final Supplier<String> sessionIdSupplier;
     private final BanRegistry banRegistry;
-    private final Map<ConnectionHandle, HandshakeStateMachine> handshakes = new ConcurrentHashMap<>();
+    private final SessionRegistry sessionRegistry;
+    private final Supplier<BanService.State> banStateSupplier;
+    private final DisconnectHandler disconnectHandler;
+    private final Map<ConnectionHandle, HandshakeContext> handshakes = new ConcurrentHashMap<>();
+    private final AtomicLong generationSequence = new AtomicLong();
 
     public HandshakeServerService(PacketDispatcher dispatcher, Supplier<String> sessionIdSupplier, BanRegistry banRegistry) {
+        this(dispatcher, sessionIdSupplier, banRegistry, new SessionRegistry());
+    }
+
+    public HandshakeServerService(
+            PacketDispatcher dispatcher,
+            Supplier<String> sessionIdSupplier,
+            BanRegistry banRegistry,
+            SessionRegistry sessionRegistry) {
+        this(
+                dispatcher,
+                sessionIdSupplier,
+                banRegistry,
+                sessionRegistry,
+                () -> BanService.State.READY,
+                NOOP_DISCONNECT);
+    }
+
+    public HandshakeServerService(
+            PacketDispatcher dispatcher,
+            Supplier<String> sessionIdSupplier,
+            BanRegistry banRegistry,
+            SessionRegistry sessionRegistry,
+            Supplier<BanService.State> banStateSupplier,
+            DisconnectHandler disconnectHandler) {
         this.dispatcher = Objects.requireNonNull(dispatcher, "dispatcher 不能为空");
         this.sessionIdSupplier = Objects.requireNonNull(sessionIdSupplier, "sessionIdSupplier 不能为空");
         this.banRegistry = Objects.requireNonNull(banRegistry, "banRegistry 不能为空");
+        this.sessionRegistry = Objects.requireNonNull(sessionRegistry, "sessionRegistry 不能为空");
+        this.banStateSupplier = Objects.requireNonNull(banStateSupplier, "banStateSupplier 不能为空");
+        this.disconnectHandler = Objects.requireNonNull(disconnectHandler, "disconnectHandler 不能为空");
         dispatcher.on(PacketIds.CLIENT_HELLO, this::onClientHello);
         dispatcher.on(PacketIds.CLIENT_ID_REPORT, this::onClientIdReport);
     }
 
+    /** 新物理连接建立时清除同 UUID 旧握手和旧会话。 */
+    public void onConnected(ConnectionHandle connection) {
+        Objects.requireNonNull(connection, "connection 不能为空");
+        sessionRegistry.removeForReconnect(connection);
+        handshakes.put(
+                connection,
+                new HandshakeContext(connection, generationSequence.incrementAndGet()));
+    }
+
+    /** 物理连接断开时仅清理该连接自己的握手和会话。 */
+    public void onDisconnected(ConnectionHandle connection) {
+        Objects.requireNonNull(connection, "connection 不能为空");
+        handshakes.computeIfPresent(
+                connection,
+                (key, current) -> sameConnection(current.connection, connection) ? null : current);
+        sessionRegistry.remove(connection);
+    }
+
     private void onClientHello(ConnectionHandle connection, Packet packet) {
-        ClientHelloPacket hello = (ClientHelloPacket) packet;
-        HandshakeStateMachine sm = handshakes.computeIfAbsent(connection, c -> new HandshakeStateMachine());
-        if (sm.state() != HandshakeStateMachine.State.CONNECTED) {
-            LOGGER.warning("重复 ClientHello，忽略；当前状态 " + sm.state());
+        HandshakeContext context = handshakes.get(connection);
+        if (context == null) {
+            onConnected(connection);
+            context = currentContext(connection);
+        } else if (!sameConnection(context.connection, connection)) {
+            LOGGER.warning("旧物理连接的 ClientHello，忽略");
+            return;
+        }
+        synchronized (context) {
+            handleClientHello(connection, (ClientHelloPacket) packet, context);
+        }
+    }
+
+    private void handleClientHello(
+            ConnectionHandle connection, ClientHelloPacket hello, HandshakeContext context) {
+        if (context.stateMachine.state() != HandshakeStateMachine.State.CONNECTED) {
+            LOGGER.warning("重复 ClientHello，忽略；当前状态 " + context.stateMachine.state());
             return;
         }
         boolean compatible = ProtocolVersion.isCompatible(hello.getProtocolVersion());
-        sm.onClientHello(compatible);
-        String sessionId = compatible ? sessionIdSupplier.get() : "";
-        dispatcher.send(connection, new ServerHelloPacket(ProtocolVersion.CURRENT, sessionId, compatible));
+        context.stateMachine.onClientHello(compatible);
+        context.sessionId = compatible ? sessionIdSupplier.get() : "";
+        dispatcher.send(
+                connection,
+                new ServerHelloPacket(ProtocolVersion.CURRENT, context.sessionId, compatible));
     }
 
     private void onClientIdReport(ConnectionHandle connection, Packet packet) {
-        ClientIdReportPacket report = (ClientIdReportPacket) packet;
-        HandshakeStateMachine sm = handshakes.get(connection);
-        if (sm == null || sm.state() != HandshakeStateMachine.State.HELLO_OK) {
-            LOGGER.warning("意外的 ClientIdReport，忽略；当前状态 " + (sm == null ? "无" : sm.state()));
+        HandshakeContext context = currentContext(connection);
+        if (context == null) {
+            LOGGER.warning("意外的 ClientIdReport，忽略；当前状态 无");
             return;
         }
-        boolean banned = banRegistry.isBanned(new MachineCode(report.getClientId()));
-        sm.onClientId(banned);
-        if (banned) {
-            // 先告知再通知断开；真实踢出由平台 L3 经 SchedulerPort.runForEntity 执行（ADR-0013）
-            dispatcher.send(connection, new ServerMessagePacket("你的客户端标识已被封禁"));
-            dispatcher.send(connection, new DisconnectPacket("banned"));
-        } else {
-            dispatcher.send(connection, new ServerMessagePacket("欢迎"));
+        synchronized (context) {
+            handleClientIdReport(connection, (ClientIdReportPacket) packet, context);
         }
     }
 
-    /** 查询某连接的握手状态（不存在返回 null）。 */
+    private void handleClientIdReport(
+            ConnectionHandle connection, ClientIdReportPacket report, HandshakeContext context) {
+        if (context.stateMachine.state() != HandshakeStateMachine.State.HELLO_OK) {
+            LOGGER.warning("意外的 ClientIdReport，忽略；当前状态 " + context.stateMachine.state());
+            return;
+        }
+        if (banStateSupplier.get() != BanService.State.READY) {
+            reject(connection, context, NOT_READY_MESSAGE);
+            return;
+        }
+        MachineCode machineCode = new MachineCode(report.getClientId());
+        if (banRegistry.isBanned(machineCode)) {
+            reject(connection, context, BANNED_MESSAGE);
+            return;
+        }
+        context.stateMachine.onClientId(false);
+        sessionRegistry.register(connection, context.sessionId, machineCode);
+        dispatcher.send(connection, new ServerMessagePacket("欢迎"));
+    }
+
+    private void reject(
+            ConnectionHandle connection, HandshakeContext context, String message) {
+        context.stateMachine.onClientId(true);
+        sessionRegistry.remove(connection);
+        dispatcher.send(connection, new ServerMessagePacket(message));
+        dispatcher.send(connection, new DisconnectPacket(message));
+        disconnectHandler.disconnect(
+                connection,
+                message,
+                () -> isCurrentRejected(connection, context.generation));
+    }
+
+    /** 查询某物理连接的握手状态（不存在或已被新连接替换时返回 null）。 */
     public HandshakeStateMachine.State stateOf(ConnectionHandle connection) {
-        HandshakeStateMachine sm = handshakes.get(connection);
-        return sm == null ? null : sm.state();
+        HandshakeContext context = currentContext(connection);
+        if (context == null) {
+            return null;
+        }
+        synchronized (context) {
+            return context.stateMachine.state();
+        }
+    }
+
+    private boolean isCurrentRejected(ConnectionHandle connection, long generation) {
+        HandshakeContext context = currentContext(connection);
+        if (context == null || context.generation != generation) {
+            return false;
+        }
+        synchronized (context) {
+            return context.stateMachine.state() == HandshakeStateMachine.State.REJECTED;
+        }
+    }
+
+    private HandshakeContext currentContext(ConnectionHandle connection) {
+        HandshakeContext context = handshakes.get(connection);
+        return context != null && sameConnection(context.connection, connection) ? context : null;
+    }
+
+    /** 物理连接必须按对象身份比较，避免同 UUID 新连接继承旧握手。 */
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
+    private static boolean sameConnection(ConnectionHandle left, ConnectionHandle right) {
+        return left == right;
+    }
+
+    private static final class HandshakeContext {
+        private final ConnectionHandle connection;
+        private final long generation;
+        private final HandshakeStateMachine stateMachine = new HandshakeStateMachine();
+        private String sessionId = "";
+
+        private HandshakeContext(ConnectionHandle connection, long generation) {
+            this.connection = connection;
+            this.generation = generation;
+        }
     }
 }

@@ -79,7 +79,7 @@ class SmokeHandshakeRoundTripTest {
 
         assertTrue(client.isAccepted(), "版本兼容（封禁在标识上报后判定）");
         assertTrue(client.isDisconnected(), "被封禁应收到断开通知");
-        assertEquals("banned", client.disconnectReason());
+        assertEquals("你的客户端标识已被封禁", client.disconnectReason());
         assertEquals(HandshakeStateMachine.State.REJECTED, server.stateOf(w.loop.clientConnection()));
     }
 

@@ -1,6 +1,8 @@
 package top.wcpe.mc.mpmt.core.client;
 
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
+import java.util.function.LongSupplier;
 import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
 import top.wcpe.mc.mpmt.core.domain.port.MachineCodeProvider;
 import top.wcpe.mc.mpmt.protocol.Packet;
@@ -23,17 +25,46 @@ public final class HandshakeClientService {
     private final PacketDispatcher dispatcher;
     private final String modVersion;
     private final MachineCodeProvider machineCodeProvider;
+    private final Runnable onAccepted;
+    private final BooleanSupplier active;
+    private final LongSupplier connectionGenerationProvider;
 
     private volatile boolean accepted;
     private volatile String sessionId;
     private volatile String lastServerMessage;
     private volatile boolean disconnected;
     private volatile String disconnectReason;
+    private long reportedGeneration = Long.MIN_VALUE;
+    private String reportedSessionId;
 
     public HandshakeClientService(PacketDispatcher dispatcher, String modVersion, MachineCodeProvider machineCodeProvider) {
+        this(dispatcher, modVersion, machineCodeProvider, () -> {
+            // 兼容旧构造器：握手完成后无附加动作
+        });
+    }
+
+    public HandshakeClientService(
+            PacketDispatcher dispatcher,
+            String modVersion,
+            MachineCodeProvider machineCodeProvider,
+            Runnable onAccepted) {
+        this(dispatcher, modVersion, machineCodeProvider, onAccepted, () -> true, () -> 0L);
+    }
+
+    HandshakeClientService(
+            PacketDispatcher dispatcher,
+            String modVersion,
+            MachineCodeProvider machineCodeProvider,
+            Runnable onAccepted,
+            BooleanSupplier active,
+            LongSupplier connectionGenerationProvider) {
         this.dispatcher = Objects.requireNonNull(dispatcher, "dispatcher 不能为空");
         this.modVersion = Objects.requireNonNull(modVersion, "modVersion 不能为空");
         this.machineCodeProvider = Objects.requireNonNull(machineCodeProvider, "machineCodeProvider 不能为空");
+        this.onAccepted = Objects.requireNonNull(onAccepted, "onAccepted 不能为空");
+        this.active = Objects.requireNonNull(active, "active 不能为空");
+        this.connectionGenerationProvider =
+                Objects.requireNonNull(connectionGenerationProvider, "connectionGenerationProvider 不能为空");
         dispatcher.on(PacketIds.SERVER_HELLO, this::onServerHello);
         dispatcher.on(PacketIds.SERVER_MESSAGE, this::onServerMessage);
         dispatcher.on(PacketIds.DISCONNECT, this::onDisconnect);
@@ -41,26 +72,50 @@ public final class HandshakeClientService {
 
     /** 发起握手：发送 ClientHello。 */
     public void startHandshake() {
+        ensureActive();
         dispatcher.send(new ClientHelloPacket(ProtocolVersion.CURRENT, modVersion));
     }
 
-    private void onServerHello(ConnectionHandle connection, Packet packet) {
+    private synchronized void onServerHello(ConnectionHandle connection, Packet packet) {
+        if (!active.getAsBoolean()) {
+            return;
+        }
         ServerHelloPacket hello = (ServerHelloPacket) packet;
         this.sessionId = hello.getSessionId();
         this.accepted = hello.isAccepted();
-        if (hello.isAccepted()) {
-            // 被接受 → 上报弱客户端标识
-            dispatcher.send(new ClientIdReportPacket(machineCodeProvider.get()));
+        long generation = connectionGenerationProvider.getAsLong();
+        if (!hello.isAccepted() || isDuplicateAccepted(generation, hello.getSessionId())) {
+            return;
         }
+        reportedGeneration = generation;
+        reportedSessionId = hello.getSessionId();
+        // 被接受 → 上报弱客户端标识并通知连接代次协调器
+        dispatcher.send(new ClientIdReportPacket(machineCodeProvider.get()));
+        onAccepted.run();
+    }
+
+    private boolean isDuplicateAccepted(long generation, String currentSessionId) {
+        return reportedGeneration == generation && Objects.equals(reportedSessionId, currentSessionId);
     }
 
     private void onServerMessage(ConnectionHandle connection, Packet packet) {
-        this.lastServerMessage = ((ServerMessagePacket) packet).getText();
+        if (active.getAsBoolean()) {
+            this.lastServerMessage = ((ServerMessagePacket) packet).getText();
+        }
     }
 
     private void onDisconnect(ConnectionHandle connection, Packet packet) {
+        if (!active.getAsBoolean()) {
+            return;
+        }
         this.disconnected = true;
         this.disconnectReason = ((DisconnectPacket) packet).getReason();
+    }
+
+    private void ensureActive() {
+        if (!active.getAsBoolean()) {
+            throw new IllegalStateException("客户端握手服务已关闭");
+        }
     }
 
     /** 服务端是否接受了握手（版本兼容）。 */

@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
+import java.util.function.LongSupplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
@@ -18,7 +20,11 @@ import top.wcpe.mc.mpmt.protocol.PacketCodec;
 import top.wcpe.mc.mpmt.protocol.ProtocolVersion;
 import top.wcpe.mc.mpmt.protocol.packet.ClientHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ClientIdReportPacket;
+import top.wcpe.mc.mpmt.protocol.packet.DisconnectPacket;
+import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
+import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ResyncRequestPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ResyncRequiredPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
 
@@ -34,9 +40,14 @@ class ClientNetworkFeatureTest {
     private final PacketCodec codec = new PacketCodec();
 
     private ClientNetworkFeature enabled(FakeClientTransport transport) {
+        return enabled(transport, () -> 0L);
+    }
+
+    private ClientNetworkFeature enabled(FakeClientTransport transport, LongSupplier revisionProvider) {
         MpmtRuntime runtime = new MpmtRuntime();
         runtime.ports().register(TransportPort.class, transport);
-        ClientNetworkFeature feature = new ClientNetworkFeature(MOD_VERSION, () -> CLIENT_CODE);
+        ClientNetworkFeature feature =
+                new ClientNetworkFeature(MOD_VERSION, () -> CLIENT_CODE, revisionProvider);
         runtime.features().register(feature);
         runtime.enable();
         return feature;
@@ -44,6 +55,26 @@ class ClientNetworkFeatureTest {
 
     private Packet lastSent(FakeClientTransport transport) {
         return codec.decode(transport.sends.get(transport.sends.size() - 1));
+    }
+
+    private <T extends Packet> T lastSent(FakeClientTransport transport, Class<T> type) {
+        for (int i = transport.sends.size() - 1; i >= 0; i--) {
+            Packet packet = codec.decode(transport.sends.get(i));
+            if (type.isInstance(packet)) {
+                return type.cast(packet);
+            }
+        }
+        throw new AssertionError("未找到指定类型的发包：" + type.getSimpleName());
+    }
+
+    private int countPackets(FakeClientTransport transport, Class<? extends Packet> type) {
+        int count = 0;
+        for (byte[] data : transport.sends) {
+            if (type.isInstance(codec.decode(data))) {
+                count++;
+            }
+        }
+        return count;
     }
 
     @Test
@@ -60,7 +91,7 @@ class ClientNetworkFeatureTest {
 
         // 收兼容 ServerHello(accepted) → 上报弱标识
         transport.receive(codec.encode(new ServerHelloPacket(ProtocolVersion.CURRENT, "sess-1", true)));
-        ClientIdReportPacket report = (ClientIdReportPacket) lastSent(transport);
+        ClientIdReportPacket report = lastSent(transport, ClientIdReportPacket.class);
         assertEquals(CLIENT_CODE, report.getClientId());
         assertTrue(feature.handshakeClient().isAccepted());
         assertEquals("sess-1", feature.handshakeClient().sessionId());
@@ -75,10 +106,12 @@ class ClientNetworkFeatureTest {
     void 装配产物可见性() {
         ClientNetworkFeature feature = new ClientNetworkFeature(MOD_VERSION, () -> CLIENT_CODE);
         assertThrows(IllegalStateException.class, feature::handshakeClient);
+        assertThrows(IllegalStateException.class, feature::heartbeatService);
         assertThrows(IllegalStateException.class, feature::startHandshake);
 
         feature = enabled(new FakeClientTransport());
         assertNotNull(feature.handshakeClient());
+        assertNotNull(feature.heartbeatService());
         assertEquals("client-network", feature.name());
     }
 
@@ -95,10 +128,86 @@ class ClientNetworkFeatureTest {
     }
 
     @Test
+    @DisplayName("首次握手不重同步，物理重连成功后仅请求一次并保留修订号")
+    void 连接代次重同步() {
+        AtomicLong revision = new AtomicLong(15L);
+        FakeClientTransport transport = new FakeClientTransport();
+        ClientNetworkFeature feature = enabled(transport, revision::get);
+
+        feature.startHandshake();
+        transport.receive(codec.encode(new ServerHelloPacket(ProtocolVersion.CURRENT, "sess-1", true)));
+        transport.receive(codec.encode(new ServerHelloPacket(ProtocolVersion.CURRENT, "sess-1", true)));
+        assertEquals(1, countPackets(transport, ClientIdReportPacket.class));
+        assertEquals(0, countPackets(transport, ResyncRequestPacket.class));
+
+        transport.receive(codec.encode(new DisconnectPacket("网络断开")));
+        revision.set(16L);
+        feature.startHandshake();
+        transport.receive(codec.encode(new ServerHelloPacket(ProtocolVersion.CURRENT, "sess-2", true)));
+        transport.receive(codec.encode(new ServerHelloPacket(ProtocolVersion.CURRENT, "sess-2", true)));
+
+        assertEquals(2, countPackets(transport, ClientIdReportPacket.class));
+        assertEquals(1, countPackets(transport, ResyncRequestPacket.class));
+        assertEquals(16L, lastSent(transport, ResyncRequestPacket.class).getSinceRevision());
+    }
+
+    @Test
+    @DisplayName("客户端角色协调器收到一个重同步要求仅发送一个请求")
+    void 客户端协调器响应重同步要求() {
+        FakeClientTransport transport = new FakeClientTransport();
+        enabled(transport);
+
+        transport.receive(codec.encode(new ResyncRequiredPacket(100L)));
+
+        assertEquals(1, countPackets(transport, ResyncRequestPacket.class));
+        assertEquals(100L, lastSent(transport, ResyncRequestPacket.class).getSinceRevision());
+    }
+
+    @Test
+    @DisplayName("运行链收到服务端 Ping 时立即回 Pong")
+    void 运行链响应心跳() {
+        FakeClientTransport transport = new FakeClientTransport();
+        enabled(transport);
+
+        transport.receive(codec.encode(new PingPacket(99L)));
+
+        assertEquals(99L, lastSent(transport, PongPacket.class).getNonce());
+    }
+
+    @Test
+    @DisplayName("运行时停用后清理客户端服务状态且不再响应入站包")
+    void 停用清理状态() {
+        FakeClientTransport transport = new FakeClientTransport();
+        MpmtRuntime runtime = new MpmtRuntime();
+        runtime.ports().register(TransportPort.class, transport);
+        ClientNetworkFeature feature = new ClientNetworkFeature(MOD_VERSION, () -> CLIENT_CODE);
+        runtime.features().register(feature);
+        runtime.enable();
+        feature.startHandshake();
+        transport.receive(codec.encode(new ServerHelloPacket(ProtocolVersion.CURRENT, "sess-1", true)));
+        transport.receive(codec.encode(new PingPacket(1L)));
+        assertTrue(feature.handshakeClient().isAccepted());
+        assertEquals(1, countPackets(transport, ClientIdReportPacket.class));
+        assertEquals(1, countPackets(transport, PongPacket.class));
+
+        runtime.disable();
+        transport.receive(codec.encode(new ServerHelloPacket(ProtocolVersion.CURRENT, "sess-2", true)));
+        transport.receive(codec.encode(new PingPacket(2L)));
+
+        assertEquals(1, countPackets(transport, ClientIdReportPacket.class));
+        assertEquals(1, countPackets(transport, PongPacket.class));
+        assertThrows(IllegalStateException.class, feature::handshakeClient);
+        assertThrows(IllegalStateException.class, feature::heartbeatService);
+    }
+
+    @Test
     @DisplayName("构造入参为空即拒")
     void 入参校验() {
         assertThrows(NullPointerException.class, () -> new ClientNetworkFeature(null, () -> CLIENT_CODE));
         assertThrows(NullPointerException.class, () -> new ClientNetworkFeature(MOD_VERSION, null));
+        assertThrows(
+                NullPointerException.class,
+                () -> new ClientNetworkFeature(MOD_VERSION, () -> CLIENT_CODE, null));
     }
 
     /** 假客户端传输：记录无连接发送、可注入服务端来的字节。 */

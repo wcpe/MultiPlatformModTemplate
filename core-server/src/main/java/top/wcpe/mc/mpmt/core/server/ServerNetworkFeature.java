@@ -1,46 +1,69 @@
 package top.wcpe.mc.mpmt.core.server;
 
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
+import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
 import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
 import top.wcpe.mc.mpmt.core.runtime.Feature;
 import top.wcpe.mc.mpmt.core.runtime.RuntimeContext;
 import top.wcpe.mc.mpmt.protocol.PacketCodec;
 import top.wcpe.mc.mpmt.protocol.PacketDispatcher;
-import top.wcpe.mc.mpmt.protocol.PacketIds;
-import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
-import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
 import top.wcpe.mc.mpmt.protocol.reliability.ResyncCoordinator;
 
-/**
- * 服务端网络装配特性（L1，FR-19）：把平台注入的 {@link TransportPort} 装配成完整的服务端收发栈——
- * {@link PacketDispatcher} + 握手服务（{@link HandshakeServerService}）+ HUD 下发（{@link HudMessageService}）
- * + 示例往返（Ping → Pong）。
- *
- * <p><b>平台无关</b>：各平台只需注入自己的 {@link TransportPort} 并登记本特性，即复用同一份服务端网络装配
- * （"逻辑写一次"，ADR-0001）。封禁表与会话 id 生成由构造方提供，便于命令 / 其他特性共享同一份状态。
- *
- * <p><b>生命周期</b>：当前按进程级一次性 enable 设计，{@code onDisable} 不解绑 dispatcher 的收包回调
- * （{@link TransportPort} 与 {@link PacketDispatcher} 暂未提供反注册）。<b>不支持热重载 / 重复启用</b>；
- * 若后续支持，需补反注册以免旧回调残留。
- */
+/** 服务端网络装配：共享会话、握手、心跳、重同步、HUD 与协议维护。 */
 public final class ServerNetworkFeature implements Feature {
 
     private static final String NAME = "server-network";
 
     private final BanRegistry banRegistry;
     private final Supplier<String> sessionIdSupplier;
+    private final Supplier<SessionRegistry> sessionRegistrySupplier;
+    private final Supplier<BanService.State> banStateSupplier;
 
     private PacketDispatcher dispatcher;
     private HandshakeServerService handshakeService;
+    private HeartbeatService heartbeatService;
     private HudMessageService hudMessageService;
     private ResyncCoordinator resyncCoordinator;
 
+    /**
+     * 兼容签名不再创建私有会话表；调用方必须显式注入共享的 {@link SessionRegistry}。
+     *
+     * @deprecated 请使用包含 SessionRegistry 的构造器
+     */
+    @Deprecated
     public ServerNetworkFeature(BanRegistry banRegistry, Supplier<String> sessionIdSupplier) {
+        throw new IllegalArgumentException("必须显式注入共享 SessionRegistry");
+    }
+
+    public ServerNetworkFeature(
+            BanRegistry banRegistry,
+            Supplier<String> sessionIdSupplier,
+            SessionRegistry sessionRegistry) {
+        this(
+                banRegistry,
+                sessionIdSupplier,
+                sessionRegistry,
+                () -> BanService.State.READY);
+    }
+
+    public ServerNetworkFeature(
+            BanRegistry banRegistry,
+            Supplier<String> sessionIdSupplier,
+            SessionRegistry sessionRegistry,
+            Supplier<BanService.State> banStateSupplier) {
         this.banRegistry = Objects.requireNonNull(banRegistry, "banRegistry 不能为空");
         this.sessionIdSupplier = Objects.requireNonNull(sessionIdSupplier, "sessionIdSupplier 不能为空");
+        SessionRegistry shared = Objects.requireNonNull(sessionRegistry, "sessionRegistry 不能为空");
+        this.sessionRegistrySupplier = () -> shared;
+        this.banStateSupplier = Objects.requireNonNull(banStateSupplier, "banStateSupplier 不能为空");
     }
 
     @Override
@@ -51,32 +74,68 @@ public final class ServerNetworkFeature implements Feature {
     @Override
     public void onEnable(RuntimeContext context) {
         TransportPort transport = context.port(TransportPort.class);
+        SchedulerPort scheduler = context.port(SchedulerPort.class);
+        ConnectionControlPort connections = context.port(ConnectionControlPort.class);
         this.dispatcher = new PacketDispatcher(transport, new PacketCodec());
-        this.handshakeService = new HandshakeServerService(dispatcher, sessionIdSupplier, banRegistry);
+        this.handshakeService = new HandshakeServerService(
+                dispatcher,
+                sessionIdSupplier,
+                banRegistry,
+                sessionRegistry(),
+                banStateSupplier,
+                (connection, reason, currentCheck) ->
+                        scheduleDisconnect(
+                                scheduler,
+                                connections,
+                                connection,
+                                reason,
+                                currentCheck));
+        this.heartbeatService =
+                new HeartbeatService(sessionRegistry(), dispatcher, scheduler, connections);
         this.hudMessageService = new HudMessageService(dispatcher);
-        // 发包示例（FR-19）：服务端收 Ping 原样回 Pong
-        dispatcher.on(
-                PacketIds.PING,
-                (connection, packet) ->
-                        dispatcher.send(connection, new PongPacket(((PingPacket) packet).getNonce())));
-        // 重连重同步（FR-24）：客户端重连后请求重发权威状态，服务端据修订号重发。脚手架以确认消息示意——
-        // 真实玩法在此回调内按 sinceRevision 查权威状态并重发（脚手架永不交付具体玩法）。
-        this.resyncCoordinator =
-                new ResyncCoordinator(
-                        dispatcher,
-                        (connection, sinceRevision) ->
-                                dispatcher.send(
-                                        connection,
-                                        new ServerMessagePacket(
-                                                "已按修订 " + sinceRevision + " 重同步（服务端重发权威状态）")));
+        this.resyncCoordinator = ResyncCoordinator.forServer(dispatcher, this::onResyncRequest);
     }
 
-    /** 握手服务（启用后可取，供命令 / 其他特性使用）。 */
+    @Override
+    public void onDisable(RuntimeContext context) {
+        if (heartbeatService != null) {
+            heartbeatService.close();
+        }
+    }
+
+    /** 新物理连接建立时重置握手与旧会话。 */
+    public void onConnected(ConnectionHandle connection) {
+        required(handshakeService).onConnected(connection);
+    }
+
+    /** 物理连接断开时清理握手、会话、心跳与协议可靠性状态。 */
+    public void onDisconnected(ConnectionHandle connection) {
+        HandshakeServerService handshake = required(handshakeService);
+        boolean current = handshake.stateOf(connection) != null
+                || sessionRegistry().get(connection).isPresent();
+        required(heartbeatService).onDisconnected(connection);
+        handshake.onDisconnected(connection);
+        if (current) {
+            required(dispatcher).onDisconnected(connection);
+        }
+    }
+
+    /** 构造方注入并由握手、心跳、重同步共同使用的会话注册表。 */
+    public SessionRegistry sessionRegistry() {
+        return sessionRegistrySupplier.get();
+    }
+
+    /** 握手服务（启用后可取）。 */
     public HandshakeServerService handshakeService() {
         return required(handshakeService);
     }
 
-    /** 重连重同步协调器（启用后可取，FR-24）。 */
+    /** 服务端心跳服务（启用后可取）。 */
+    public HeartbeatService heartbeatService() {
+        return required(heartbeatService);
+    }
+
+    /** 重连重同步协调器（启用后可取）。 */
     public ResyncCoordinator resyncCoordinator() {
         return required(resyncCoordinator);
     }
@@ -84,6 +143,36 @@ public final class ServerNetworkFeature implements Feature {
     /** HUD 下发服务（启用后可取）。 */
     public HudMessageService hudMessageService() {
         return required(hudMessageService);
+    }
+
+    private static void scheduleDisconnect(
+            SchedulerPort scheduler,
+            ConnectionControlPort connections,
+            ConnectionHandle connection,
+            String reason,
+            BooleanSupplier currentCheck) {
+        EntityRef entity = connections.entityOf(connection);
+        scheduler.runForEntity(
+                entity,
+                () -> {
+                    if (currentCheck.getAsBoolean()) {
+                        connections.disconnect(connection, reason);
+                    }
+                });
+    }
+
+    private void onResyncRequest(ConnectionHandle connection, long sinceRevision) {
+        Optional<SessionRegistry.Session> current = sessionRegistry().get(connection);
+        if (!current.isPresent()) {
+            return;
+        }
+        dispatcher.send(
+                connection,
+                new ServerMessagePacket(
+                        "已按修订 " + sinceRevision + " 重同步（服务端重发权威状态）"));
+        sessionRegistry()
+                .markResyncComplete(current.get(), sinceRevision)
+                .ifPresent(heartbeatService::onResyncComplete);
     }
 
     private static <T> T required(T value) {

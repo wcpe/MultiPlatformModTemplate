@@ -1,6 +1,8 @@
 package top.wcpe.mc.mpmt.core.client;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.LongSupplier;
 import top.wcpe.mc.mpmt.core.domain.port.MachineCodeProvider;
 import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.Feature;
@@ -10,13 +12,13 @@ import top.wcpe.mc.mpmt.protocol.PacketDispatcher;
 import top.wcpe.mc.mpmt.protocol.reliability.ResyncCoordinator;
 
 /**
- * 客户端网络装配特性（L1，FR-19）：把平台注入的 {@link TransportPort}（客户端方向）装配成客户端收发栈——
- * {@link PacketDispatcher} + 客户端握手服务（{@link HandshakeClientService}）。
+ * 客户端网络装配特性（L1，FR-19 / FR-28）：把平台注入的 {@link TransportPort} 装配成客户端收发栈——
+ * {@link PacketDispatcher}、{@link HandshakeClientService} 与 {@link HeartbeatService}。
  *
- * <p><b>平台无关</b>：各客户端加载器只需注入自己的 {@link TransportPort} 并登记本特性，即复用同一份客户端网络装配
- * （"逻辑写一次"，ADR-0001）。握手在客户端连入服务端后由平台触发 {@link #startHandshake()}（如 Fabric 的连接事件）。
+ * <p><b>平台无关</b>：各客户端加载器注入传输端口并登记本特性，即复用同一份客户端网络装配
+ * （"逻辑写一次"，ADR-0001）。平台在每次物理连接建立后调用 {@link #startHandshake()}，本特性据此维护连接代次。
  *
- * <p><b>生命周期</b>：当前按进程级一次性启用，{@code onDisable} 不解绑（同 ServerNetworkFeature），不支持热重载。
+ * <p><b>生命周期</b>：首次握手完成不重同步；后续连接代次握手成功后自动请求一次重同步。停用时关闭收包服务并清理状态。
  */
 public final class ClientNetworkFeature implements Feature {
 
@@ -24,14 +26,26 @@ public final class ClientNetworkFeature implements Feature {
 
     private final String modVersion;
     private final MachineCodeProvider machineCodeProvider;
+    private final LongSupplier revisionProvider;
 
     private HandshakeClientService handshakeClient;
+    private HeartbeatService heartbeatService;
     private PacketDispatcher dispatcher;
     private ResyncCoordinator resyncCoordinator;
+    private AtomicBoolean active;
+    private long connectionGeneration;
+    private long acceptedGeneration;
+    private boolean initialHandshakeCompleted;
 
     public ClientNetworkFeature(String modVersion, MachineCodeProvider machineCodeProvider) {
+        this(modVersion, machineCodeProvider, () -> 0L);
+    }
+
+    public ClientNetworkFeature(
+            String modVersion, MachineCodeProvider machineCodeProvider, LongSupplier revisionProvider) {
         this.modVersion = Objects.requireNonNull(modVersion, "modVersion 不能为空");
         this.machineCodeProvider = Objects.requireNonNull(machineCodeProvider, "machineCodeProvider 不能为空");
+        this.revisionProvider = Objects.requireNonNull(revisionProvider, "revisionProvider 不能为空");
     }
 
     @Override
@@ -40,48 +54,101 @@ public final class ClientNetworkFeature implements Feature {
     }
 
     @Override
-    public void onEnable(RuntimeContext context) {
+    public synchronized void onEnable(RuntimeContext context) {
         TransportPort transport = context.port(TransportPort.class);
         this.dispatcher = new PacketDispatcher(transport, new PacketCodec());
-        this.handshakeClient = new HandshakeClientService(dispatcher, modVersion, machineCodeProvider);
-        // 重连重同步（FR-24）：装配协调器供 requestResync 发请求；客户端不处理入站重同步请求（handler 空操作）
-        this.resyncCoordinator =
-                new ResyncCoordinator(dispatcher, (connection, sinceRevision) -> {
-                    // 客户端方向不处理入站重同步请求
-                });
+        this.resyncCoordinator = ResyncCoordinator.forClient(dispatcher);
+        this.active = new AtomicBoolean(true);
+        this.heartbeatService = new HeartbeatService(dispatcher);
+        this.handshakeClient =
+                new HandshakeClientService(
+                        dispatcher,
+                        modVersion,
+                        machineCodeProvider,
+                        this::onHandshakeAccepted,
+                        active::get,
+                        this::currentConnectionGeneration);
+        clearConnectionState();
     }
 
-    /**
-     * 重连重同步（FR-24）：请求服务端重发自 {@code sinceRevision} 起的权威状态。
-     *
-     * <p>由平台在<b>重连 / 重新握手后</b>触发（如 Fabric 的重新 JOIN 事件），与 {@link #startHandshake()} 同为
-     * 平台驱动的连接生命周期钩子；{@code sinceRevision} 取客户端已知的最新权威修订号。
-     */
-    public void requestResync(long sinceRevision) {
-        if (resyncCoordinator == null) {
-            throw new IllegalStateException("客户端网络特性尚未启用");
+    @Override
+    public synchronized void onDisable(RuntimeContext context) {
+        if (active != null) {
+            active.set(false);
         }
-        resyncCoordinator.requestResync(sinceRevision);
+        if (heartbeatService != null) {
+            heartbeatService.close();
+        }
+        active = null;
+        heartbeatService = null;
+        handshakeClient = null;
+        resyncCoordinator = null;
+        dispatcher = null;
+        clearConnectionState();
+    }
+
+    /** 手动请求服务端重发自 {@code sinceRevision} 起的权威状态（保留 FR-24 兼容入口）。 */
+    public synchronized void requestResync(long sinceRevision) {
+        resyncCoordinator().requestResync(sinceRevision);
     }
 
     /** 客户端收发管线（启用后可取，供平台注册收包处理器，如 HUD 渲染）。 */
-    public PacketDispatcher dispatcher() {
+    public synchronized PacketDispatcher dispatcher() {
         if (dispatcher == null) {
             throw new IllegalStateException("客户端网络特性尚未启用");
         }
         return dispatcher;
     }
 
-    /** 发起握手（客户端连入服务端后由平台触发）。 */
-    public void startHandshake() {
-        handshakeClient().startHandshake();
+    /** 物理连接建立后发起握手，并推进连接代次。 */
+    public synchronized void startHandshake() {
+        HandshakeClientService service = handshakeClient();
+        connectionGeneration++;
+        service.startHandshake();
     }
 
     /** 客户端握手服务（启用后可取，供平台读取握手结果 / 状态）。 */
-    public HandshakeClientService handshakeClient() {
+    public synchronized HandshakeClientService handshakeClient() {
         if (handshakeClient == null) {
             throw new IllegalStateException("客户端网络特性尚未启用");
         }
         return handshakeClient;
+    }
+
+    /** 客户端心跳响应器（启用后可取）。 */
+    public synchronized HeartbeatService heartbeatService() {
+        if (heartbeatService == null) {
+            throw new IllegalStateException("客户端网络特性尚未启用");
+        }
+        return heartbeatService;
+    }
+
+    private synchronized void onHandshakeAccepted() {
+        if (connectionGeneration == 0L || acceptedGeneration == connectionGeneration) {
+            return;
+        }
+        acceptedGeneration = connectionGeneration;
+        if (!initialHandshakeCompleted) {
+            initialHandshakeCompleted = true;
+            return;
+        }
+        resyncCoordinator().requestResync(revisionProvider.getAsLong());
+    }
+
+    private ResyncCoordinator resyncCoordinator() {
+        if (resyncCoordinator == null) {
+            throw new IllegalStateException("客户端网络特性尚未启用");
+        }
+        return resyncCoordinator;
+    }
+
+    private synchronized long currentConnectionGeneration() {
+        return connectionGeneration;
+    }
+
+    private void clearConnectionState() {
+        connectionGeneration = 0L;
+        acceptedGeneration = 0L;
+        initialHandshakeCompleted = false;
     }
 }
