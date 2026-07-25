@@ -276,8 +276,9 @@ tasks.named<JavaExec>("runSimNetworkTest") {
 }
 
 // realserver v2 报告元数据：与模拟服同一套绑定（commit / 版本 / 产品 jar SHA）。
+// 矩阵轨（-Pmpmt.acceptance.matrix=Rn）：注入 runId/startEpoch/javaExecutable/五类制品，供 MatrixAcceptanceReportV2。
 tasks.named<JavaExec>("runAcceptanceServer") {
-    dependsOn(tasks.named("remapJar"))
+    dependsOn(tasks.named("remapJar"), "gametestClasses")
     doFirst {
         val productJar = tasks.named<RemapJarTask>("remapJar").get().archiveFile.get().asFile
         val commit =
@@ -289,6 +290,71 @@ tasks.named<JavaExec>("runAcceptanceServer") {
         systemProperty("mpmt.acceptance.mcVersion", mcVersion)
         systemProperty("mpmt.acceptance.serverVersion", "Fabric realserver $mcVersion")
         systemProperty("mpmt.acceptance.productJarSha256", sha256(productJar))
+
+        val matrixId = (project.findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
+        if (matrixId.isNotEmpty()) {
+            fun req(name: String): String {
+                val v = (project.findProperty(name) as String?)?.trim().orEmpty()
+                if (v.isEmpty()) {
+                    throw GradleException("矩阵 $matrixId 缺少 -P$name")
+                }
+                return v
+            }
+            val javaHome =
+                System.getenv("MPMT_JAVA21_HOME")
+                    ?: System.getProperty("java.home")
+                    ?: throw GradleException("矩阵轨需要 MPMT_JAVA21_HOME 或当前 java.home")
+            val javaSuffix = if (System.getProperty("os.name").lowercase().contains("win")) ".exe" else ""
+            val javaExec = file("$javaHome/bin/java$javaSuffix")
+            if (!javaExec.isFile) {
+                throw GradleException("找不到 Java 可执行文件：${javaExec.absolutePath}")
+            }
+            // Loom dev 无独立 server-runtime/acceptance jar 时，以产品 jar 占位；可用 -P 覆盖
+            fun artifactOrProduct(prop: String): File {
+                val raw = (project.findProperty(prop) as String?)?.trim().orEmpty()
+                return if (raw.isNotEmpty()) file(raw) else productJar
+            }
+            val serverRuntime = artifactOrProduct("mpmt.acceptance.artifact.server-runtime")
+            val acceptanceArtifact = artifactOrProduct("mpmt.acceptance.artifact.server-acceptance")
+            val clientProduct = artifactOrProduct("mpmt.acceptance.artifact.client-product")
+            val clientAcceptance = artifactOrProduct("mpmt.acceptance.artifact.client-acceptance")
+            systemProperty("mpmt.acceptance.matrix", matrixId)
+            systemProperty("mpmt.acceptance.runId", req("mpmt.acceptance.runId"))
+            systemProperty("mpmt.acceptance.startEpochMs", req("mpmt.acceptance.startEpochMs"))
+            systemProperty("mpmt.acceptance.javaExecutable", javaExec.absolutePath)
+            systemProperty("mpmt.acceptance.artifact.server-runtime", serverRuntime.absolutePath)
+            systemProperty("mpmt.acceptance.artifact.server-product", productJar.absolutePath)
+            systemProperty("mpmt.acceptance.artifact.server-acceptance", acceptanceArtifact.absolutePath)
+            systemProperty("mpmt.acceptance.artifact.client-product", clientProduct.absolutePath)
+            systemProperty("mpmt.acceptance.artifact.client-acceptance", clientAcceptance.absolutePath)
+            val matrixReport =
+                (project.findProperty("mpmt.acceptance.report") as String?)
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { file(it) }
+                    ?: layout.buildDirectory.file("acceptance/server-report-${matrixId.lowercase()}.txt").get().asFile
+            systemProperty("mpmt.acceptance.report", matrixReport.absolutePath)
+            logger.lifecycle(
+                "[realserver] 矩阵 $matrixId 已注入：runId=${project.findProperty("mpmt.acceptance.runId")} report=${matrixReport.absolutePath}",
+            )
+        }
+    }
+}
+
+// 矩阵客户端：注入 javaExecutable，便于 ClientReady v2 上报
+tasks.named<JavaExec>("runAcceptanceClient") {
+    doFirst {
+        val matrixId = (project.findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
+        if (matrixId.isNotEmpty()) {
+            val javaHome =
+                System.getenv("MPMT_JAVA21_HOME")
+                    ?: System.getProperty("java.home")
+                    ?: throw GradleException("矩阵轨客户端需要 MPMT_JAVA21_HOME 或当前 java.home")
+            val javaSuffix = if (System.getProperty("os.name").lowercase().contains("win")) ".exe" else ""
+            val javaExec = file("$javaHome/bin/java$javaSuffix")
+            systemProperty("mpmt.acceptance.javaExecutable", javaExec.absolutePath)
+            systemProperty("mpmt.acceptance.matrix", matrixId)
+        }
     }
 }
 
@@ -413,9 +479,21 @@ val realRequiredScenarios =
 // 实跑：① runAcceptanceServer ② runAcceptanceClient（须显示）③ 本任务读报告。
 tasks.register("runRealServerAcceptance") {
     group = "verification"
-    description = "严格校验 Fabric realserver acceptance v2 报告与完整 P1 REAL_REQUIRED"
+    description =
+        "严格校验 Fabric realserver acceptance v2 报告（默认 P1；-Pmpmt.acceptance.matrix=Rn 时校验 MATRIX + 公共三场景 + RESULT PASS）"
     doLast {
-        val report = acceptanceReportFile.get().asFile
+        val matrixId = (project.findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
+        val report =
+            if (matrixId.isNotEmpty()) {
+                val custom = (project.findProperty("mpmt.acceptance.report") as String?)?.trim().orEmpty()
+                if (custom.isNotEmpty()) {
+                    file(custom)
+                } else {
+                    layout.buildDirectory.file("acceptance/server-report-${matrixId.lowercase()}.txt").get().asFile
+                }
+            } else {
+                acceptanceReportFile.get().asFile
+            }
         if (!report.exists()) {
             throw GradleException(
                 "未找到验收报告（先跑 runAcceptanceServer + runAcceptanceClient）：${report.absolutePath}",
@@ -426,6 +504,29 @@ tasks.register("runRealServerAcceptance") {
         val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
         if (lines.firstOrNull() != "SERVER-GAMETEST-REPORT v2") {
             throw GradleException("[realserver] 报告不是 acceptance v2")
+        }
+        if (matrixId.isNotEmpty()) {
+            val matrixLine = lines.firstOrNull { it.startsWith("MATRIX\t") || it.startsWith("MATRIX ") }
+            if (matrixLine == null || !matrixLine.contains(matrixId)) {
+                throw GradleException("[realserver] 矩阵报告缺少 MATRIX $matrixId：$matrixLine")
+            }
+            if (lines.last() != "RESULT PASS") {
+                throw GradleException("[realserver] 矩阵 $matrixId 未通过：${report.absolutePath}")
+            }
+            val common = listOf("product-handshake", "product-roundtrip", "client-hud")
+            for (id in common) {
+                val hit =
+                    lines.any {
+                        it.startsWith("SCENARIO\t$id\tPASS") ||
+                            it.startsWith("PASS $id") ||
+                            it.contains("\t$id\tPASS")
+                    }
+                if (!hit) {
+                    throw GradleException("[realserver] 矩阵 $matrixId 缺少公共场景 PASS：$id")
+                }
+            }
+            logger.lifecycle("[realserver] 矩阵 $matrixId 报告 PASS：${report.absolutePath}")
+            return@doLast
         }
         val metadata =
             lines.filter { it.startsWith("META ") }.associate { line ->
