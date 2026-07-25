@@ -18,7 +18,7 @@ repositories {
 
 dependencies {
     // 装配时把端口注入 core-runtime 的 RuntimePorts；core-runtime 已 api 暴露 core-domain
-    api(project(":core-runtime"))
+    api(project(":core:runtime"))
 
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")

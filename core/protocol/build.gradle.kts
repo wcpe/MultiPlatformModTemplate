@@ -18,7 +18,7 @@ repositories {
 
 dependencies {
     // 收发管线依赖 L0 端口（TransportPort/ConnectionHandle），公共 API 暴露故用 api（protocol → core-domain，ADR-0001）
-    api(project(":core-domain"))
+    api(project(":core:domain"))
 
     // 值对象（协议包 DTO）用 Lombok 减样板（ADR-0004：Lombok 仅用于 Java 模块）
     compileOnly("org.projectlombok:lombok:1.18.34")

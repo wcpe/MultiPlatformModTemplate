@@ -16,9 +16,9 @@ repositories {
 }
 
 dependencies {
-    api(project(":protocol"))
+    api(project(":core:protocol"))
     // 客户端网络装配特性实现 core-runtime 的 Feature，经运行时编排（ARCHITECTURE §2.2：core-client → core-runtime）
-    api(project(":core-runtime"))
+    api(project(":core:runtime"))
 
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
