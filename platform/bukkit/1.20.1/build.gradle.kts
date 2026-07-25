@@ -371,13 +371,26 @@ tasks.named("check") {
 }
 
 val bukkitReportFile = layout.buildDirectory.file("acceptance/server-report.txt")
+// R6 矩阵报告默认旁路文件；-Pmpmt.acceptance.matrix=R6 时门禁读此路径
+val r6ReportFile = layout.buildDirectory.file("acceptance/server-report-r6.txt")
+val acceptanceMatrix =
+    providers.gradleProperty("mpmt.acceptance.matrix").orElse("")
 val autoHost =
     providers.gradleProperty("mpmt.realserver.autoHost").map { it == "true" }.orElse(false)
 
 mpmtRealServerAcceptance {
-    reportFile.set(bukkitReportFile)
+    // Folia R6 与 Paper 默认报告分离，避免 P1 全量报告冒充矩阵 R6
+    reportFile.set(
+        acceptanceMatrix.map { matrixId ->
+            if (matrixId.equals("R6", ignoreCase = true)) {
+                r6ReportFile.get()
+            } else {
+                bukkitReportFile.get()
+            }
+        },
+    )
     laneId.set("Bukkit")
-    matrix.set(providers.gradleProperty("mpmt.acceptance.matrix").orElse(""))
+    matrix.set(acceptanceMatrix)
     autoStartPaperHost.set(autoHost)
     paperVersion.set(minecraftVersion)
     paperPort.set(
@@ -393,7 +406,8 @@ tasks.named("runRealServerAcceptance") {
     group = "verification"
     description =
         "Bukkit $minecraftVersion realserver 门禁" +
-            "（-Pmpmt.realserver.autoHost=true 时接线 PaperHostService）"
+            "（-Pmpmt.realserver.autoHost=true 时接线 PaperHostService；" +
+            "-Pmpmt.acceptance.matrix=R6 时读 server-report-r6.txt）"
     dependsOn(tasks.named("shadowJar"), acceptanceJar, "verifyMpmtAcceptanceReport")
 }
 

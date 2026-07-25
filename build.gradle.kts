@@ -450,7 +450,7 @@ registerLaneGate(
 tasks.register("runRealServerAcceptance") {
     group = "verification"
     description =
-        "B 完整：全服务端 realserver 报告门禁（含 Fabric121；不含 Forge 1.21/1.12 自有 launcher）"
+        "B 完整：全服务端 realserver 报告门禁（含 Fabric121 / NeoForge / Sponge；不含 Forge 1.21/1.12 自有 launcher）"
     dependsOn(
         "runRealServerAcceptanceFabric",
         "runRealServerAcceptanceFabric121",
@@ -460,6 +460,26 @@ tasks.register("runRealServerAcceptance") {
         "runRealServerAcceptanceFolia",
         "runRealServerAcceptanceCatServer",
         "runRealServerAcceptanceSponge",
+    )
+}
+
+/**
+ * P2 核心矩阵真服门禁（FR-12）：仅 R1–R6 相关车道，不阻断 NeoForge / Sponge。
+ *
+ * <p>各 lane 仍须先自行完成「服 + 自有 gametest 客户端」并落 RESULT PASS 报告；
+ * 本任务只读权威报告，不嵌套 gradlew、不调用 buildAll。
+ */
+tasks.register("runP2RealServerAcceptance") {
+    group = "verification"
+    description =
+        "P2 核心矩阵 realserver 门禁：Fabric 1.20/1.21 + Forge 1.20 + Bukkit/Folia + CatServer（不含 NeoForge/Sponge）"
+    dependsOn(
+        "runRealServerAcceptanceFabric",
+        "runRealServerAcceptanceFabric121",
+        "runRealServerAcceptanceForge",
+        "runRealServerAcceptanceBukkit",
+        "runRealServerAcceptanceFolia",
+        "runRealServerAcceptanceCatServer",
     )
 }
 
@@ -480,6 +500,19 @@ tasks.register("verifyVersionMatrixBuild") {
     dependsOnIncludedIfPresent("platform-fabric-1.21.1", ":verifyPackaging")
     dependsOnIncludedIfPresent("platform-forge-1.20.1", ":verifyPackaging")
     doLast {
+        val java8 = System.getenv("MPMT_JAVA8_HOME")
+        val java17 = System.getenv("MPMT_JAVA17_HOME")
+        val java21 = System.getenv("MPMT_JAVA21_HOME")
+        if (java8.isNullOrBlank() || java17.isNullOrBlank() || java21.isNullOrBlank()) {
+            logger.warn(
+                "[verifyVersionMatrixBuild] 建议设置 MPMT_JAVA8_HOME / MPMT_JAVA17_HOME / " +
+                    "MPMT_JAVA21_HOME（P2 跨代车道显式 JDK；当前未齐）",
+            )
+        } else {
+            logger.lifecycle(
+                "[verifyVersionMatrixBuild] JDK 环境：8=$java8 17=$java17 21=$java21",
+            )
+        }
         logger.lifecycle(
             """
             |[verifyVersionMatrixBuild] 根可聚合部分已校验。
@@ -488,17 +521,31 @@ tasks.register("verifyVersionMatrixBuild") {
             |  ./platform/forge/1.21.1/gradlew --no-daemon build
             |  # Java 8 + Gradle 5.6.4
             |  ./platform/forge/1.12.2/gradlew --no-daemon build
-            |真服子门：./gradlew runRealServerAcceptance（须先各 lane 落 RESULT PASS 报告）
+            |P2 真服子门：./gradlew :runP2RealServerAcceptance（须先 R1–R6 落 RESULT PASS）
+            |全 lane（含 NeoForge/Sponge）：./gradlew :runRealServerAcceptance
             """.trimMargin(),
         )
     }
 }
 
-/** 版本矩阵聚合：先矩阵构建门，再全 lane 报告门禁（真服须已跑过）。 */
+/**
+ * P2 版本矩阵聚合门（FR-12 / ADR-0021）：
+ * 构建矩阵 + P2 核心 realserver 报告门；不调用 buildAll，不阻断 NeoForge/Sponge。
+ *
+ * <p>文档别名：历史文稿中的 runP2StrictCheck 与本任务等价。
+ */
 tasks.register("runVersionMatrixGate") {
     group = "verification"
-    description = "版本矩阵门禁：verifyVersionMatrixBuild + runRealServerAcceptance"
-    dependsOn("verifyVersionMatrixBuild", "runRealServerAcceptance")
+    description =
+        "P2 版本矩阵门禁：verifyVersionMatrixBuild + runP2RealServerAcceptance（不含 NeoForge/Sponge）"
+    dependsOn("verifyVersionMatrixBuild", "runP2RealServerAcceptance")
+}
+
+/** 历史别名：与 :runVersionMatrixGate 等价。 */
+tasks.register("runP2StrictCheck") {
+    group = "verification"
+    description = "P2 严格门别名（等价 :runVersionMatrixGate）"
+    dependsOn("runVersionMatrixGate")
 }
 
 // ============================================================================
