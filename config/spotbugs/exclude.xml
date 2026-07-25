@@ -15,6 +15,15 @@
         </Or>
     </Match>
 
+    <!-- v2 报告校验入口仅由本地严格门调用。workspaceFile 已对输入执行 canonical 解析、当前工作区
+         startsWith 边界校验及普通文件校验；FindSecBugs 无法推断该组合校验，仍把 File(String) 标为
+         SECPTI。仅精确放行该方法，其他外部路径读取继续严格检出。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.acceptance.report.AcceptanceReportV2ValidationMain"/>
+        <Method name="workspaceFile"/>
+        <Bug pattern="PATH_TRAVERSAL_IN"/>
+    </Match>
+
     <!-- 连接句柄按设计在 L3 内部暴露平台原生对象（Bukkit Player / ServerPlayer 等），供 L3 传输解封后
          发送；平台对象不泄漏进 L0/L1（ADR-0001）。此处 EI 为预期行为。 -->
     <Match>
