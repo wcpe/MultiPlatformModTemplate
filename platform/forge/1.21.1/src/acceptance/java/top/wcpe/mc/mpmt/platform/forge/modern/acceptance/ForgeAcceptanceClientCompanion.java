@@ -43,7 +43,9 @@ import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
 public final class ForgeAcceptanceClientCompanion {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("mpmt-acceptance");
+    /** 普通步骤 200 tick；client-hud 需等演示包过后再收验收 ACTIONBAR，放宽至 400。 */
     private static final int STEP_TIMEOUT_TICKS = 200;
+    private static final int HUD_STEP_TIMEOUT_TICKS = 400;
     private static final int AUTO_CONNECT_DELAY_TICKS = 40;
     private static final long PING_NONCE = 20260718L;
     private static final String EXPECTED_HUD_TEXT = "验收HUD";
@@ -97,11 +99,28 @@ public final class ForgeAcceptanceClientCompanion {
             }
         }
         Outcome outcome = evaluate();
-        if (outcome == null && ++ticksInStep < STEP_TIMEOUT_TICKS) {
+        int timeoutTicks =
+                active != null && "client-hud".equals(active.getScenarioId())
+                        ? HUD_STEP_TIMEOUT_TICKS
+                        : STEP_TIMEOUT_TICKS;
+        if (outcome == null && ++ticksInStep < timeoutTicks) {
             return;
         }
         if (outcome == null) {
-            outcome = Outcome.fail("客户端步骤超时 " + STEP_TIMEOUT_TICKS + " tick");
+            // HUD 超时附带末次快照，便于区分「未收到」与「一直是演示包」
+            if (active != null && "client-hud".equals(active.getScenarioId())) {
+                ForgeHudSnapshot snap = ForgeClientEvents.session().hudSnapshot();
+                outcome =
+                        Outcome.fail(
+                                "客户端 HUD 步骤超时 "
+                                        + timeoutTicks
+                                        + " tick 末次="
+                                        + (snap == null
+                                                ? "null"
+                                                : ("kind=" + snap.kind() + " text=" + snap.text())));
+            } else {
+                outcome = Outcome.fail("客户端步骤超时 " + timeoutTicks + " tick");
+            }
         }
         send(new StepResultPacket(
                 active.getScenarioId(),
@@ -262,12 +281,14 @@ public final class ForgeAcceptanceClientCompanion {
         if (!"verify-hud".equals(active.getStepId())) {
             return Outcome.error("未知 HUD 步骤：" + active.getStepId());
         }
+        // 握手成功后产品会先下发 TITLE/ACTIONBAR/TOAST/CHAT 演示包，快照可能暂非验收 ACTIONBAR。
+        // 未匹配时返回 null 继续轮询至步骤超时，避免被演示 CHAT 误判为永久失败。
         ForgeHudSnapshot snapshot = ForgeClientEvents.session().hudSnapshot();
         if (snapshot == null) {
             return null;
         }
         if (snapshot.kind() != HudKind.ACTIONBAR || !EXPECTED_HUD_TEXT.equals(snapshot.text())) {
-            return Outcome.fail("HUD 不符：kind=" + snapshot.kind() + " text=" + snapshot.text());
+            return null;
         }
         return Outcome.ok("{\"hud\":\"" + snapshot.text() + "\"}", "产品 ACTIONBAR HUD 通过");
     }
