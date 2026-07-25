@@ -198,7 +198,7 @@ flowchart TB
 
 > P2 正式规格与 ADR 已通过独立复核并接受，**仍不是当前实现状态**；当前已落地能力仍以 §6“当前落地”和 PRD 状态为准。
 
-P2 采用非笛卡尔积版本矩阵、按版本隔离的 Forge 工具链、L4 裸 payload golden vectors，以及绑定本轮 JVM/制品/场景的 realserver v2 权威报告。唯一聚合入口为 **Gradle** `./gradlew runP2StrictCheck`（`build-logic/realserver-acceptance` 约定插件 + 根薄包装；可选 mc-testkit 辅车道），**禁止** shell 剧本；串行验证 P2 核心矩阵与受影响的 1.20.1 基线；Sponge、NeoForge、26.2 不进入该门。完整冻结事实见 [`specs/p2-version-matrix.md`](specs/p2-version-matrix.md)，长期裁决见本仓 [ADR-0021](adr/0021-p2-version-matrix-toolchain-isolation.md)（已接受；勿与 AllinCore-New ADR-0020 混淆）。
+P2 采用非笛卡尔积版本矩阵、按版本隔离的 Forge 工具链、L4 裸 payload golden vectors，以及绑定本轮 JVM/制品/场景的 realserver v2 权威报告。唯一聚合入口为 **Gradle** `./gradlew :runVersionMatrixGate`（历史别名 `runP2StrictCheck` 等价；`build-logic/realserver-acceptance` 约定插件 + 根薄包装；可选 mc-testkit 辅车道），**禁止** shell 剧本；串行验证 P2 核心矩阵与受影响的 1.20.1 基线；Sponge、NeoForge、26.2 不进入该门（全 lane 另用 `:runRealServerAcceptance`）。完整冻结事实见 [`specs/p2-version-matrix.md`](specs/p2-version-matrix.md)，长期裁决见本仓 [ADR-0021](adr/0021-p2-version-matrix-toolchain-isolation.md)（已接受；勿与 AllinCore-New ADR-0020 混淆）。
 
 **验收编排两车道（Gradle only）**：
 - **B 主车道**：全服务端 lane + 各 loader **自有 gametest/acceptance 客户端**进服 + 权威报告 `RESULT PASS`；约定插件 `top.wcpe.mc.mpmt.realserver-acceptance`。**B 增强**：`PaperHostService` BuildService 可后台起 Paper、部署产品/验收 jar（`-Pmpmt.realserver.autoHost=true` / `ensurePaperRealServerHost`）。

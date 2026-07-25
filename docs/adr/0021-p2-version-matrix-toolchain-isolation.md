@@ -21,7 +21,7 @@ FR-12 要把 1.20.1 锚点扩展到 1.21.1 与 1.12.2，FR-25 同期要求 CatSe
 3. **L4 负责版本差异**：Bukkit/Fabric/Forge 现代构建按 `mpmt.minecraftVersion` 选择 L4；新旧通道注册、CustomPayload 与 Mixin 目标差异不得进入 L0–L2，产品 payload 字节保持一致。
 4. **1.12 通道与产品/验收隔离固定**：产品通道与验收通道各自由对应 jar 独占，产品 jar 不携带验收控制逻辑；控制通道成功不能代替产品场景。
 5. **线缆兼容由人工锁定 golden vectors 裁决**：先从基线生成，再由各版本 L4 对裸 payload 做逐字节回归；平台外层通道包装可不同。
-6. **唯一聚合入口**：P2 只允许 **Gradle 任务** `./gradlew runP2StrictCheck`（及真服 `runRealServerAcceptance`）聚合；编排在 `build-logic/realserver-acceptance` / 可选 mc-testkit；**禁止** `scripts/*.sh` 入口；不得使用 `buildAll`。串行、显式选择 Java 8/17/21，排除 Sponge/NeoForge/26.2；禁止嵌套 `gradlew`。
+6. **唯一聚合入口**：P2 只允许 **Gradle 任务** `./gradlew :runVersionMatrixGate`（历史别名 `runP2StrictCheck` 等价；真服子集 `runP2RealServerAcceptance`）聚合；编排在 `build-logic/realserver-acceptance` / 可选 mc-testkit；**禁止** `scripts/*.sh` 入口；不得使用 `buildAll`。串行、显式选择 Java 8/17/21，排除 Sponge/NeoForge/26.2；禁止嵌套 `gradlew`。全 lane（含 NeoForge/Sponge）另用 `:runRealServerAcceptance`。
 7. **realserver 权威升级为 v2 报告**：报告绑定 runId、matrix、启动时间、双端 JVM、制品哈希与 required scenarios；validator 对缺失、重复、旧文件、SKIP/FAIL/ERROR、哈希/JDK/进程不符一律拒绝。
 8. **CatServer 只激活 Bukkit**：Forge 1.12 客户端必须 client-only/optional，允许加入无我方 Forge 服务端 mod 的 CatServer；加入后才开始产品握手。融合服不变量任一失败即写 FAIL 并清理，不得降级为控制通道 PASS。
 9. **测试先行且串行实施**：先守卫与失败测试，再按 Fabric 1.21、Forge 1.21、Bukkit 1.21/1.12、Forge legacy、realserver、严格门、文档推进。

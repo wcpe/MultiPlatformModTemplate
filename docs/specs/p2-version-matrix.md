@@ -110,8 +110,9 @@ P2 有效矩阵**不是笛卡尔积**：
 
 ```bash
 ./gradlew verifyVersionMatrixBuild    # 构建矩阵（无真服）
-./gradlew runVersionMatrixGate      # 矩阵 + 全 lane 报告门禁
-./gradlew runRealServerAcceptance
+./gradlew :runVersionMatrixGate     # P2 核心矩阵门（= runP2StrictCheck 别名）
+./gradlew :runP2RealServerAcceptance # 仅 R1–R6 相关车道报告门
+./gradlew :runRealServerAcceptance   # 全 lane（含 NeoForge/Sponge，非 P2 阻断）
 ```
 
 编排：`build-logic/realserver-acceptance` + 根薄包装；辅车道 mc-testkit。禁止 `buildAll` 充当 P2 门。实现必须：
