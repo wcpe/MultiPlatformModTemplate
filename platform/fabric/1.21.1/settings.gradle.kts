@@ -1,0 +1,16 @@
+// Fabric 1.21.1 独立构建（Loom）
+pluginManagement {
+    repositories {
+        maven("https://maven.fabricmc.net/") { name = "Fabric" }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
+}
+
+rootProject.name = "platform-fabric-1.21.1"
+
+includeBuild("../../..")

@@ -1,0 +1,6 @@
+top.wcpe.mc.mpmt.platform.fabric.gametest.client.verifier.SmokeClientVerifier
+top.wcpe.mc.mpmt.platform.fabric.gametest.client.verifier.CapabilityClientVerifier
+top.wcpe.mc.mpmt.platform.fabric.gametest.client.verifier.RealRoundTripClientVerifier
+top.wcpe.mc.mpmt.platform.fabric.gametest.client.verifier.ClientHudClientVerifier
+top.wcpe.mc.mpmt.platform.fabric.gametest.client.verifier.ProductHandshakeClientVerifier
+top.wcpe.mc.mpmt.platform.fabric.gametest.client.verifier.ProductRoundtripClientVerifier
