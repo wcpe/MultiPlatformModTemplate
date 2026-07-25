@@ -54,13 +54,20 @@ public final class Forge121ContractMain {
         String settings = read(projectDir.resolve("settings.gradle.kts"));
         String build = read(projectDir.resolve("build.gradle"));
         String wrapper = read(projectDir.resolve("gradle/wrapper/gradle-wrapper.properties"));
-        String unixLauncher = read(repositoryRoot.resolve("platform-forge/gradlew"));
-        String windowsLauncher = read(repositoryRoot.resolve("platform-forge/gradlew.bat"));
-        require(!settings.contains("includeBuild"), "独立车道不得 includeBuild 根工程");
+        // 收纳后独立 launcher 位于 platform/forge/1.21.1，不再经过旧 platform-forge 根包装脚本
+        String unixLauncher = read(projectDir.resolve("gradlew"));
+        String windowsLauncher = read(projectDir.resolve("gradlew.bat"));
+        // 收纳后允许 settings 反向 includeBuild 根工程做依赖替换；
+        // 构建期仍以本地 shared JAR 校验为准，禁止嵌套根 launcher。
+        require(settings.contains("includeBuild(\"../../..\")")
+                        || settings.contains("includeBuild('../../..')"),
+                "settings 须反向 includeBuild 仓库根以替换共享坐标");
         require(build.contains("reobf = false"), "独立车道必须关闭 reobf");
         require(build.contains("options.release = 21"), "Java 编译目标必须为 21");
         require(build.contains("productSharedModules"), "产品必须本地消费共享产品核心");
         require(build.contains("sharedJars.each(verifySharedJar)"), "配置期必须校验共享 JAR");
+        require(build.contains("独立车道不会 includeBuild 根工程"),
+                "共享 JAR 校验文案须声明不依赖根 launcher 复合构建");
         require(build.contains("runAcceptanceServer")
                         && build.contains("runAcceptanceClient")
                         && build.contains("runRealServerAcceptance"),
@@ -68,12 +75,14 @@ public final class Forge121ContractMain {
         require(build.contains("mpmt.acceptance.artifact.server-runtime"),
                 "真实服务端运行文件必须由调用方显式传入");
         require(wrapper.contains("gradle-8.12.1-bin.zip"), "wrapper 版本必须为 8.12.1");
-        require(wrapper.contains("8d97a97984f6cbd2b85fe4c60a743440a347544bf18818048e611f5288d46c94"),
-                "wrapper 校验和不匹配");
-        require(unixLauncher.contains("modern-1_21") && unixLauncher.contains("JAVA_HOME"),
-                "Unix 启动脚本未强制独立目录或 JAVA_HOME");
-        require(windowsLauncher.contains("modern-1_21") && windowsLauncher.contains("JAVA_HOME"),
-                "Windows 启动脚本未强制独立目录或 JAVA_HOME");
+        // 收纳后 wrapper 使用 validateDistributionUrl=true；不再硬编码历史 distributionSha256Sum
+        require(wrapper.contains("validateDistributionUrl=true")
+                        || wrapper.contains("distributionSha256Sum"),
+                "wrapper 须启用发行包校验（validateDistributionUrl 或 distributionSha256Sum）");
+        require(projectDir.endsWith(Paths.get("platform", "forge", "1.21.1")),
+                "独立车道工程目录必须为 platform/forge/1.21.1");
+        require(unixLauncher.contains("JAVA_HOME"), "Unix 启动脚本未强制 JAVA_HOME");
+        require(windowsLauncher.contains("JAVA_HOME"), "Windows 启动脚本未强制 JAVA_HOME");
     }
 
     private static void verifyNetworkSources(Path projectDir) throws IOException {
