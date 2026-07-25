@@ -194,6 +194,16 @@ flowchart TB
 
 > 关键：带专属插件的平台各居独立构建（各自 `settings` 与 `pluginManagement`），彻底互不污染；核心经依赖替换共享、无需发布。Bukkit 家族无专属冲突插件，作根构建常规模块。
 
+### 2.5 P2 已接受规划（尚未落地）
+
+> P2 正式规格与 ADR 已通过独立复核并接受，**仍不是当前实现状态**；当前已落地能力仍以 §6“当前落地”和 PRD 状态为准。
+
+P2 采用非笛卡尔积版本矩阵、按版本隔离的 Forge 工具链、L4 裸 payload golden vectors，以及绑定本轮 JVM/制品/场景的 realserver v2 权威报告。唯一聚合入口为 **Gradle** `./gradlew runP2StrictCheck`（`build-logic/realserver-acceptance` 约定插件 + 根薄包装；可选 mc-testkit 辅车道），**禁止** shell 剧本；串行验证 P2 核心矩阵与受影响的 1.20.1 基线；Sponge、NeoForge、26.2 不进入该门。完整冻结事实见 [`specs/p2-version-matrix.md`](specs/p2-version-matrix.md)，长期裁决见本仓 [ADR-0021](adr/0021-p2-version-matrix-toolchain-isolation.md)（已接受；勿与 AllinCore-New ADR-0020 混淆）。
+
+**验收编排两车道（Gradle only）**：
+- **B 主车道**：全服务端 lane + 各 loader **自有 gametest/acceptance 客户端**进服 + 权威报告 `RESULT PASS`；约定插件 `top.wcpe.mc.mpmt.realserver-acceptance`。**B 增强**：`PaperHostService` BuildService 可后台起 Paper、部署产品/验收 jar（`-Pmpmt.realserver.autoHost=true` / `ensurePaperRealServerHost`）。
+- **A 辅车道**：根工程 `top.wcpe.mc-testkit` + `e2e/harness` 桩 + `e2e/bot`；`runMcTestkitSmoke` / `runMcTestkitFoliaSmoke` 用真实 Paper/Folia + bot/桩结果文件，**不**替代 B 的 mod 客户端门禁。
+
 ## 3. 数据模型
 
 - **领域模型（L0）**：用 Lombok 编写的不可变值对象 / 实体（玩法实体、玩法状态、配置模型）。无任何平台类型，可在纯 JVM 单元测试中穷举。
@@ -214,6 +224,10 @@ flowchart TB
 
 - **平台发现与装配**：进程启动时，平台胶水经 `ServiceLoader`（`META-INF/services`）注册 `PlatformBootstrap`；**发现 / 装配编排在 L2 `platform-spi`**（`PlatformProvider.boot` → `PlatformAssembler` 发现唯一活跃平台、零 / 多入口失败快 → 平台 `assemble` 把端口注入 L1 `core-runtime` 的 `RuntimePorts` → 固化平台标识与 `FeatureGate` 为只读 Holder；**进程级单一活跃绑定**经 JVM 全局系统属性 `top.wcpe.mc.mpmt.active-platform` 跨类加载器把关——融合服（CatServer 等 Forge+Bukkit 同进程）上我方 Bukkit 插件与 Forge mod 各自类加载器、per-classloader 静态拦不住"我方多入口同时激活"，由该属性失败快，`deactivate` 在 disable 时释放以支持 `/reload`；Bukkit 入口探测 `HYBRID_FORGE_BUKKIT`（Forge 标志类）即记融合服感知、绑定 Bukkit 家族为唯一活跃平台、不激活我方 Forge 入口（FR-25 / ADR-0008，实跑随 1.12.2 属 P2）），随后加载 L0 特性。**L1 只接收注入、不依赖 L2**（守 ADR-0001 依赖方向）。详见 [ADR-0002](adr/0002-platform-abstraction-spi.md) 与其执行边界细化 [ADR-0017](adr/0017-assembly-orchestration-in-l2.md)。
 - **多版本适配**：平台模块内 `version-api` 声明随 MC 版本分歧的操作；运行时探测 MC 版本，选择 `vX_Y` 实现装配。锚点版本：**1.12.2 / 1.20.1 / 1.21.1 / 26.2**（26.2 为 MC 今年最新版本号、新版号方案无 `1.` 前缀，模块 `v26_2`），前向可扩展（加新版本=加一个 `vX_Y` 模块）。详见 [ADR-0003](adr/0003-multi-version-adapter.md)。
+  - **Bukkit（方案 C 阶段 2）**：`version-api` + `modern` + `v1_12`/`v1_20`/`v1_21` 多源集；`-Pmpmt.minecraftVersion=1.12.2|1.20.1(默认)|1.21.1` 每构建只打唯一 L4（ServiceLoader）。公共 L3 用 1.12 API/JDK8；Folia 仅 modern。产物 `mpmt-bukkit-$mc`。
+  - **Fabric（方案 C 阶段 2）**：`version-api` + 选中 `v1_20` 或 `v1_21`（无 1.12）；`-Pmpmt.minecraftVersion=1.20.1|1.21.1`；`SelectedFabricVersionFactory` + 运行期 `requireExactMatch`。产物 `mpmt-fabric-$mc`。gametest 经 L4 收发，避免绑死 1.20 网络 API。
+  - **Forge**：主工程 1.20.1；跨大版本旁路子工程 `legacy-1_12` / `modern-1_21`（非单模块多源集）。
+  - **NeoForge**：锚点 **1.20.2**（无官方 1.20.1）；1.21.1 车道未在 C-2 首批落地。
 - **"特判"承载（FeatureGate）**：`FeatureGate` 是运行期的**能力探测**——平台无关代码问"当前平台 / 版本是否具备某能力"（如"是否 Folia 区域调度可用""该版本是否有某 API"），据此分流，而非在公共层硬编码平台 / 版本 if-else。它探测"能干什么"而非"你是谁"（capability detection，非平台嗅探）。**与端口分工**：端口（Port）是"要某能力"的统一调用面，FeatureGate 是"当前环境有没有该能力"的判定；二者配合让同一份 L0 逻辑跑遍异构平台。接口定义在 L2 `platform-spi`、各平台 L3 实现。**典型例**：探测到 Folia 时 `SchedulerPort` 实现选用 `RegionScheduler`，否则用全局调度——L0 只调 `SchedulerPort`，对底层差异无感。符合"禁止散落 if-else/switch 堆砌可变逻辑"的反模式禁令。
 - **跨端通信**：客户端 ↔ 服务端经 `protocol` 自定义协议通信，握手时做版本协商（`MIN_SUPPORTED` 兼容判断）；底层传输经 `TransportPort` 适配到各平台的网络通道。详见 [ADR-0006](adr/0006-cross-end-protocol.md)。
 - **命令模型**：命令入口在 L3 平台胶水，各平台用**原生命令框架**（Bukkit/Paper/Sponge 原生、Fabric/Forge/NeoForge Brigadier；**不引入 TabooLib**），执行逻辑在共享 L0/L1，L3 不写执行逻辑；L2 仅提供薄 `CommandRegistrar` 接缝（注册 + 转发，非命令框架）。详见 [ADR-0009](adr/0009-command-config-framework.md)。

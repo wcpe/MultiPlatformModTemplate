@@ -50,7 +50,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | FR-09 | platform-forge 胶水（ForgeGradle·独立 includeBuild）：客户端 / 服务端分离代理（锚点 1.20.1） | P1 | 已交付@v0.1.0 |
 | FR-10 | L4 版本适配机制：version-api + vX_Y 运行期按 MC 版本装配（先落地 1.20.1） | P1 | 已交付@v0.1.0 |
 | FR-11 | smoke 冒烟特性（两证）：① 同一份 L0 逻辑经端口在 Paper/Fabric/Forge 各端一致运行——证"逻辑/胶水完全分离"；② 异构客户端（Fabric/Forge mod）经 protocol 与异构服务端（Paper/Bukkit 插件）完成握手 + 版本协商 + 一次往返包——证"服务端软件 ↔ 模组加载器"桥接成立 | P1 | 已交付@v0.1.0 |
-| FR-12 | 多版本扩展：新增 1.21.1、1.12.2 版本适配，验证 L4 机制跨版本成立 | P2 | 计划 |
+| FR-12 | 多版本扩展：按[有效版本矩阵规格](specs/p2-version-matrix.md)新增 1.21.1（仅 Paper/Fabric/Forge）与 1.12.2（Bukkit/CatServer + Forge 客户端）适配，以隔离工具链、golden vectors、realserver v2 报告和唯一严格脚本验证 L4 跨版本成立；严格门仅覆盖 P2 核心矩阵及受影响 1.20.1 基线 | P2 | 计划 |
 | FR-13 | Folia 支持：并入 Bukkit 家族构建，经 FeatureGate 适配 RegionScheduler（验证特判机制，不拆独立构建） | P1 | 已交付@v0.1.0 |
 | FR-14 | platform-sponge（SpongeGradle·独立 includeBuild）：基础网络与示例可用 | P1 | 已交付@v0.1.0 |
 | FR-15 | platform-neoforge（NeoGradle·独立 includeBuild；**NeoForge 无 1.20.1，锚点取 1.20.2**）：基础网络与示例可用 | P1 | 已交付@v0.1.0 |

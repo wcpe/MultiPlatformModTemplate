@@ -24,6 +24,7 @@
 | [0018](0018-forge-mixin-raw-payload.md) | Forge 端用 Mixin 拦截裸 CustomPayload 统一裸字节收发（取代 SimpleChannel，打通 Forge 客户端↔Bukkit 服） | 已接受 |
 | [0019](0019-bukkit-paper-api-baseline.md) | Bukkit 家族编译基线改用 paper-api（compileOnly）以接 Folia 区域调度 API（细化 ADR-0007） | 已接受 |
 | [0020](0020-sponge-rc1365-runtime-baseline.md) | Sponge 第一期开箱运行基线固定为 RC1365 与 Java 17（细化 ADR-0004/0007/0014） | 已接受 |
+| [0021](0021-p2-version-matrix-toolchain-isolation.md) | P2 有效版本矩阵、工具链隔离与严格验收入口（本仓 ADR-0021；勿与 AllinCore-New ADR-0020 混淆） | 已接受 |
 
 > 模板：状态 / 背景 / 决策 / 理由 / 后果 / 备选方案，见 [`_template.md`](_template.md)。
 

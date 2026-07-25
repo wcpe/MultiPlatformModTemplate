@@ -80,7 +80,7 @@
 环境：Gradle 8.10.2（守护进程 JDK 21）、Loom 1.7.4、MC 1.20.1 + Mojang 官方映射、core 用 JDK 8 工具链（corretto-1.8.0_482，Gradle 自动探测）、Fabric 用 Java 17 工具链。`gradlew :platform-fabric:build` 全绿（守护进程下约 31s）。
 
 1. **core 消费路径 = includeBuild 依赖替换（成立，未回退 mavenLocal）**。
-   - 结构：根构建含 `core-domain`（常规 java-library）+ `includeBuild("platform-fabric")`；`platform-fabric` 自身 `includeBuild("..")` 反向消费 `top.wcpe.mc.mpmt:core-domain`。
+   - 结构：根构建含 `core-domain`（常规 java-library）+ `includeBuild("platform-fabric")`；`platform-fabric` 自身 `includeBuild("..")` 反向消费 `top.wcpe.mc.mpmt:domain`。
    - 该互相 includeBuild（root↔fabric）在 Gradle 8.10.2 下配置与解析均正常，`:core-domain:jar` 被正确替换进 `platform-fabric` 编译/打包。
    - **ADR-0012 落地结论**：includeBuild 依赖替换在 Loom 1.7 下可行，**本期不触发"core 发 mavenLocal + shadow 消费"的回退**（回退方案保留为后续若遇 ForgeGradle/NeoGradle 不顺时的备用）。
 
