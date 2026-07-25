@@ -1,0 +1,12 @@
+// platform-forge-1.12.2：独立构建（FG3 / Gradle 5.6.4 / JDK8）
+// 产品以 client 为主（CatServer 场景，ADR-0021）；源码分 common / client
+
+pluginManagement {
+    repositories {
+        maven { url = 'https://maven.minecraftforge.net/' }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'platform-forge-1.12.2'

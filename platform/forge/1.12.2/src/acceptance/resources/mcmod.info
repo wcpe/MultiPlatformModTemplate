@@ -1,0 +1,18 @@
+[
+  {
+    "modid": "mpmt_acceptance",
+    "name": "MPMT Legacy Acceptance Companion",
+    "description": "MPMT Forge 1.12.2 客户端验收伴侣，仅用于 realserver 验收",
+    "version": "${version}",
+    "mcversion": "1.12.2",
+    "clientSideOnly": true,
+    "acceptableRemoteVersions": "*",
+    "url": "",
+    "updateUrl": "",
+    "authorList": ["wcpe"],
+    "credits": "",
+    "logoFile": "",
+    "screenshots": [],
+    "dependencies": ["mpmt"]
+  }
+]

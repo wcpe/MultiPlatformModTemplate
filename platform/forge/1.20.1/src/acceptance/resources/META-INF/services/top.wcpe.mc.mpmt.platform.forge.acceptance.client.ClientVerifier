@@ -1,0 +1,5 @@
+top.wcpe.mc.mpmt.platform.forge.acceptance.client.verifier.ForgeSmokeClientVerifier
+top.wcpe.mc.mpmt.platform.forge.acceptance.client.verifier.ForgeRealRoundTripClientVerifier
+top.wcpe.mc.mpmt.platform.forge.acceptance.client.verifier.ClientHudClientVerifier
+top.wcpe.mc.mpmt.platform.forge.acceptance.client.verifier.ProductHandshakeClientVerifier
+top.wcpe.mc.mpmt.platform.forge.acceptance.client.verifier.ProductRoundtripClientVerifier

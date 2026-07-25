@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+set -eu
+APP_HOME=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -z "${JAVA_HOME:-}" ]; then
+    printf '%s\n' '错误：legacy wrapper 必须显式设置 Java 8 的 JAVA_HOME。' >&2
+    exit 1
+fi
+JAVA_CMD="$JAVA_HOME/bin/java"
+if [ ! -x "$JAVA_CMD" ]; then
+    printf '%s\n' "错误：JAVA_HOME 无效：$JAVA_HOME" >&2
+    exit 1
+fi
+exec "$JAVA_CMD" -Xms64m -Xmx128m -Dorg.gradle.appname=gradlew -classpath "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain -p "$APP_HOME" "$@"

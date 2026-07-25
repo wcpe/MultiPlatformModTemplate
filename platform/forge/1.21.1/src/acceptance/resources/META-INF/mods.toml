@@ -1,0 +1,32 @@
+modLoader="javafml"
+loaderVersion="[52,)"
+license="Apache-2.0"
+showAsResourcePack=false
+
+[[mods]]
+modId="mpmt_acceptance"
+version="${version}"
+displayName="MPMT Forge 1.21.1 Acceptance"
+description='''Forge 1.21.1 独立验收伴侣，只承载控制协议与验收接入。'''
+displayTest="IGNORE_SERVER_VERSION"
+
+[[dependencies.mpmt_acceptance]]
+modId="forge"
+mandatory=true
+versionRange="[52.1.0,52.2.0)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.mpmt_acceptance]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.21.1,1.21.2)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.mpmt_acceptance]]
+modId="mpmt"
+mandatory=true
+versionRange="[0.1.0,0.2.0)"
+ordering="AFTER"
+side="BOTH"

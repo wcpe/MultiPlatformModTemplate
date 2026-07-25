@@ -1,0 +1,343 @@
+import java.io.DataInputStream
+import java.util.jar.JarFile
+
+buildscript {
+    repositories {
+        maven { url = 'https://maven.minecraftforge.net/' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:3.0.197'
+    }
+}
+
+apply plugin: 'java'
+apply plugin: 'net.minecraftforge.gradle'
+
+if (gradle.gradleVersion != '5.6.4') {
+    throw new GradleException("1.12.2 车道只允许 Gradle 5.6.4，当前为 ${gradle.gradleVersion}")
+}
+if (JavaVersion.current() != JavaVersion.VERSION_1_8) {
+    throw new GradleException("1.12.2 车道 launcher 必须使用 Java 8，当前为 ${System.getProperty('java.version')}")
+}
+
+// 本工程已提升为仓库根下独立目录 platform-forge-1.12.2（不再嵌套 platform-forge/1.12.2-1_12）
+def repositoryRoot = file('../../..')
+def versionFile = new File(repositoryRoot, 'VERSION')
+if (!versionFile.isFile()) {
+    throw new GradleException("缺少仓库版本文件：${versionFile}")
+}
+
+group = 'top.wcpe.mc.mpmt'
+version = versionFile.getText('UTF-8').trim()
+archivesBaseName = 'mpmt-forge-1.12.2'
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+
+ext {
+    minecraftVersion = '1.12.2'
+    forgeVersion = '1.12.2-14.23.5.2860'
+    mappingsVersion = '20171003-1.12'
+    productChannel = 'MPMT'
+    acceptanceChannel = 'MPMTTEST'
+    // 坐标末段与工程 path 末段一致（domain/runtime/client…）
+    sharedModules = ['domain', 'runtime', 'client', 'protocol', 'acceptance']
+    sharedRequiredClasses = [
+        'domain': 'top/wcpe/mc/mpmt/core/domain/port/TransportPort.class',
+        'runtime': 'top/wcpe/mc/mpmt/core/runtime/MpmtRuntime.class',
+        'client': 'top/wcpe/mc/mpmt/core/client/ClientNetworkFeature.class',
+        'protocol': 'top/wcpe/mc/mpmt/protocol/PacketCodec.class',
+        'acceptance': 'top/wcpe/mc/mpmt/acceptance/control/AcceptanceControlCodec.class'
+    ]
+    sharedModuleDirs = [
+        'domain': 'core/domain',
+        'runtime': 'core/runtime',
+        'client': 'core/client',
+        'protocol': 'core/protocol',
+        'acceptance': 'modules/acceptance',
+    ]
+    sharedJars = sharedModules.collectEntries { module ->
+        def dir = sharedModuleDirs[module] ?: module
+        [(module): new File(repositoryRoot, "${dir}/build/libs/${module}-${project.version}.jar")]
+    }
+}
+
+def verifySharedJar = { module, File jarFile ->
+    if (!jarFile.isFile()) {
+        throw new GradleException(
+            "缺少共享 JAR：${jarFile}。请先在仓库根生成 ${module} ${project.version} JAR；1.12.2 构建不会复制源码或复合加载现代根构建。")
+    }
+    if (jarFile.name != "${module}-${project.version}.jar") {
+        throw new GradleException("共享 JAR 版本不匹配：${jarFile.name}，期望 ${module}-${project.version}.jar")
+    }
+    def jar = new JarFile(jarFile)
+    try {
+        if (jar.getJarEntry(sharedRequiredClasses[module]) == null) {
+            throw new GradleException("共享 JAR 缺少必需类：${module} -> ${sharedRequiredClasses[module]}")
+        }
+        def manifest = jar.manifest
+        def declaredVersion = manifest == null ? null : manifest.mainAttributes.getValue('Implementation-Version')
+        if (declaredVersion != null && declaredVersion != project.version.toString()) {
+            throw new GradleException("共享 JAR 清单版本不匹配：${module}=${declaredVersion}，期望 ${project.version}")
+        }
+        jar.entries().each { entry ->
+            if (!entry.directory && entry.name.endsWith('.class')) {
+                def input = new DataInputStream(jar.getInputStream(entry))
+                try {
+                    if (input.readInt() != (int) 0xCAFEBABE) {
+                        throw new GradleException("共享 JAR 类文件魔数错误：${module}!/${entry.name}")
+                    }
+                    input.readUnsignedShort()
+                    int major = input.readUnsignedShort()
+                    if (major > 52) {
+                        throw new GradleException("共享 JAR 不是 Java 8 字节码：${module}!/${entry.name} major=${major}")
+                    }
+                } finally {
+                    input.close()
+                }
+            }
+        }
+    } finally {
+        jar.close()
+    }
+}
+
+// 1.12.2 不参与现代根构建，配置期即冻结并校验全部本地共享 JAR 输入。
+sharedJars.each(verifySharedJar)
+
+configurations {
+    productBundle
+    acceptanceBundle
+    forge112Sources {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+}
+
+sourceSets {
+    main {
+        // 1.12 产品以 client 为主；common + client 分目录
+        java.srcDirs = ['common/src/main/java', 'client/src/main/java']
+        resources.srcDirs = ['common/src/main/resources', 'src/main/resources']
+    }
+    acceptance {
+        java.srcDir 'src/acceptance/java'
+        resources.srcDir 'src/acceptance/resources'
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+    contractTest {
+        java.srcDir 'src/contractTest/java'
+        resources.srcDir 'src/contractTest/resources'
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath + sourceSets.acceptance.output + sourceSets.acceptance.compileClasspath
+        runtimeClasspath += output + compileClasspath + sourceSets.main.runtimeClasspath + sourceSets.acceptance.runtimeClasspath
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${forgeVersion}"
+    forge112Sources "net.minecraftforge:forge:${forgeVersion}_mapped_snapshot_${mappingsVersion}:sources@jar"
+
+    implementation files(sharedJars.findAll { it.key != 'acceptance' }.values())
+    productBundle files(sharedJars.findAll { it.key != 'acceptance' }.values())
+
+    acceptanceImplementation files(sharedJars.values())
+    acceptanceBundle files(sharedJars['acceptance'])
+}
+
+minecraft {
+    mappings channel: 'snapshot', version: mappingsVersion
+    runs {
+        client {
+            workingDirectory project.file('run-client')
+            property 'forge.logging.console.level', 'info'
+            // R5 CatServer 自连地址；可 -Dmpmt.acceptance.server=host:port 覆盖
+            property 'mpmt.acceptance.server',
+                project.findProperty('mpmt.acceptance.server') ?: '127.0.0.1:25568'
+            // 验收伴侣上报 ClientReady 用的 Java 可执行文件
+            property 'mpmt.acceptance.javaExecutable',
+                System.getProperty('java.home') + File.separator + 'bin' + File.separator +
+                    (System.getProperty('os.name', '').toLowerCase().contains('win') ? 'java.exe' : 'java')
+            mods {
+                mpmt {
+                    source sourceSets.main
+                }
+                mpmt_acceptance {
+                    source sourceSets.acceptance
+                }
+            }
+        }
+    }
+}
+
+// ForgeGradle 3 在空缓存直接运行客户端时只生成含 Side.BUKKIT 的 raw jar；先解析 sources 才会生成可运行的 recomp 输入。
+task prepareForge112Runtime {
+    group = 'verification'
+    description = '为 ForgeGradle 3 的 1.12.2 客户端运行生成 patched sources/recomp 输入'
+    doLast {
+        def sourceArtifacts = configurations.forge112Sources.files
+        if (sourceArtifacts.size() != 1 || !sourceArtifacts.first().isFile()) {
+            throw new GradleException("Forge 1.12.2 源码制品解析异常：${sourceArtifacts}")
+        }
+    }
+}
+tasks.matching { it.name == 'runClient' }.all {
+    dependsOn prepareForge112Runtime
+}
+compileJava.mustRunAfter prepareForge112Runtime
+
+def generatedBuildInfo = file("${buildDir}/generated/sources/buildInfo/top/wcpe/mc/mpmt/platform/forge/ForgeBuildInfo.java")
+task generateBuildInfo {
+    inputs.property 'version', project.version
+    outputs.file generatedBuildInfo
+    doLast {
+        generatedBuildInfo.parentFile.mkdirs()
+        generatedBuildInfo.setText(
+            "package top.wcpe.mc.mpmt.platform.forge;\n\n" +
+                "public final class ForgeBuildInfo {\n" +
+                "    public static final String VERSION = \"${project.version}\";\n" +
+                "    private ForgeBuildInfo() { }\n" +
+                "}\n",
+            'UTF-8')
+    }
+}
+sourceSets.main.java.srcDir file("${buildDir}/generated/sources/buildInfo")
+compileJava.dependsOn generateBuildInfo
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('mcmod.info') {
+        expand version: project.version
+    }
+}
+
+processAcceptanceResources {
+    inputs.property 'version', project.version
+    filesMatching('mcmod.info') {
+        expand version: project.version
+    }
+}
+
+task verifySharedInputs {
+    group = 'verification'
+    description = '再次校验 1.12.2 本地共享 JAR 的存在性、版本、必需类与 Java 8 字节码'
+    inputs.files files(sharedJars.values())
+    doLast {
+        sharedJars.each(verifySharedJar)
+    }
+}
+
+tasks.withType(JavaCompile) {
+    dependsOn verifySharedInputs
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:all']
+}
+
+jar {
+    from {
+        configurations.productBundle.collect { zipTree(it) }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/MANIFEST.MF', 'META-INF/maven/**'
+    exclude 'top/wcpe/mc/mpmt/acceptance/**'
+    exclude 'top/wcpe/mc/mpmt/platform/forge/acceptance/**'
+    manifest {
+        attributes 'Implementation-Title': 'MPMT Forge 1.12.2 客户端产品',
+            'Implementation-Version': project.version,
+            'FMLAT': ''
+    }
+}
+
+task acceptanceJar(type: Jar) {
+    group = 'build'
+    description = '构建独立 client-only 1.12.2 验收伴侣 JAR'
+    baseName = 'mpmt-forge-acceptance-1.12.2'
+    version = project.version
+    from sourceSets.acceptance.output
+    from {
+        configurations.acceptanceBundle.collect { zipTree(it) }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/MANIFEST.MF', 'META-INF/maven/**'
+    exclude 'top/wcpe/mc/mpmt/core/**'
+    exclude 'top/wcpe/mc/mpmt/protocol/**'
+    exclude 'top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class'
+    exclude 'top/wcpe/mc/mpmt/platform/forge/ForgeBuildInfo.class'
+    exclude 'top/wcpe/mc/mpmt/platform/forge/client/**'
+    exclude 'top/wcpe/mc/mpmt/platform/forge/hud/**'
+    exclude 'top/wcpe/mc/mpmt/platform/forge/net/**'
+    manifest {
+        attributes 'Implementation-Title': 'MPMT Forge 1.12.2 客户端验收伴侣',
+            'Implementation-Version': project.version
+    }
+}
+
+reobf {
+    jar {}
+    acceptanceJar {}
+}
+
+build.dependsOn reobfAcceptanceJar
+
+/**
+ * 将 client-only 产品 + 验收伴侣拷到 build/client-companion/，供 CatServer R5 手工/编排消费。
+ * 禁止作为服务端 mods 装入 CatServer。
+ */
+task prepareClientCompanionArtifacts {
+    group = 'build'
+    description = '拷贝 Forge 1.12.2 client-only 产品/验收 jar 到 build/client-companion/（供 CatServer R5）'
+    dependsOn reobfJar, reobfAcceptanceJar
+    doLast {
+        File outDir = file("${buildDir}/client-companion")
+        outDir.mkdirs()
+        File product = file("${buildDir}/reobfJar/output.jar")
+        File acceptanceReobf = file("${buildDir}/reobfAcceptanceJar/output.jar")
+        if (!product.isFile()) {
+            throw new GradleException("缺少 reobf 产品 jar：${product}")
+        }
+        // FG3 reobf 验收 jar 路径：优先 reobfAcceptanceJar/output.jar，否则 libs 中 acceptance jar
+        File acceptance = acceptanceReobf.isFile() ? acceptanceReobf : acceptanceJar.archivePath
+        if (!acceptance.isFile()) {
+            throw new GradleException("缺少验收伴侣 jar：${acceptance}")
+        }
+        copy {
+            from product
+            into outDir
+            rename { "mpmt-forge-1.12.2-${project.version}.jar" }
+        }
+        copy {
+            from acceptance
+            into outDir
+            rename { "mpmt-forge-acceptance-1.12.2-${project.version}.jar" }
+        }
+        logger.lifecycle("[client-companion] ${outDir.absolutePath}")
+        logger.lifecycle('[client-companion] 注意：client-only，禁止装入 CatServer mods/；R5 客户端伴侣用')
+    }
+}
+
+compileAcceptanceJava.dependsOn classes
+compileContractTestJava.dependsOn acceptanceClasses
+
+task contractTest(type: JavaExec) {
+    group = 'verification'
+    description = '运行 1.12.2 构建、握手、wire 与双 JAR 隔离契约测试'
+    dependsOn reobfJar, reobfAcceptanceJar, contractTestClasses
+    classpath = sourceSets.contractTest.runtimeClasspath
+    main = 'top.wcpe.mc.mpmt.platform.forge.contract.Forge112ContractTest'
+    systemProperty 'mpmt.test.repositoryRoot', repositoryRoot.absolutePath
+    systemProperty 'mpmt.test.productJar', jar.archivePath.absolutePath
+    systemProperty 'mpmt.test.acceptanceJar', acceptanceJar.archivePath.absolutePath
+    systemProperty 'mpmt.test.version', project.version.toString()
+}
+
+check.dependsOn verifySharedInputs, contractTest
+
+clean.doFirst {
+    delete project.file('run-client')
+}

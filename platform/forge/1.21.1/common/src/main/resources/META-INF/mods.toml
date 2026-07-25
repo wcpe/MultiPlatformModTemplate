@@ -1,0 +1,25 @@
+modLoader="javafml"
+loaderVersion="[52,)"
+license="Apache-2.0"
+showAsResourcePack=false
+
+[[mods]]
+modId="mpmt"
+version="${version}"
+displayName="MPMT Forge 1.21.1"
+description='''Forge 1.21.1 产品车道，提供可选 typed custom payload 产品通道。'''
+displayTest="IGNORE_SERVER_VERSION"
+
+[[dependencies.mpmt]]
+modId="forge"
+mandatory=true
+versionRange="[52.1.0,52.2.0)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.mpmt]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.21.1,1.21.2)"
+ordering="NONE"
+side="BOTH"

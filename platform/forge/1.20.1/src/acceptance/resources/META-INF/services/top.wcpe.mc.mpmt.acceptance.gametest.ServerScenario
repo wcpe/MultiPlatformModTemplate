@@ -1,0 +1,4 @@
+top.wcpe.mc.mpmt.platform.forge.acceptance.scenario.ForgeRealRoundTripServerScenario
+top.wcpe.mc.mpmt.platform.forge.acceptance.scenario.ClientHudServerScenario
+top.wcpe.mc.mpmt.platform.forge.acceptance.scenario.ProductHandshakeServerScenario
+top.wcpe.mc.mpmt.platform.forge.acceptance.scenario.ProductRoundtripServerScenario
