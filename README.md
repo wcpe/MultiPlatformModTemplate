@@ -14,8 +14,9 @@
 L0 core-domain   功能域：玩法规则 + 领域模型 + 端口(Port) + 自有 EventBus(域间解耦)   ← 玩法只写这里
 L1 core-runtime / core-server / core-client / protocol            框架编排 / 端逻辑 / 跨端协议
 L2 platform-spi  平台抽象 SPI + PlatformProvider + FeatureGate     平台可插拔的唯一机制
-L3 platform-bukkit（含 Paper/Folia 系列·FeatureGate）+ sponge/fabric/forge/neoforge（各独立 includeBuild）  各平台胶水
-L4 各平台内 version-api + vX_Y                                     版本差异隔离
+L3 平台胶水：Bukkit/Sponge 根多模块；Fabric/Forge/NeoForge 每 MC 版本独立 includeBuild
+     各版本内 common / server / client（或仅 server）分目录，平台只做胶水
+L4 版本差异只在「该版本构建」内，禁止单工程多源集堆多版本
 ```
 
 L0/L1 不含任何平台 / 版本代码；跨平台、跨版本的差异全部被 L3/L4 关在接口之后。
@@ -51,13 +52,47 @@ L0/L1 不含任何平台 / 版本代码；跨平台、跨版本的差异全部�
 
 平台无关核心（L0–L2）与首个平台胶水已落地，其余平台随后续迭代补全（进度见 [`docs/PRD.md`](docs/PRD.md) FR 状态）。需本机有 JDK（构建自动选用 JDK 8 编译核心、JDK 17 编译平台胶水，缺失时按需下载）。
 
-```bash
-./gradlew buildAll                 # 全量构建（根模块 + 各 includeBuild 平台）
-./gradlew :platform-bukkit:build   # Bukkit 家族插件 → platform-bukkit/build/libs/platform-bukkit-<版本>.jar
-./gradlew :platform-fabric:build   # Fabric 产物 → platform-fabric/build/libs/mpmt-fabric-<版本>.jar
+**物理布局（不拍平到仓库根）**：
+
+```
+core/          domain runtime server client paths config protocol spi
+platform/
+  bukkit/      api common modern 1.12.2 1.20.1 1.21.1
+  fabric/      api 1.20.1 1.21.1
+  forge/       api 1.12.2 1.20.1 1.21.1
+  neoforge/    api 1.20.2
+  sponge/      api 1.20.1
+modules/       smoke acceptance
 ```
 
-Bukkit 家族插件 jar 放入服务端 `plugins/`、Fabric mod jar 放入客户端 `mods/`；玩法开发与完整平台矩阵随后续迭代补全（见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)）。
+```bash
+./gradlew :buildAll
+# 可发布 jar 聚合到 build/dist/{bukkit,fabric,forge,neoforge,sponge}/
+./gradlew :collectReleaseArtifacts
+
+# Bukkit
+./gradlew :platform:bukkit:1.20.1:shadowJar
+./gradlew :platform:bukkit:1.12.2:shadowJar
+./gradlew :platform:bukkit:1.21.1:shadowJar
+# Fabric / Forge（-p 指向物理目录；跨代 Forge 用自有 wrapper）
+./gradlew -p platform/fabric/1.20.1 remapJar
+./gradlew -p platform/fabric/1.21.1 remapJar
+./gradlew -p platform/forge/1.20.1 reobfShadowJar
+```
+
+产物放入对应服务端 `plugins/` 或双端 `mods/`；运维见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)。
+
+### 克隆后换名（脚手架）
+
+```bash
+./gradlew renameScaffold \
+  -Pmpmt.scaffold.id=mygame \
+  -Pmpmt.scaffold.group=com.example.mygame \
+  -Pmpmt.scaffold.name=MyGame \
+  -Pmpmt.scaffold.dryRun=true
+```
+
+详见 [`tools/README.md`](tools/README.md)。纯 kts 实现，无需 python。
 
 ## 约定
 

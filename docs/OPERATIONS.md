@@ -1,44 +1,94 @@
 # 运维手册：MultiPlatformModTemplate
 
-> 构建、部署、调试、升级、回滚的操作指南。运维方式变化时更新。
-> 当前为骨架阶段：构建脚本尚未落地，下列命令为**约定形态**，随构建模块（见 ADR-0007）建立后在此填实具体任务名。
+> 物理布局：`core/` · `platform/<loader>/{api,版本}/` · `modules/`。  
+> Gradle 工程名保持稳定；`-p` 与 `projectDir` 指向收纳后的路径。
 
 ## 1. 构建
 
-- 构建工具：Gradle **复合构建**（Kotlin DSL）。核心 L0–L2（纯 `java-library`·Java 8）与 Bukkit 家族（`platform-bukkit`·普通 Java+shadow）为根构建常规模块；Fabric/Forge/NeoForge/Sponge 各为经 `includeBuild` 引入的独立构建，隔离各自工具链（Loom / ForgeGradle / NeoGradle / SpongeGradle），核心经依赖替换共享（见 ADR-0007）。第三方依赖 relocate 到 `top.wcpe.mc.mpmt.libs.*`、core 打进各产物的方式见 ADR-0012；M0 先做打包 spike，必要时回退"core 发 mavenLocal + 各 loader shadow 消费"。
-- 预期产物（每平台一件，内含核心 + 对应 L3/L4 胶水）：
-  - Bukkit 家族：插件 jar（含 `plugin.yml`）。
-  - Fabric：Loom 重映射 mod jar（`fabric.mod.json`）。
-  - Forge / NeoForge：mod jar（`mods.toml` / `neoforge.mods.toml`）。
-- 版本号注入：根 `VERSION` 是唯一来源，构建注入各产物。
-- 全量构建 / 单模块构建 / 跑测试的具体 Gradle 任务名，待构建模块落地后补全于此。
+```bash
+# 根 L0–L2 + 平台 api
+./gradlew --no-daemon :core:domain:build :core:spi:build
+./gradlew --no-daemon :platform:bukkit:bukkit-api:build :platform:fabric:fabric-api:build
 
-## 2. 部署
+# Bukkit 版本产物
+./gradlew --no-daemon :platform:bukkit:1.20.1:shadowJar
+./gradlew --no-daemon :platform:bukkit:1.12.2:shadowJar
+./gradlew --no-daemon :platform:bukkit:1.21.1:shadowJar
 
-- **服务端**：把对应平台插件 / mod 放入服务端的 `plugins/`（Bukkit 家族）或 `mods/`（Fabric/Forge/NeoForge 服务端）目录，重启。
-- **客户端**：把对应 loader 的 mod 放入 `.minecraft/mods/`（需先装对应 loader 与依赖，如 Fabric API / Kotlin loader 视实现而定）。
-- **组合**：任意服务端 + 任意客户端可组合（如 Paper 服务端 + Fabric 客户端），双方经协议通信，握手做版本协商。
-- 健康检查：启动日志应出现"平台发现成功 + 唯一活跃平台 + 端口装配完成"；冒烟特性按预期运行。
+# Fabric / Forge / Neo / Sponge（-p 用物理路径）
+./gradlew -p platform/fabric/1.20.1 --no-daemon remapJar
+./gradlew -p platform/fabric/1.21.1 --no-daemon remapJar
+./gradlew -p platform/forge/1.20.1 --no-daemon reobfShadowJar
+./gradlew -p platform/neoforge/1.20.2 --no-daemon shadowJar
+./gradlew -p platform/sponge/1.20.1 --no-daemon shadowJar
 
-## 3. 开发期调试
+# 聚合可发布 jar → build/dist/{bukkit,fabric,forge,neoforge,sponge}/
+./gradlew --no-daemon :collectReleaseArtifacts
+# 全量构建 + 聚合
+./gradlew --no-daemon :buildAll
+```
 
-- 各平台提供开发期运行入口（如 Fabric Loom 的 `runClient`/`runServer`、Paper 的 run-paper、Forge 的 `runClient`/`runServer`），具体任务名待构建落地补全。
-- 开发服 / 客户端运行目录（`run/` 等）已在 `.gitignore` 排除。
+Forge 跨代（自有 launcher，目录在 `platform/forge/`，禁止从根嵌套 gradlew）：
 
-## 4. 升级
+| MC | 目录 | JDK / Gradle |
+|---|---|---|
+| 1.21.1 | `platform/forge/1.21.1/` | Java 21 + 8.12.1 |
+| 1.12.2 | `platform/forge/1.12.2/` | Java 8 + 5.6.4（**client-only**） |
 
-- 升级部署的产物：替换各平台产物 jar 为新版本；若涉及协议破坏性变更，**服务端与客户端须同步升级到兼容区间**（见 CHANGELOG 迁移说明与协议 `MIN_SUPPORTED`）。
-- 新增平台 / 版本支持是增量的：旧产物不受影响。
+## 2. 平台 API 模块
 
-## 5. 回滚
+| 工程名 | 物理路径 | 用途 |
+|---|---|---|
+| `:platform:bukkit:bukkit-api` | `platform/bukkit/bukkit-api` | Bukkit 家族对外契约 |
+| `:platform:fabric:fabric-api` | `platform/fabric/fabric-api` | Fabric 对外契约 |
+| `:platform:forge:forge-api` | `platform/forge/forge-api` | Forge 对外契约 |
+| `:platform:neoforge:neoforge-api` | `platform/neoforge/neoforge-api` | NeoForge 对外契约 |
+| `:platform:sponge:sponge-api` | `platform/sponge/sponge-api` | Sponge 对外契约 |
 
-- 出问题回退到上一个已知良好版本：替换回旧产物 jar。
-- 协议层回滚需注意：若新版本提升了 `MIN_SUPPORTED`，回滚端与未回滚端可能不兼容——按 CHANGELOG 迁移说明成对回滚。
-- 代码层回滚优先 `git revert`（见 `sdd-rollback-change`）。
+玩法扩展 / 跨版本 common 应依赖 **api**，不要依赖版本实现 jar。
 
-## 6. 排障
+## 3. 版本矩阵 / 真服
 
-- **启动即失败 / 报"无平台 / 我方多入口同时激活"**：检查产物是否对应正确平台、是否在同进程误装了多个我方入口（融合服上 Bukkit/Forge 并存正常，应只激活 Bukkit 入口，见 ADR-0008）、`META-INF/services` 是否就位（SPI 发现，见 ADR-0002）。
-- **跨端不通 / 握手失败**：检查两端协议版本是否在兼容区间（`CURRENT` / `MIN_SUPPORTED`）。
-- **某版本行为异常**：检查 MC 版本探测与 `vX_Y` 装配是否匹配（L4，见 ADR-0003）。
-- 关键日志为中文分级日志（ERROR/WARN/INFO/DEBUG），定位时按级别筛查。
+```bash
+./gradlew :listRealServerLanes
+./gradlew :verifyVersionMatrixBuild
+./gradlew :runVersionMatrixGate
+```
+
+请使用 **绝对路径** `:task`，避免无 `:` 时匹配到子工程同名 `runRealServerAcceptance`。
+
+Paper + Fabric 客户端：
+
+```bash
+./gradlew :platform:bukkit:1.20.1:ensurePaperRealServerHost \
+  -Pmpmt.realserver.autoHost=true -Pmpmt.realserver.waitForReport=true
+./gradlew -p platform/fabric/1.20.1 runAcceptanceClient \
+  -Pmpmt.acceptance.server=127.0.0.1:25599
+```
+
+Forge 1.21.1 专用服（独立 launcher）：
+
+```bash
+cd platform/forge/1.21.1
+./gradlew --no-daemon printRealServerAcceptanceRecipe
+# 起服 + 客户端伴侣 + ./gradlew verifyAcceptanceReport
+```
+
+Forge 1.12.2：**禁止** Forge 服务端 mod；真服走 CatServer R5：
+
+```bash
+./gradlew :runRealServerAcceptanceCatServer
+# 客户端伴侣：./platform/forge/1.12.2/gradlew --no-daemon prepareClientCompanionArtifacts
+```
+
+## 4. 脚手架换名
+
+```bash
+./gradlew renameScaffold \
+  -Pmpmt.scaffold.id=mygame \
+  -Pmpmt.scaffold.group=com.example.mygame \
+  -Pmpmt.scaffold.name=MyGame \
+  -Pmpmt.scaffold.dryRun=true
+```
+
+见 [`../tools/README.md`](../tools/README.md)。纯 kts，无需 python。
