@@ -1,0 +1,5 @@
+top.wcpe.mc.mpmt.platform.sponge.acceptance.scenario.SpongeSmokeServerScenario
+top.wcpe.mc.mpmt.platform.sponge.acceptance.scenario.SpongeCapabilityServerScenario
+top.wcpe.mc.mpmt.platform.sponge.acceptance.scenario.ClientHudServerScenario
+top.wcpe.mc.mpmt.platform.sponge.acceptance.scenario.ProductHandshakeServerScenario
+top.wcpe.mc.mpmt.platform.sponge.acceptance.scenario.ProductRoundtripServerScenario
