@@ -25,7 +25,9 @@ import top.wcpe.mc.mpmt.protocol.Packet;
 import top.wcpe.mc.mpmt.protocol.packet.ClientHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ClientIdReportPacket;
 import top.wcpe.mc.mpmt.protocol.packet.DisconnectPacket;
+import top.wcpe.mc.mpmt.protocol.packet.HudKind;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
 
 /** 握手与会话登记、连接生命周期的回归测试。 */
@@ -47,6 +49,11 @@ class HandshakeServerServiceTest {
         assertEquals(hello.getSessionId(), session.getSessionId());
         assertEquals(new MachineCode("machine-a"), session.getMachineCode());
         assertEquals(HandshakeStateMachine.State.ESTABLISHED, fixture.service.stateOf(connection));
+        assertEquals("欢迎", ((ServerMessagePacket) fixture.packetFromEnd(5)).getText());
+        assertEquals(HudKind.TITLE, ((ServerHudMessagePacket) fixture.packetFromEnd(4)).getKind());
+        assertEquals(HudKind.ACTIONBAR, ((ServerHudMessagePacket) fixture.packetFromEnd(3)).getKind());
+        assertEquals(HudKind.TOAST, ((ServerHudMessagePacket) fixture.packetFromEnd(2)).getKind());
+        assertEquals(HudKind.CHAT, ((ServerHudMessagePacket) fixture.packetFromEnd(1)).getKind());
     }
 
     @Test

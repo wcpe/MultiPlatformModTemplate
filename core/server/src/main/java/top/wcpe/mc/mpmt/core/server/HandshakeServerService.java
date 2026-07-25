@@ -18,7 +18,9 @@ import top.wcpe.mc.mpmt.protocol.ProtocolVersion;
 import top.wcpe.mc.mpmt.protocol.packet.ClientHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ClientIdReportPacket;
 import top.wcpe.mc.mpmt.protocol.packet.DisconnectPacket;
+import top.wcpe.mc.mpmt.protocol.packet.HudKind;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
+import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
 
 /** 服务端握手服务：版本协商、封禁门禁、会话登记及拒绝断开请求。 */
@@ -33,6 +35,22 @@ public final class HandshakeServerService {
     private static final Logger LOGGER = Logger.getLogger(HandshakeServerService.class.getName());
     private static final String BANNED_MESSAGE = "你的客户端标识已被封禁";
     private static final String NOT_READY_MESSAGE = "封禁服务尚未就绪，请稍后重试";
+    /** 握手成功欢迎语（聊天包，兼容旧客户端）。 */
+    private static final String WELCOME_MESSAGE = "欢迎";
+    /** 握手成功后演示用 HUD 标题。 */
+    private static final String DEMO_TITLE = "MPMT 握手成功";
+    /** 握手成功后演示用 HUD 副标题。 */
+    private static final String DEMO_SUBTITLE = "跨端网络已就绪";
+    /** 握手成功后演示用 ACTIONBAR。 */
+    private static final String DEMO_ACTIONBAR = "ACTIONBAR：跨端 HUD 演示";
+    /** 握手成功后演示用 TOAST 标题。 */
+    private static final String DEMO_TOAST = "TOAST：跨端 HUD 演示";
+    /** 握手成功后演示用 TOAST 副标题。 */
+    private static final String DEMO_TOAST_SUBTITLE = "title / actionbar / toast / chat";
+    /** 握手成功后演示用 HUD 聊天。 */
+    private static final String DEMO_HUD_CHAT = "CHAT：跨端 HUD 演示";
+    /** 演示标题默认展示时长（毫秒）。 */
+    private static final long DEMO_TITLE_DURATION_MS = 3500L;
     private static final DisconnectHandler NOOP_DISCONNECT = (connection, reason, currentCheck) -> {
     };
 
@@ -154,7 +172,25 @@ public final class HandshakeServerService {
         }
         context.stateMachine.onClientId(false);
         sessionRegistry.register(connection, context.sessionId, machineCode);
-        dispatcher.send(connection, new ServerMessagePacket("欢迎"));
+        // 聊天欢迎：兼容只监听 ServerMessage 的旧路径
+        dispatcher.send(connection, new ServerMessagePacket(WELCOME_MESSAGE));
+        // FR-27 演示：握手成功后主动下发 title / actionbar / toast / chat，避免产品路径只剩 MessagePort 聊天心跳
+        sendHandshakeHudDemo(connection);
+    }
+
+    /** 向刚完成握手的连接下发四类 HUD 演示包。 */
+    private void sendHandshakeHudDemo(ConnectionHandle connection) {
+        dispatcher.send(
+                connection,
+                new ServerHudMessagePacket(
+                        HudKind.TITLE, DEMO_TITLE, DEMO_SUBTITLE, DEMO_TITLE_DURATION_MS));
+        dispatcher.send(
+                connection, new ServerHudMessagePacket(HudKind.ACTIONBAR, DEMO_ACTIONBAR, "", 0L));
+        dispatcher.send(
+                connection,
+                new ServerHudMessagePacket(HudKind.TOAST, DEMO_TOAST, DEMO_TOAST_SUBTITLE, 0L));
+        dispatcher.send(
+                connection, new ServerHudMessagePacket(HudKind.CHAT, DEMO_HUD_CHAT, "", 0L));
     }
 
     private void reject(
