@@ -80,13 +80,14 @@ final class ForgeVerificationRegistry {
         if (!"verify-hud".equals(step.getStepId())) {
             return unknownStep(step);
         }
+        // 握手后产品会先下发 TITLE/ACTIONBAR/TOAST/CHAT 演示包，快照可能暂非验收 ACTIONBAR。
+        // 未匹配时返回 null 继续轮询，避免被演示 CHAT 误判为永久失败。
         ForgeHudSnapshot snapshot = MpmtForgeMod.session().hudSnapshot();
         if (snapshot == null) {
             return null;
         }
         if (snapshot.kind() != HudKind.ACTIONBAR || !EXPECTED_HUD_TEXT.equals(snapshot.text())) {
-            return ForgeVerifyOutcome.fail(
-                    "HUD 不符：kind=" + snapshot.kind() + " text=" + snapshot.text());
+            return null;
         }
         return ForgeVerifyOutcome.ok(
                 "{\"hud\":\"" + snapshot.text() + "\"}", "产品 HUD 通过");
