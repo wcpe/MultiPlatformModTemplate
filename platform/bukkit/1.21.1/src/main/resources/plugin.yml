@@ -1,0 +1,16 @@
+# MPMT Bukkit 产品插件描述；版本相关字段由选中构建车道注入。
+name: MultiPlatformModTemplate
+version: ${version}
+main: top.wcpe.mc.mpmt.platform.bukkit.MpmtBukkitPlugin
+${apiVersionMetadata}
+${foliaMetadata}
+description: 多平台 mod 玩法脚手架 —— Bukkit 家族平台胶水
+commands:
+  mpmt:
+    description: MPMT 管理命令
+    usage: /mpmt machinecode ban <code> [reason...] | unban <code> | list
+    permission: mpmt.machinecode.manage
+permissions:
+  mpmt.machinecode.manage:
+    description: 管理机器码封禁
+    default: op

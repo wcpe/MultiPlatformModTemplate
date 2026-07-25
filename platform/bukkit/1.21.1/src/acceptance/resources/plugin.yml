@@ -1,0 +1,9 @@
+# MPMT realserver 验收驱动插件描述；仅验收运行期加载（ADR-0014）。
+name: mpmt-acceptance
+version: ${version}
+main: top.wcpe.mc.mpmt.platform.bukkit.acceptance.MpmtBukkitAcceptancePlugin
+${apiVersionMetadata}
+${foliaMetadata}
+load: POSTWORLD
+softdepend: [MultiPlatformModTemplate]
+description: MPMT realserver 验收驱动 —— 服务端驱动场景、客户端验证、单一权威报告

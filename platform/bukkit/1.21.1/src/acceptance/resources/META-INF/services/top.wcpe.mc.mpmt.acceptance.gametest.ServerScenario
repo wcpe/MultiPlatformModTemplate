@@ -1,0 +1,11 @@
+top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.BukkitRealRoundTripServerScenario
+top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.ClientHudServerScenario
+top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.ProductHandshakeServerScenario
+top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.ProductRoundtripServerScenario
+top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.ForgeClientOptionalServerScenario
+top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.ActivePlatformBukkitServerScenario
+top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.HybridForgeBukkitServerScenario
+top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.ServerForgeProductAbsentServerScenario
+top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.GlobalSchedulerServerScenario
+top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.RegionSchedulerServerScenario
+top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.EntitySchedulerServerScenario
