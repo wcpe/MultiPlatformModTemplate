@@ -4,6 +4,24 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 未发布版本
+
+### 新增
+- **从 `feature/p2-version-matrix` 挑拣迁入可挂 tip 源集的 P2 能力（保留 tip P1，跳过 version 矩阵 build）**：ClientReady 控制协议 v2（Java major + executable）；`MatrixAcceptanceReportV2` + `MatrixScenarioCatalog` 为 R1–R6 required 单一真源；五平台验收驱动矩阵双轨（默认 P1，`-Dmpmt.acceptance.matrix=Rn` → SPI 过滤 + 严格 v2）；五平台产品场景 `product-handshake` / `product-roundtrip` / `client-hud` 与 Fabric/Forge/NeoForge ClientVerifier；Bukkit R5（CatServer 融合服不变量 + `forge-client-optional`）/ R6（Folia 全局·区域·实体调度，经 `ProductPluginAccess` 反射桥）；`FabricSchedulerPort` 多服 tick 路由/`close`；`FabricClientSession` 延迟握手 + tip L4 `clearReceiver`。
+- **文档纠偏对齐实装**：Forge 1.21.1 车道 ForgeGradle **6.0.54**（取代误写的 7.0.3）；CatServer 1.12.2 制品 SHA-256 与大小冻结入 `docs/specs/p2-version-matrix.md` / OPERATIONS / ADR-0021。**未**迁入 `version-api`/`modern`/`v1_*` 多源集与相关 build 改动（须获准后另议）。
+
+### 变更
+- **version-api 方案 C 阶段 2（C-2）**：
+  - **Bukkit**：多源集 `version-api`/`modern`/`v1_12`/`v1_20`/`v1_21` + `-Pmpmt.minecraftVersion`；ServiceLoader 唯一 L4；验收通道构建期生成；1.12 车道 Folia 反射隔离。门禁：三车道 `test`+`shadowJar`+`verifyPackaging` 绿（默认 1.20.1 含 MockBukkit/acceptanceContract）。
+  - **Fabric**：多源集 `version-api`+选中 `v1_20`/`v1_21`；产物名带 MC；gametest 改走 L4 适配器。门禁：1.20.1/1.21.1 `test`+`remapJar`+`verifyPackaging`+`gametestClasses` 绿。
+  - **Forge**：沿用主 1.20.1 + 既有 `legacy-1_12`/`modern-1_21` 子工程（本批未改工具链）。
+  - **NeoForge**：仍锚点 1.20.2（无 1.20.1）；1.21 未纳入本批。
+- SpotBugs 排除过滤器精确放行 `AcceptanceReportV2ValidationMain.workspaceFile` 的 `PATH_TRAVERSAL_IN` 误报（方法已 canonical + 工作区边界校验；与 feature/p2 对齐，避免严格门误杀）。
+- **验收编排改为 Gradle only（禁 sh）**：`build-logic/realserver-acceptance` + 根 `runRealServerAcceptance` / `runP2StrictCheck` / 分 lane 任务；`scripts/p2-strict-check.sh` 废弃（exit 2）。
+- **B 完整：全服务端覆盖 + 自有 gametest 客户端进服**：lane = Fabric / Forge / NeoForge / Bukkit / Folia / CatServer / Sponge；各平台补 `runRealServerAcceptance` 报告门禁；客户端规定为各 loader acceptance/gametest 伴侣（非默认 bot）；`PlatformLaneCatalog` + 单测。
+- **B 增强：`PaperHostService` BuildService**：Fill v3 下载/缓存 paperclip、部署产品+验收 jar、轮询 `Done (`、全局看门狗与 build 结束强杀；注入 P1 报告元数据（commit/version/mcVersion/serverVersion/productJarSha256）；`autoStartPaperHost` + `ensurePaperRealServerHost`（`-Pmpmt.realserver.autoHost=true`，分终端联调加 `waitForReport=true`）。本机 Paper+Fabric 客户端真机 **v2 TOTAL 14 PASS 14 / RESULT PASS**。
+- **A 车道接入 mc-testkit 0.5.1**：根 `mcTestkit{}` 声明 Paper/Folia smoke；`e2e/harness`+`e2e/bot`；`runMcTestkitSmoke` / `runMcTestkitFoliaSmoke`；smoke 断言被测插件启用。根任务对 `-Pmpmt.skip.*=true` 缺失 includeBuild 软依赖，便于本机 SSL 阻塞时仍列 `e2eSmoke`。
+
 ## [0.1.0] - 2026-07-22
 
 首个正式发布：跨端脚手架 MVP 闭环（模拟服 + realserver 全量门、异构互通 tip 复验、用户确认放行）。
