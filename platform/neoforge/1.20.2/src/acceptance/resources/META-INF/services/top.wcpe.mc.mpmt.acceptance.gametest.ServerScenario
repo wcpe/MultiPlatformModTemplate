@@ -1,0 +1,4 @@
+top.wcpe.mc.mpmt.platform.neoforge.acceptance.scenario.NeoForgeRealRoundTripServerScenario
+top.wcpe.mc.mpmt.platform.neoforge.acceptance.scenario.ClientHudServerScenario
+top.wcpe.mc.mpmt.platform.neoforge.acceptance.scenario.ProductHandshakeServerScenario
+top.wcpe.mc.mpmt.platform.neoforge.acceptance.scenario.ProductRoundtripServerScenario
