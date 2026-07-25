@@ -20,6 +20,9 @@ plugins {
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1" apply false
     id("io.gitlab.arturbosch.detekt") version "1.23.7" apply false
     id("org.jetbrains.kotlinx.kover") version "0.8.3" apply false
+    // A 车道：mc-testkit（Bukkit/Folia bot e2e；与 B 真 mod 客户端分 lane）
+    // 仅经 maven.wcpe.top 解析插件坐标；禁止 sibling includeBuild 联调
+    id("top.wcpe.mc-testkit") version "0.5.1"
 }
 
 val mpmtVersion: String = rootProject.file("VERSION").readText().trim()
@@ -28,6 +31,9 @@ allprojects {
     group = "top.wcpe.mc.mpmt"
     version = mpmtVersion
 }
+
+// 脚手架换名：纯 kts（gradle/scaffold-rename.gradle.kts），无 python 依赖
+apply(from = "gradle/scaffold-rename.gradle.kts")
 
 // ============================================================================
 // 静态分析 / 质量工具链（严格门禁，static-analysis.md）——根构建各 Java 模块统一接入。
@@ -54,13 +60,13 @@ subprojects {
     }
     // 测试覆盖率：JaCoCo（报告 + 覆盖率底线门禁）。底线 LINE 0.70 取各模块当前覆盖率（最低 77%）下方整数、防回退。
     apply(plugin = "jacoco")
-    tasks.withType(org.gradle.testing.jacoco.tasks.JacocoReport::class.java).configureEach {
+    tasks.withType(JacocoReport::class.java).configureEach {
         reports {
             xml.required.set(true)
             html.required.set(true)
         }
     }
-    tasks.withType(org.gradle.testing.jacoco.tasks.JacocoCoverageVerification::class.java)
+    tasks.withType(JacocoCoverageVerification::class.java)
         .configureEach {
             violationRules {
                 rule {
@@ -103,8 +109,9 @@ subprojects {
     // 分析工具运行 JVM 与被测模块目标字节码无关：L0–L2 编译工具链为 JDK 8，但 Checkstyle 10.x 需 JDK 11+，
     // 故把分析任务固定到 JDK 17 启动器运行（不影响模块自身的 Java 8 编译目标）。
     // 在 afterEvaluate 配置：JavaToolchainService 由模块自身的 java 插件注册、晚于本 subprojects 块。
+    // 聚合壳（如 platform-bukkit 无业务源码）也可能挂 java；无 JavaToolchainService 则跳过。
     afterEvaluate {
-        val toolchains = extensions.getByType(JavaToolchainService::class.java)
+        val toolchains = extensions.findByType(JavaToolchainService::class.java) ?: return@afterEvaluate
         val analysisLauncher =
             toolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(17)) }
         tasks.withType(Checkstyle::class.java).configureEach {
@@ -125,23 +132,418 @@ subprojects {
 }
 
 // 发布产物结构门：即使平台 build 生命周期以后发生调整，根聚合仍显式校验五平台最终可部署包。
+// 本机可用 -Pmpmt.skip.forge/neoforge/sponge/fabric=true 跳过对应 includeBuild 时，仅依赖已 include 的。
+fun includedBuildOrNull(name: String): org.gradle.api.initialization.IncludedBuild? =
+    gradle.includedBuilds.find { it.name == name }
+
+fun org.gradle.api.Task.dependsOnIncludedIfPresent(buildName: String, taskPath: String) {
+    val ib = includedBuildOrNull(buildName)
+    if (ib != null) {
+        dependsOn(ib.task(taskPath))
+    } else {
+        doFirst {
+            logger.warn("[mpmt] 跳过依赖 $buildName$taskPath（includeBuild 未加载，见 -Pmpmt.skip.*）")
+        }
+    }
+}
+
 val verifyReleasePackaging by tasks.registering {
     group = "verification"
-    description = "校验五平台最终自包含发布产物"
-    dependsOn(":platform-bukkit:verifyPackaging")
-    dependsOn(gradle.includedBuild("platform-fabric").task(":verifyPackaging"))
-    dependsOn(gradle.includedBuild("platform-forge").task(":verifyPackaging"))
-    dependsOn(gradle.includedBuild("platform-neoforge").task(":verifyPackaging"))
-    dependsOn(gradle.includedBuild("platform-sponge").task(":verifyPackaging"))
+    description = "校验五平台最终自包含发布产物（已 skip 的 includeBuild 仅 warn）"
+    // Bukkit 已拆为每版本子工程；聚合任务在 platform-bukkit 壳上
+    dependsOn(":platform:bukkit:verifyPackaging")
+    dependsOnIncludedIfPresent("platform-fabric-1.20.1", ":verifyPackaging")
+    dependsOnIncludedIfPresent("platform-fabric-1.21.1", ":verifyPackaging")
+    dependsOnIncludedIfPresent("platform-forge-1.20.1", ":verifyPackaging")
+    dependsOnIncludedIfPresent("platform-neoforge", ":verifyPackaging")
+    dependsOnIncludedIfPresent("platform-sponge", ":verifyPackaging")
+}
+
+/**
+ * 聚合各平台权威可发布 jar 到 build/dist/{bukkit,fabric,forge,neoforge,sponge}/。
+ *
+ * <p>不复制 acceptance / plain / dev-shadow / corelib。跨代 Forge 1.12/1.21 仅在产物
+ * 已存在时捞入，绝不嵌套 gradlew。
+ */
+val collectReleaseArtifacts by tasks.registering {
+    group = "build"
+    description =
+        "聚合权威可发布 jar 到 build/dist/{bukkit,fabric,forge,neoforge,sponge}/"
+    dependsOn(verifyReleasePackaging)
+    dependsOn(
+        ":platform:bukkit:1.12.2:shadowJar",
+        ":platform:bukkit:1.20.1:shadowJar",
+        ":platform:bukkit:1.21.1:shadowJar",
+    )
+    dependsOnIncludedIfPresent("platform-fabric-1.20.1", ":remapJar")
+    dependsOnIncludedIfPresent("platform-fabric-1.21.1", ":remapJar")
+    dependsOnIncludedIfPresent("platform-forge-1.20.1", ":reobfShadowJar")
+    dependsOnIncludedIfPresent("platform-neoforge", ":shadowJar")
+    dependsOnIncludedIfPresent("platform-sponge", ":shadowJar")
+
+    val distRoot = layout.buildDirectory.dir("dist")
+    outputs.dir(distRoot)
+
+    doLast {
+        val version = mpmtVersion
+        val root = project.rootDir
+        val dist = distRoot.get().asFile
+        if (dist.exists()) {
+            dist.deleteRecursively()
+        }
+        listOf("bukkit", "fabric", "forge", "neoforge", "sponge").forEach { name ->
+            File(dist, name).mkdirs()
+        }
+
+        fun copyNamed(src: File, loader: String, fileName: String) {
+            if (!src.isFile) {
+                logger.warn("[dist] 缺少产物，跳过 $loader/$fileName ← ${src.absolutePath}")
+                return
+            }
+            val dest = File(File(dist, loader), fileName)
+            src.copyTo(dest, overwrite = true)
+            logger.lifecycle("[dist] $loader/$fileName  (${src.length()} bytes)")
+        }
+
+        // Bukkit
+        copyNamed(
+            File(root, "platform/bukkit/1.12.2/build/libs/mpmt-bukkit-1.12.2-$version.jar"),
+            "bukkit",
+            "mpmt-bukkit-1.12.2-$version.jar",
+        )
+        copyNamed(
+            File(root, "platform/bukkit/1.20.1/build/libs/mpmt-bukkit-1.20.1-$version.jar"),
+            "bukkit",
+            "mpmt-bukkit-1.20.1-$version.jar",
+        )
+        copyNamed(
+            File(root, "platform/bukkit/1.21.1/build/libs/mpmt-bukkit-1.21.1-$version.jar"),
+            "bukkit",
+            "mpmt-bukkit-1.21.1-$version.jar",
+        )
+
+        // Fabric（remap 后权威 jar）
+        copyNamed(
+            File(root, "platform/fabric/1.20.1/build/libs/mpmt-fabric-1.20.1-$version.jar"),
+            "fabric",
+            "mpmt-fabric-1.20.1-$version.jar",
+        )
+        copyNamed(
+            File(root, "platform/fabric/1.21.1/build/libs/mpmt-fabric-1.21.1-$version.jar"),
+            "fabric",
+            "mpmt-fabric-1.21.1-$version.jar",
+        )
+
+        // Forge 1.20.1：必须用 reobf 输出（SRG），勿用 libs 中间 named jar
+        copyNamed(
+            File(root, "platform/forge/1.20.1/build/reobfShadowJar/output.jar"),
+            "forge",
+            "mpmt-forge-1.20.1-$version.jar",
+        )
+
+        // NeoForge / Sponge
+        copyNamed(
+            File(root, "platform/neoforge/1.20.2/build/libs/mpmt-neoforge-1.20.2-$version.jar"),
+            "neoforge",
+            "mpmt-neoforge-1.20.2-$version.jar",
+        )
+        copyNamed(
+            File(root, "platform/sponge/1.20.1/build/libs/mpmt-sponge-1.20.1-$version.jar"),
+            "sponge",
+            "mpmt-sponge-1.20.1-$version.jar",
+        )
+
+        // 跨代 Forge：仅捞已存在产物（禁止嵌套 gradlew）
+        val forge121 =
+            File(root, "platform/forge/1.21.1/build/libs/mpmt-forge-1.21.1-$version.jar")
+        if (forge121.isFile) {
+            copyNamed(forge121, "forge", "mpmt-forge-1.21.1-$version.jar")
+        } else {
+            logger.lifecycle(
+                """
+                |[dist] 未找到 Forge 1.21.1 产物（可选）。请用自有 wrapper（Java 21 + Gradle 8.12.1）：
+                |  ./platform/forge/1.21.1/gradlew --no-daemon jar
+                |然后再跑 :collectReleaseArtifacts
+                """.trimMargin(),
+            )
+        }
+        val forge112Reobf = File(root, "platform/forge/1.12.2/build/reobfJar/output.jar")
+        if (forge112Reobf.isFile) {
+            copyNamed(forge112Reobf, "forge", "mpmt-forge-1.12.2-$version.jar")
+        } else {
+            logger.lifecycle(
+                """
+                |[dist] 未找到 Forge 1.12.2 reobf 产物（可选，client-only）。请用自有 wrapper（Java 8 + Gradle 5.6.4）：
+                |  ./platform/forge/1.12.2/gradlew --no-daemon reobfJar
+                |然后再跑 :collectReleaseArtifacts
+                """.trimMargin(),
+            )
+        }
+
+        logger.lifecycle("[dist] 完成：${dist.absolutePath}")
+    }
 }
 
 // 一键全量构建：复合构建的 includeBuild 默认不并入根 build 生命周期，这里聚合
-// 根构建各子模块 + 各独立 includeBuild 平台的 build，并显式执行最终发布产物结构门。
+// 根构建各子模块 + 各独立 includeBuild 平台的 build，并显式执行最终发布产物结构门 + dist 聚合。
 tasks.register("buildAll") {
     group = "build"
-    description = "构建全部模块并校验各平台最终发布产物"
+    description = "构建全部模块、校验发布产物并聚合到 build/dist/"
     dependsOn(subprojects.map { "${it.path}:build" })
     dependsOn(gradle.includedBuilds.map { it.task(":build") })
     dependsOn(verifyReleasePackaging)
+    dependsOn(collectReleaseArtifacts)
+}
+
+// ---------------------------------------------------------------------------
+// 真服 / 版本矩阵 验收入口（Gradle only，禁止 scripts/*.sh 编排）
+// B 完整：全部服务端 lane；客户端 = 各 loader 自有 gametest/acceptance 伴侣进服。
+// 对齐 AllinCore：根薄包装 + includeBuild；禁止嵌套 gradlew。
+// ---------------------------------------------------------------------------
+
+/** 打印 B 车道覆盖（与 build-logic PlatformLaneCatalog 一致，根侧可离线查看）。 */
+tasks.register("listRealServerLanes") {
+    group = "help"
+    description = "列出 B 车道：全服务端 + 自有 gametest 客户端进服方式"
+    doLast {
+        logger.lifecycle(
+            """
+            |[mpmt-realserver] B 车道覆盖（路径已对齐每版本工程）
+            |  Fabric 1.20.1   platform-fabric-1.20.1    客户端=Fabric gametest
+            |  Fabric 1.21.1   platform-fabric-1.21.1    客户端=Fabric gametest
+            |  Forge 1.20.1    platform-forge-1.20.1     客户端=Forge acceptance
+            |  Forge 1.21.1    platform/forge/1.21.1 自有 launcher（不 includeBuild；见 :runRealServerAcceptanceForge121）
+            |  NeoForge        platform-neoforge         客户端=NeoForge acceptance
+            |  Bukkit/Paper    :platform:bukkit:1.20.1   客户端=Fabric gametest
+            |  Folia           同上 1.20.1；矩阵默认 R6
+            |  CatServer R5    :platform:bukkit:1.12.2 + Forge 1.12 client-only 伴侣（禁止 Forge 服务端 mod）
+            |  Sponge          platform-sponge
+            |入口（请用绝对路径 :task，避免匹配子工程同名任务）：
+            |  ./gradlew :runRealServerAcceptance
+            |  ./gradlew :runRealServerAcceptanceFabric
+            |  ./gradlew :verifyVersionMatrixBuild
+            |  ./gradlew :runVersionMatrixGate
+            |  ./gradlew :collectReleaseArtifacts   # → build/dist/{bukkit,fabric,forge,neoforge,sponge}/
+            |  ./gradlew :buildAll
+            |B 增强：
+            |  ./gradlew :platform:bukkit:1.20.1:ensurePaperRealServerHost -Pmpmt.realserver.autoHost=true
+            |A 辅车道：./gradlew :runMcTestkitSmoke -PmcTestkit.botDir=e2e/bot
+            """.trimMargin(),
+        )
+    }
+}
+
+fun registerLaneGate(
+    taskName: String,
+    descriptionText: String,
+    configure: org.gradle.api.Task.() -> Unit,
+) {
+    tasks.register(taskName) {
+        group = "verification"
+        description = descriptionText
+        configure()
+    }
+}
+
+// --- 各服务端 lane：委托平台内 runRealServerAcceptance（读权威报告）---
+
+registerLaneGate(
+    "runRealServerAcceptanceFabric",
+    "Fabric 1.20.1 专用服门禁：须先 runAcceptanceServer + Fabric gametest 客户端进服",
+) {
+    dependsOnIncludedIfPresent("platform-fabric-1.20.1", ":runRealServerAcceptance")
+}
+
+registerLaneGate(
+    "runRealServerAcceptanceFabric121",
+    "Fabric 1.21.1 专用服门禁",
+) {
+    dependsOnIncludedIfPresent("platform-fabric-1.21.1", ":runRealServerAcceptance")
+}
+
+registerLaneGate(
+    "runRealServerAcceptanceForge",
+    "Forge 1.20.1 专用服门禁：须先实跑 Forge 服 + Forge acceptance 客户端伴侣",
+) {
+    dependsOnIncludedIfPresent("platform-forge-1.20.1", ":runRealServerAcceptance")
+}
+
+/** 跨代 Forge 1.21.1：独立 launcher，禁止嵌套 gradlew；仅打印步骤。 */
+tasks.register("runRealServerAcceptanceForge121") {
+    group = "verification"
+    description =
+        "Forge 1.21.1 专用服门禁说明（独立 launcher）：打印步骤；须在 platform/forge/1.21.1 用自有 wrapper 跑报告门"
+    doLast {
+        logger.lifecycle(
+            """
+            |[runRealServerAcceptanceForge121]
+            |Forge 1.21.1 不在根 includeBuild（Gradle 8.12.1 + Java 21）。请在独立目录：
+            |  cd platform/forge/1.21.1
+            |  ./gradlew --no-daemon printRealServerAcceptanceRecipe
+            |  ./gradlew --no-daemon packageArtifacts
+            |  # 起服 + 客户端伴侣 + 报告门见 printRealServerAcceptanceRecipe
+            |  ./gradlew --no-daemon verifyAcceptanceReport
+            |产物可再由根 :collectReleaseArtifacts 捞入 build/dist/forge/（若 jar 已存在）。
+            """.trimMargin(),
+        )
+    }
+}
+
+/** Forge 1.12.2 client-only：真服走 CatServer R5，禁止 Forge 专用服。 */
+tasks.register("runRealServerAcceptanceForge112") {
+    group = "verification"
+    description =
+        "Forge 1.12.2 说明：client-only；真服请用 :runRealServerAcceptanceCatServer（禁止 Forge 服务端 mod）"
+    doLast {
+        logger.lifecycle(
+            """
+            |[runRealServerAcceptanceForge112]
+            |ADR-0021：1.12.2 Forge 只产 client-only 客户端，不得装入 CatServer 作服务端 mod。
+            |真服矩阵 R5：
+            |  ./gradlew :runRealServerAcceptanceCatServer
+            |  # 即 :platform:bukkit:1.12.2:runRealServerAcceptance（报告 RESULT PASS）
+            |客户端伴侣构建（Java 8 + Gradle 5.6.4，自有 wrapper）：
+            |  ./platform/forge/1.12.2/gradlew --no-daemon reobfJar reobfAcceptanceJar
+            |  产物：platform/forge/1.12.2/build/reobfJar/output.jar
+            |        platform/forge/1.12.2/build/libs/…acceptance…
+            """.trimMargin(),
+        )
+    }
+}
+
+registerLaneGate(
+    "runRealServerAcceptanceNeoForge",
+    "NeoForge 专用服门禁：须先实跑 NeoForge 服 + NeoForge acceptance 客户端伴侣",
+) {
+    dependsOnIncludedIfPresent("platform-neoforge", ":runRealServerAcceptance")
+}
+
+registerLaneGate(
+    "runRealServerAcceptanceBukkit",
+    "Paper/Bukkit 宿主门禁（默认 1.20.1）：产品+验收插件部署后，Fabric gametest 客户端进服写报告",
+) {
+    dependsOn(":platform:bukkit:1.20.1:runRealServerAcceptance")
+}
+
+registerLaneGate(
+    "runRealServerAcceptanceFolia",
+    "Folia 宿主门禁（矩阵 R6）：1.20.1 产物，Folia 实跑 + Fabric gametest 客户端",
+) {
+    dependsOn(":platform:bukkit:1.20.1:runRealServerAcceptance")
+}
+
+registerLaneGate(
+    "runRealServerAcceptanceCatServer",
+    "CatServer 融合服门禁（矩阵 R5）：Bukkit 1.12.2 活跃 + Forge 1.12.2 optional 客户端",
+) {
+    dependsOn(":platform:bukkit:1.12.2:runRealServerAcceptance")
+}
+
+registerLaneGate(
+    "runRealServerAcceptanceSponge",
+    "Sponge 宿主门禁：Sponge 服 + Fabric gametest 客户端进服",
+) {
+    dependsOnIncludedIfPresent("platform-sponge", ":runRealServerAcceptance")
+}
+
+/** 默认：全服务端 lane 串行门禁（各 lane 须已自行完成「服 + 自有 gametest 客户端」并落报告）。 */
+tasks.register("runRealServerAcceptance") {
+    group = "verification"
+    description =
+        "B 完整：全服务端 realserver 报告门禁（含 Fabric121；不含 Forge 1.21/1.12 自有 launcher）"
+    dependsOn(
+        "runRealServerAcceptanceFabric",
+        "runRealServerAcceptanceFabric121",
+        "runRealServerAcceptanceForge",
+        "runRealServerAcceptanceNeoForge",
+        "runRealServerAcceptanceBukkit",
+        "runRealServerAcceptanceFolia",
+        "runRealServerAcceptanceCatServer",
+        "runRealServerAcceptanceSponge",
+    )
+}
+
+/**
+ * 版本矩阵构建（无真服）：对齐每版本独立工程路径，废除 -Pmpmt.minecraftVersion。
+ * Forge 1.21.1 / 1.12.2 须用各自目录自有 launcher，本任务只打印命令不嵌套 gradlew。
+ */
+tasks.register("verifyVersionMatrixBuild") {
+    group = "verification"
+    description =
+        "版本矩阵构建：Bukkit 三版本 + Fabric 两版本 + Forge 1.20.1 打包校验；打印 1.21/1.12 Forge 独立 launcher 命令"
+    dependsOn(
+        ":platform:bukkit:1.12.2:verifyPackaging",
+        ":platform:bukkit:1.20.1:verifyPackaging",
+        ":platform:bukkit:1.21.1:verifyPackaging",
+    )
+    dependsOnIncludedIfPresent("platform-fabric-1.20.1", ":verifyPackaging")
+    dependsOnIncludedIfPresent("platform-fabric-1.21.1", ":verifyPackaging")
+    dependsOnIncludedIfPresent("platform-forge-1.20.1", ":verifyPackaging")
+    doLast {
+        logger.lifecycle(
+            """
+            |[verifyVersionMatrixBuild] 根可聚合部分已校验。
+            |Forge 1.21.1 / 1.12.2 须在对应目录用自有 wrapper（禁止嵌套 gradlew）：
+            |  # Java 21 + Gradle 8.12.1
+            |  ./platform/forge/1.21.1/gradlew --no-daemon build
+            |  # Java 8 + Gradle 5.6.4
+            |  ./platform/forge/1.12.2/gradlew --no-daemon build
+            |真服子门：./gradlew runRealServerAcceptance（须先各 lane 落 RESULT PASS 报告）
+            """.trimMargin(),
+        )
+    }
+}
+
+/** 版本矩阵聚合：先矩阵构建门，再全 lane 报告门禁（真服须已跑过）。 */
+tasks.register("runVersionMatrixGate") {
+    group = "verification"
+    description = "版本矩阵门禁：verifyVersionMatrixBuild + runRealServerAcceptance"
+    dependsOn("verifyVersionMatrixBuild", "runRealServerAcceptance")
+}
+
+// ============================================================================
+// A 车道：mc-testkit（Bukkit/Folia + mineflayer bot smoke；非 B 主 lane 的 mod 客户端）
+// 桩：e2e/harness；bot：e2e/bot；被测 jar / 桩 jar 经 env 或路径注入。
+// ============================================================================
+mcTestkit {
+    backend("s1") {
+        platform = paper
+        version = "1.20.1"
+        port = 25565
+    }
+    // 无 bot：仅校验桩 + 被测插件就绪（smoke 桩内断言 MultiPlatformModTemplate 已启用）
+    scenario("smoke") {
+        backend = "s1"
+    }
+    // Folia 后端可选矩阵（同 smoke 场景，换平台声明）
+    backend("folia1") {
+        platform = folia
+        version = "1.20.1"
+        port = 25566
+    }
+    scenario("smoke-folia") {
+        backend = "folia1"
+    }
+    dependencies {
+        // 环境变量名或路径；运行前导出或传 -D
+        pluginUnderTest = "MC_TESTKIT_E2E_PLUGIN_UNDER_TEST_JAR"
+        plugin("HARNESS_JAR")
+    }
+}
+
+/** A 车道聚合：先提示构建 jar，再跑 e2eSmoke（须 env 指向产物）。 */
+tasks.register("runMcTestkitSmoke") {
+    group = "verification"
+    description =
+        "A 车道：mc-testkit Paper smoke（须已构建产品/桩 jar 并设置 " +
+            "MC_TESTKIT_E2E_PLUGIN_UNDER_TEST_JAR 与 HARNESS_JAR；-PmcTestkit.botDir=e2e/bot）"
+    dependsOn("e2eSmoke")
+}
+
+tasks.register("runMcTestkitFoliaSmoke") {
+    group = "verification"
+    description = "A 车道：mc-testkit Folia smoke（场景 smoke-folia；依赖同上）"
+    // 任务名由 scenario key 生成：smoke-folia → SmokeFolia
+    dependsOn("e2eSmokeFolia")
 }
 
