@@ -6,6 +6,9 @@
 
 ## 未发布版本
 
+### 变更
+- **P2 矩阵门收窄（FR-12 进行中）**：`:runVersionMatrixGate` 改为依赖 `runP2RealServerAcceptance`（Fabric 1.20/1.21 + Forge 1.20 + Bukkit/Folia + CatServer），不再把 NeoForge/Sponge 作为 P2 阻断依赖；历史别名 `:runP2StrictCheck` 等价；Folia 在 `-Pmpmt.acceptance.matrix=R6` 时读 `server-report-r6.txt`。第一期用户实机确认已收口；FR-12 仍为开发中（R1–R4 合规矩阵真服与用户 P2 确认待齐）。
+
 ### 新增
 - **从 `feature/p2-version-matrix` 挑拣迁入可挂 tip 源集的 P2 能力（保留 tip P1，跳过 version 矩阵 build）**：ClientReady 控制协议 v2（Java major + executable）；`MatrixAcceptanceReportV2` + `MatrixScenarioCatalog` 为 R1–R6 required 单一真源；五平台验收驱动矩阵双轨（默认 P1，`-Dmpmt.acceptance.matrix=Rn` → SPI 过滤 + 严格 v2）；五平台产品场景 `product-handshake` / `product-roundtrip` / `client-hud` 与 Fabric/Forge/NeoForge ClientVerifier；Bukkit R5（CatServer 融合服不变量 + `forge-client-optional`）/ R6（Folia 全局·区域·实体调度，经 `ProductPluginAccess` 反射桥）；`FabricSchedulerPort` 多服 tick 路由/`close`；`FabricClientSession` 延迟握手 + tip L4 `clearReceiver`。
 - **文档纠偏对齐实装**：Forge 1.21.1 车道 ForgeGradle **6.0.54**（取代误写的 7.0.3）；CatServer 1.12.2 制品 SHA-256 与大小冻结入 `docs/specs/p2-version-matrix.md` / OPERATIONS / ADR-0021。**未**迁入 `version-api`/`modern`/`v1_*` 多源集与相关 build 改动（须获准后另议）。
