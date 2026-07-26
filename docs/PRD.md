@@ -54,9 +54,9 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | FR-13 | Folia 支持：并入 Bukkit 家族构建，经 FeatureGate 适配 RegionScheduler（验证特判机制，不拆独立构建） | P1 | 已交付@v0.1.0 |
 | FR-14 | platform-sponge（SpongeGradle·独立 includeBuild）：基础网络与示例可用 | P1 | 已交付@v0.1.0 |
 | FR-15 | platform-neoforge（NeoGradle·独立 includeBuild；**NeoForge 无 1.20.1，锚点取 1.20.2**）：基础网络与示例可用 | P1 | 已交付@v0.1.0 |
-| FR-16 | 最新版本 26.2 适配（MC 今年最新版本号，新版号方案无 `1.` 前缀），验证架构前向可扩展 | P3 | 计划 |
-| FR-17 | 脚手架发布与版本化：作为模板仓库（如 GitHub Template）发布 + VERSION 注入各平台构建产物 + 版本化/标签 | P3 | 计划 |
-| FR-18 | 玩法开发者上手：克隆模板后如何在 L0 写玩法的文档 + 示例（非产品玩法） | P3 | 计划 |
+| FR-16 | 最新版本 26.2 适配（MC 今年最新版本号，新版号方案无 `1.` 前缀），验证架构前向可扩展；冻结见 [specs/fr-26_2-adapter.md](specs/fr-26_2-adapter.md) | P3 | 开发中 |
+| FR-17 | 脚手架发布与版本化：作为模板仓库（如 GitHub Template）发布 + VERSION 注入各平台构建产物 + 版本化/标签 | P3 | 开发中 |
+| FR-18 | 玩法开发者上手：克隆模板后如何在 L0 写玩法的文档 + 示例（非产品玩法） | P3 | 开发中 |
 | FR-19 | 跨端网络收发框架：基于 protocol 的 C2S/S2C 收发管线 + 各平台经 `TransportPort` 注册通道（具体平台见 FR-20），附若干发包示例 | P1 | 已交付@v0.1.0 |
 | FR-20 | 跨平台传输：Bukkit/Folia/Sponge（插件消息）+ Fabric/Forge/NeoForge 服务端（各网络 API）+ 单人世界（集成服内存回环）均实现 `TransportPort`；上层逻辑不变 | P1 | 已交付@v0.1.0 |
 | FR-21 | 进服握手 + 客户端标识上报：握手协商后客户端上报**弱客户端标识**（默认基于可得弱硬件/系统属性 SHA-256，可伪造/可随机化，`MachineCodeProvider` 可插拔），服务端接收并回发消息 | P1 | 已交付@v0.1.0 |
@@ -102,7 +102,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 
 > 第一期**实施顺序**（评审）：先 **Paper + Fabric + Forge** 跑通"一份 L0 逻辑 + 一次往返 + 握手"作骨架证明（FR-11 两证），再铺 Folia/Sponge/NeoForge 与完整可靠性 / 三组示例——"全平台跑通"是 P1 收尾目标、非 MVP 必过门。NeoForge 锚点取 1.20.2（无 1.20.1）。客户端侧**渲染必在 L3/L4、各平台各版本各写**，"写一次"主要在协议 / 状态 / 输入意图层（core-client 较薄），不夸大客户端复用。
 - **第二期**：**沿版本轴铺开**——1.21.1 / 1.12.2 验证 L4 跨版本；CatServer 实跑（需 1.12.2）。对应 FR-12；状态以 §4 为准（**已交付@v0.2.0**）。交付门（R1–R6 合规矩阵 v2 + `:runVersionMatrixGate` + 用户第二期实机确认）已齐；详见 [p2-version-matrix §11.1](specs/p2-version-matrix.md)。
-- **第三期**：**规模化与对外**——最新版本（26.2）、脚手架模板化发布、玩法开发者上手文档与示例。
+- **第三期**：**规模化与对外**——最新版本（26.2）、脚手架模板化发布、玩法开发者上手文档与示例。对应 FR-16/FR-17/FR-18；规格见 [`specs/p3-platform-scaling-and-onboarding.md`](specs/p3-platform-scaling-and-onboarding.md)（草拟：分 T1–T8 任务，按 §6 验收独立交付，**任何一项未齐不得预标 `已交付`**）。
 
 > 分期是少数粗粒度阶段，不随 FR 增长而改。某期是否完成看 §4 表里该期 FR 状态是否都 `已交付`。
 

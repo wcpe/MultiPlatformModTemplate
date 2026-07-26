@@ -33,6 +33,9 @@ include(
     "modules:acceptance",
 )
 
+// FR-18 上手示例域（非产品玩法，不进发布产物）
+include("examples:counter")
+
 include(
     "platform:bukkit",
     "platform:bukkit:bukkit-api",

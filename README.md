@@ -4,7 +4,9 @@
 
 ## 状态
 
-当前正式版 **v0.2.0**：第一期 MVP 与第二期多版本矩阵（FR-12，1.21.1 / 1.12.2）已交付；第三期（26.2 / 模板化发布 / 上手文档）仍在计划中。
+当前正式版 **v0.2.0**：第一期 MVP 与第二期多版本矩阵（FR-12，1.21.1 / 1.12.2）已交付；第三期（FR-16 26.2 / FR-17 模板发布 / FR-18 上手文档）进行中。
+
+**克隆本模板起步**：见 [`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`](docs/HOWTO-CLONE-AND-WRITE-PLAY.md)（含 Counter 示例域）。版本节奏见 [`docs/VERSIONING.md`](docs/VERSIONING.md)。
 
 ## 架构一览
 
@@ -35,10 +37,13 @@ L0/L1 不含任何平台 / 版本代码；跨平台、跨版本的差异全部�
 - `platform-spi`：平台抽象 SPI。
 - `platform-*`：各平台胶水（按各 loader 最低 JDK 编译）。
 - `smoke`：架构验证用的最小冒烟特性（不发布，非产品玩法）。
+- `examples/counter`：FR-18 上手示例域（纯 L0 加入计数，非产品玩法）。
 - `docs/`：规格与决策文档。`.claude/rules/`：防漂移红线。
 
 ## 文档导航
 
+- 上手：[`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`](docs/HOWTO-CLONE-AND-WRITE-PLAY.md)
+- 版本节奏：[`docs/VERSIONING.md`](docs/VERSIONING.md)
 - 需求：[`docs/PRD.md`](docs/PRD.md)
 - 架构：[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - 接口：[`docs/API.md`](docs/API.md)

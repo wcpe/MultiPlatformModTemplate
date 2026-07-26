@@ -6,6 +6,11 @@
 
 ## 未发布版本
 
+### 新增
+- **上手指南与 Counter 示例域（FR-18 进行中）**：`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`；`examples/counter` 纯 L0 加入计数服务 + 纯 JVM 单测（不依赖 L3）。
+- **版本节奏与发布说明模板（FR-17 进行中）**：`docs/VERSIONING.md`；`.github/RELEASE_TEMPLATE.md`；README 顶部强化「克隆本模板」入口。
+- **26.2 适配冻结规格（FR-16 T1）**：`docs/specs/fr-26_2-adapter.md`——确认 Paper/Fabric/Forge 26.2 均存在并冻结坐标；Folia 无 26.2 不建格；Paper 宿主要求 Java 25+。
+
 ## [0.2.0] - 2026-07-26
 
 多版本矩阵（FR-12）收口：1.21.1 / 1.12.2 跨版本适配、R1–R6 合规真服、用户第二期实机确认通过。
