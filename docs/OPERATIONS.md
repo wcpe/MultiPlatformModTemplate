@@ -55,7 +55,7 @@ Forge 跨代（自有 launcher，目录在 `platform/forge/`，禁止从根嵌�
 # P2 核心矩阵门（FR-12）：不含 NeoForge / Sponge；等价别名 :runP2StrictCheck
 ./gradlew :runVersionMatrixGate
 
-> **FR-12 未齐不得标已交付**：R1–R4 合规矩阵 v2 + 用户 P2 实机确认未齐前，禁止把 FR-12 标 `已交付@…`；`:runVersionMatrixGate` 仅在权威报告已落盘时放行报告门，不代替真服与用户确认。
+> **FR-12 已交付@v0.2.0**：R1–R6 合规矩阵 v2 + 用户第二期实机确认已齐；`:runVersionMatrixGate` 仍是 P2 报告门入口（只读权威报告，不代替真服实跑）。
 # 全 lane（含 NeoForge / Sponge）另用：
 ./gradlew :runRealServerAcceptance
 # Folia R6 报告路径：-Pmpmt.acceptance.matrix=R6 时读 server-report-r6.txt

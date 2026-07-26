@@ -1,6 +1,6 @@
 # 功能规格：P2 版本矩阵与工具链隔离
 
-> 状态：已接受　·　关联 PRD：FR-12、FR-25　·　分支：feature/p2-version-matrix　·　架构决策：[ADR-0021](../adr/0021-p2-version-matrix-toolchain-isolation.md)
+> 状态：已交付@v0.2.0　·　关联 PRD：FR-12、FR-25　·　分支：feature/p2-version-matrix　·　架构决策：[ADR-0021](../adr/0021-p2-version-matrix-toolchain-isolation.md)
 
 ## 1. 背景与目标
 
@@ -261,7 +261,7 @@ R5 启动后必须同时证明：
 3. `./gradlew :runVersionMatrixGate`（≡ `:runP2StrictCheck`）在本机对**当前 HEAD 权威报告**放行。
 4. **用户对第二期 / P2 实机维度作出最终确认**（第一期确认不自动覆盖第二期）。
 
-当前状态（对照 2026-07-26 验收）：FR-12 = **开发中**。历史 `.tmp/matrix-20260723` 中 R5/R6 合规 PASS 可作参考；R1–R4 多为 P1 14 项或同栈误标，**不构成交付证据**。
+当前状态（对照 2026-07-26 发版 `v0.2.0`）：FR-12 = **已交付@v0.2.0**。R1–R6 合规矩阵 v2 真服 `RESULT PASS` 已归档于 `.tmp/matrix-r{1..6}-attempt/server-report-r{n}-PASS.txt`；`:runVersionMatrixGate` 放行；用户第二期 / P2 实机最终确认通过（`.tmp/acceptance-phase-P2-user-confirm-20260726.md`）。
 
 ## 12. 风险 / 待定
 

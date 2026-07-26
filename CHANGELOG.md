@@ -6,24 +6,32 @@
 
 ## 未发布版本
 
-### 变更
-- **P2 矩阵门收窄（FR-12 进行中）**：`:runVersionMatrixGate` 改为依赖 `runP2RealServerAcceptance`（Fabric 1.20/1.21 + Forge 1.20 + Bukkit/Folia + CatServer），不再把 NeoForge/Sponge 作为 P2 阻断依赖；历史别名 `:runP2StrictCheck` 等价；Folia 在 `-Pmpmt.acceptance.matrix=R6` 时读 `server-report-r6.txt`。第一期用户实机确认已收口；FR-12 仍为开发中（R1–R4 合规矩阵真服与用户 P2 确认待齐）。
+## [0.2.0] - 2026-07-26
+
+多版本矩阵（FR-12）收口：1.21.1 / 1.12.2 跨版本适配、R1–R6 合规真服、用户第二期实机确认通过。
 
 ### 新增
-- **从 `feature/p2-version-matrix` 挑拣迁入可挂 tip 源集的 P2 能力（保留 tip P1，跳过 version 矩阵 build）**：ClientReady 控制协议 v2（Java major + executable）；`MatrixAcceptanceReportV2` + `MatrixScenarioCatalog` 为 R1–R6 required 单一真源；五平台验收驱动矩阵双轨（默认 P1，`-Dmpmt.acceptance.matrix=Rn` → SPI 过滤 + 严格 v2）；五平台产品场景 `product-handshake` / `product-roundtrip` / `client-hud` 与 Fabric/Forge/NeoForge ClientVerifier；Bukkit R5（CatServer 融合服不变量 + `forge-client-optional`）/ R6（Folia 全局·区域·实体调度，经 `ProductPluginAccess` 反射桥）；`FabricSchedulerPort` 多服 tick 路由/`close`；`FabricClientSession` 延迟握手 + tip L4 `clearReceiver`。
-- **文档纠偏对齐实装**：Forge 1.21.1 车道 ForgeGradle **6.0.54**（取代误写的 7.0.3）；CatServer 1.12.2 制品 SHA-256 与大小冻结入 `docs/specs/p2-version-matrix.md` / OPERATIONS / ADR-0021。**未**迁入 `version-api`/`modern`/`v1_*` 多源集与相关 build 改动（须获准后另议）。
+- **版本矩阵与工具链隔离（FR-12 / ADR-0021）**：按 `docs/specs/p2-version-matrix.md` 落地 1.21.1（Paper/Fabric/Forge）与 1.12.2（Bukkit/CatServer + Forge client-only）车道；CatServer 制品 SHA-256/大小冻结；Forge 跨代独立 launcher（禁止根嵌套 gradlew）。
+- **矩阵验收报告 v2**：`MatrixAcceptanceReportV2` + `MatrixScenarioCatalog` 为 R1–R6 required 场景单一真源；五平台验收驱动支持默认 P1 与 `-Dmpmt.acceptance.matrix=Rn` 双轨；公共产品场景 `product-handshake` / `product-roundtrip` / `client-hud`。
+- **R5 / R6 专属场景**：CatServer 融合服不变量（`hybrid-forge-bukkit` / `forge-client-optional` / `server-forge-product-absent` 等）；Folia 三类调度（`global-scheduler` / `region-scheduler` / `entity-scheduler`）。
+- **realserver-acceptance 约定插件**：`build-logic/realserver-acceptance` + 根 `:runRealServerAcceptance*` / `:runVersionMatrixGate`（≡ `:runP2StrictCheck`）/ `:runP2RealServerAcceptance`；可选 `PaperHostService` 自动起 Paper 宿主。
+- **物理布局收纳**：`core/` · `platform/<loader>/{api,版本}/` · `modules/`；Bukkit/Fabric/Forge/NeoForge/Sponge 各版本独立工程或 includeBuild。
+- **发布与脚手架工具**：`:collectReleaseArtifacts` 聚合 `build/dist/{bukkit,fabric,forge,neoforge,sponge}/`；`renameScaffold` 换名任务；mc-testkit e2e 桩与 bot 脚手架。
+- **ClientReady 控制协议 v2**：上报 Java major + executable，支撑矩阵报告 Java 元数据。
 
 ### 变更
-- **version-api 方案 C 阶段 2（C-2）**：
-  - **Bukkit**：多源集 `version-api`/`modern`/`v1_12`/`v1_20`/`v1_21` + `-Pmpmt.minecraftVersion`；ServiceLoader 唯一 L4；验收通道构建期生成；1.12 车道 Folia 反射隔离。门禁：三车道 `test`+`shadowJar`+`verifyPackaging` 绿（默认 1.20.1 含 MockBukkit/acceptanceContract）。
-  - **Fabric**：多源集 `version-api`+选中 `v1_20`/`v1_21`；产物名带 MC；gametest 改走 L4 适配器。门禁：1.20.1/1.21.1 `test`+`remapJar`+`verifyPackaging`+`gametestClasses` 绿。
-  - **Forge**：沿用主 1.20.1 + 既有 `legacy-1_12`/`modern-1_21` 子工程（本批未改工具链）。
-  - **NeoForge**：仍锚点 1.20.2（无 1.20.1）；1.21 未纳入本批。
-- SpotBugs 排除过滤器精确放行 `AcceptanceReportV2ValidationMain.workspaceFile` 的 `PATH_TRAVERSAL_IN` 误报（方法已 canonical + 工作区边界校验；与 feature/p2 对齐，避免严格门误杀）。
-- **验收编排改为 Gradle only（禁 sh）**：`build-logic/realserver-acceptance` + 根 `runRealServerAcceptance` / `runP2StrictCheck` / 分 lane 任务；`scripts/p2-strict-check.sh` 废弃（exit 2）。
-- **B 完整：全服务端覆盖 + 自有 gametest 客户端进服**：lane = Fabric / Forge / NeoForge / Bukkit / Folia / CatServer / Sponge；各平台补 `runRealServerAcceptance` 报告门禁；客户端规定为各 loader acceptance/gametest 伴侣（非默认 bot）；`PlatformLaneCatalog` + 单测。
-- **B 增强：`PaperHostService` BuildService**：Fill v3 下载/缓存 paperclip、部署产品+验收 jar、轮询 `Done (`、全局看门狗与 build 结束强杀；注入 P1 报告元数据（commit/version/mcVersion/serverVersion/productJarSha256）；`autoStartPaperHost` + `ensurePaperRealServerHost`（`-Pmpmt.realserver.autoHost=true`，分终端联调加 `waitForReport=true`）。本机 Paper+Fabric 客户端真机 **v2 TOTAL 14 PASS 14 / RESULT PASS**。
-- **A 车道接入 mc-testkit 0.5.1**：根 `mcTestkit{}` 声明 Paper/Folia smoke；`e2e/harness`+`e2e/bot`；`runMcTestkitSmoke` / `runMcTestkitFoliaSmoke`；smoke 断言被测插件启用。根任务对 `-Pmpmt.skip.*=true` 缺失 includeBuild 软依赖，便于本机 SSL 阻塞时仍列 `e2eSmoke`。
+- **P2 矩阵门收窄**：`:runVersionMatrixGate` 仅依赖 P2 核心车道（Fabric 1.20/1.21 + Forge 1.20 + Bukkit/Folia + CatServer），NeoForge/Sponge 不再阻断 FR-12；Folia 在 `-Pmpmt.acceptance.matrix=R6` 时读 `server-report-r6.txt`。
+- **FR-12 交付门**：PRD §7 / OPERATIONS / `p2-version-matrix` §11.1 固化 R1–R6 合规报告 + `:runVersionMatrixGate` + 用户第二期实机确认四条件；缺任一不得标 `已交付`。
+- **Forge 1.21.1 工具链纠偏**：ForgeGradle **6.0.54**（取代误写 7.0.3）。
+
+### 修复
+- **验收 HUD 误杀 client-hud**：握手后演示四类 HUD 不再直接污染断言；Forge 1.21 / 1.12 与 1.12 侧轮询 ACTIONBAR「验收HUD」。
+- **Fabric 1.21.1 真服矩阵轨**：`runAcceptanceServer` 注入 R1 矩阵属性（runId / 制品哈希 / 报告路径），矩阵报告与默认 P1 报告路径分离。
+
+### 验收证据
+- R1–R6 合规 `SERVER-GAMETEST-REPORT v2` `RESULT PASS` 归档于 `.tmp/matrix-r{1..6}-attempt/`。
+- `:runVersionMatrixGate` BUILD SUCCESSFUL；`:collectReleaseArtifacts` 产出全平台 dist jar。
+- 用户第二期 / P2 实机确认：通过（`.tmp/acceptance-phase-P2-user-confirm-20260726.md`）。
 
 ## [0.1.0] - 2026-07-22
 
