@@ -1,7 +1,7 @@
 # ADR-0016：反混淆映射策略——锚点有官方映射用官方(Mojmap)，无官方走各 loader 自带
 
 ## 状态
-已接受
+已被 [ADR-0022](0022-unobfuscated-minecraft-naming-policy.md) 取代
 
 ## 背景
 模组加载器（Fabric/Forge/NeoForge）编译期需要一套把 Minecraft 混淆类名还原为可读名的**反混淆映射**。可选项主要有：Mojang 官方映射（Mojmap，Mojang 自 1.14.4 起随版本发布）、社区 Yarn（Fabric）、MCP/SRG（Forge）等。映射选择影响**所有 L3/L4 平台侧代码**里对 Minecraft 类型的命名引用，跨平台混用会让同一份平台胶水在 Fabric 与 Forge 两侧命名不一致、增加模板读者心智负担；且后期切换映射代价大（要重写所有 NMS 引用）。本项目锚点版本含 1.20.1（有官方映射）与 1.12.2（**无**官方映射，Mojang 当年未发布）。

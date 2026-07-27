@@ -19,12 +19,13 @@
 | [0013](0013-threading-and-scheduling.md) | 线程模型与归属调度：Folia 无主线程，SchedulerPort 按归属调度 | 已接受 |
 | [0014](0014-realserver-acceptance-harness.md) | realserver 验收：服务端驱动 / 客户端验证 / 单一权威报告（镜像 AllinCore-New ADR-0020） | 已接受 |
 | [0015](0015-domain-organization.md) | 功能域组织与拆分约定：域模板 + 注册 + 包→模块成长，不预建空壳 | 已接受 |
-| [0016](0016-mappings-policy.md) | 反混淆映射策略：锚点有官方映射用 Mojmap，无官方走各 loader 自带 | 已接受 |
+| [0016](0016-mappings-policy.md) | 反混淆映射策略：锚点有官方映射用 Mojmap，无官方走各 loader 自带 | 已被 [0022](0022-unobfuscated-minecraft-naming-policy.md) 取代 |
 | [0017](0017-assembly-orchestration-in-l2.md) | 平台发现 / 装配编排归属 L2 platform-spi（细化 ADR-0002，守 L1⊄L2） | 已接受 |
 | [0018](0018-forge-mixin-raw-payload.md) | Forge 端用 Mixin 拦截裸 CustomPayload 统一裸字节收发（取代 SimpleChannel，打通 Forge 客户端↔Bukkit 服） | 已接受 |
 | [0019](0019-bukkit-paper-api-baseline.md) | Bukkit 家族编译基线改用 paper-api（compileOnly）以接 Folia 区域调度 API（细化 ADR-0007） | 已接受 |
 | [0020](0020-sponge-rc1365-runtime-baseline.md) | Sponge 第一期开箱运行基线固定为 RC1365 与 Java 17（细化 ADR-0004/0007/0014） | 已接受 |
 | [0021](0021-p2-version-matrix-toolchain-isolation.md) | P2 有效版本矩阵、工具链隔离与严格验收入口（本仓 ADR-0021；勿与 AllinCore-New ADR-0020 混淆） | 已接受 |
+| [0022](0022-unobfuscated-minecraft-naming-policy.md) | Minecraft 26.1+ 使用无混淆原始命名，并按加载器采用非映射构建链路 | 已接受 |
 
 > 模板：状态 / 背景 / 决策 / 理由 / 后果 / 备选方案，见 [`_template.md`](_template.md)。
 
