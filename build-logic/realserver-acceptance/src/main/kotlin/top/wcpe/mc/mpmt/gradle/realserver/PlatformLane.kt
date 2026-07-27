@@ -15,7 +15,7 @@ enum class PlatformLane(
     val displayName: String,
     val serverKind: ServerKind,
     val clientKind: ClientKind,
-    /** composite includeBuild 名；null = 根多模块（Bukkit 家族） */
+    /** composite includeBuild 名；null = 根多模块或自有 launcher 车道 */
     val includedBuildName: String?,
     /** 平台/模块内门禁任务名 */
     val verifyTaskName: String,
@@ -46,6 +46,16 @@ enum class PlatformLane(
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "build/acceptance/server-report.txt",
     ),
+    FABRIC_262(
+        id = "Fabric262",
+        displayName = "Fabric 26.2 专用服",
+        serverKind = ServerKind.MOD_DEDICATED,
+        clientKind = ClientKind.FABRIC_GAMETEST,
+        includedBuildName = "platform-fabric-26.2",
+        verifyTaskName = "runRealServerAcceptance",
+        defaultReportHint = "build/acceptance/server-report-r7.txt",
+        defaultMatrix = "R7",
+    ),
     FORGE(
         id = "Forge",
         displayName = "Forge 1.20.1 专用服",
@@ -54,6 +64,17 @@ enum class PlatformLane(
         includedBuildName = "platform-forge-1.20.1",
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "run-server/acceptance-report.txt",
+    ),
+    FORGE_262(
+        id = "Forge262",
+        displayName = "Forge 26.2 专用服",
+        serverKind = ServerKind.MOD_DEDICATED,
+        clientKind = ClientKind.FORGE_ACCEPTANCE,
+        // ForgeGradle 7 与 JDK 25 由自有 wrapper 管理；根仅消费既有制品和报告。
+        includedBuildName = null,
+        verifyTaskName = "runRealServerAcceptance",
+        defaultReportHint = "run-acceptance-server/acceptance-report.txt",
+        defaultMatrix = "R7",
     ),
     NEOFORGE(
         id = "NeoForge",
@@ -73,6 +94,17 @@ enum class PlatformLane(
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "build/acceptance/server-report.txt",
         rootProjectTaskPath = ":platform:bukkit:1.20.1:runRealServerAcceptance",
+    ),
+    BUKKIT_262(
+        id = "Bukkit262",
+        displayName = "Paper 26.2 插件宿主",
+        serverKind = ServerKind.PLUGIN_HOST,
+        clientKind = ClientKind.FABRIC_GAMETEST,
+        includedBuildName = null,
+        verifyTaskName = "runRealServerAcceptance",
+        defaultReportHint = "build/acceptance/server-report.txt",
+        defaultMatrix = "R7",
+        rootProjectTaskPath = ":platform:bukkit:26.2:runRealServerAcceptance",
     ),
     FOLIA(
         id = "Folia",

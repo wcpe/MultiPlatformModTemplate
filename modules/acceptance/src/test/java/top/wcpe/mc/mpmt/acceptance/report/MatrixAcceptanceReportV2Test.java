@@ -1,6 +1,7 @@
 package top.wcpe.mc.mpmt.acceptance.report;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -44,13 +45,23 @@ class MatrixAcceptanceReportV2Test {
     }
 
     @Test
-    @DisplayName("仅 R1–R6 视为矩阵模式激活")
+    @DisplayName("R1–R7 视为矩阵模式激活")
     void 矩阵模式探测() {
         assertFalse(MatrixAcceptanceReportV2.matrixModeActive());
         System.setProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY, "R1");
         assertTrue(MatrixAcceptanceReportV2.matrixModeActive());
+        System.setProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY, "R7");
+        assertTrue(MatrixAcceptanceReportV2.matrixModeActive());
         System.setProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY, "bukkit");
         assertFalse(MatrixAcceptanceReportV2.matrixModeActive());
+    }
+
+    @Test
+    @DisplayName("R7 完整启动属性通过矩阵校验")
+    void r7启动属性校验() throws IOException {
+        installValidProperties("R7");
+
+        assertDoesNotThrow(MatrixAcceptanceReportV2::validateRequiredProperties);
     }
 
     @Test
@@ -103,7 +114,11 @@ class MatrixAcceptanceReportV2Test {
     }
 
     private void installValidProperties() throws IOException {
-        System.setProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY, "R1");
+        installValidProperties("R1");
+    }
+
+    private void installValidProperties(String matrix) throws IOException {
+        System.setProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY, matrix);
         System.setProperty("mpmt.acceptance.runId", "run-matrix-test");
         System.setProperty("mpmt.acceptance.startEpochMs", "1000");
         System.setProperty("mpmt.acceptance.javaExecutable", "C:/server/java.exe");

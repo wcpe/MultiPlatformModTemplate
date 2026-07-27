@@ -22,8 +22,8 @@ class AcceptanceReportV2FactoryTest {
     Path tempDir;
 
     @Test
-    @DisplayName("按实际文件计算五类 SHA-256 并转换场景结果")
-    void 装配实际报告() throws IOException {
+    @DisplayName("R7 按实际文件计算五类 SHA-256 并转换场景结果")
+    void 装配r7实际报告() throws IOException {
         Path serverRuntime = artifact("server-runtime");
         Path serverProduct = artifact("server-product");
         Path serverAcceptance = artifact("server-acceptance");
@@ -35,7 +35,7 @@ class AcceptanceReportV2FactoryTest {
 
         AcceptanceReportV2 report = AcceptanceReportV2Factory.create(
                 "run-1",
-                "R1",
+                "R7",
                 1000L,
                 new JavaRuntimeInfo(21, "C:/server/java.exe"),
                 new JavaRuntimeInfo(21, "C:/client/java.exe"),

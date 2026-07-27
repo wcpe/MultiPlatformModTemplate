@@ -13,9 +13,12 @@ class PlatformLaneCatalogTest {
             setOf(
                 "Fabric",
                 "Fabric121",
+                "Fabric262",
                 "Forge",
+                "Forge262",
                 "NeoForge",
                 "Bukkit",
+                "Bukkit262",
                 "Folia",
                 "CatServer",
                 "Sponge",
@@ -28,7 +31,9 @@ class PlatformLaneCatalogTest {
     fun `includeBuild 与根路径对齐新版本工程`() {
         assertEquals("platform-fabric-1.20.1", PlatformLane.FABRIC.includedBuildName)
         assertEquals("platform-fabric-1.21.1", PlatformLane.FABRIC_121.includedBuildName)
+        assertEquals("platform-fabric-26.2", PlatformLane.FABRIC_262.includedBuildName)
         assertEquals("platform-forge-1.20.1", PlatformLane.FORGE.includedBuildName)
+        assertEquals(null, PlatformLane.FORGE_262.includedBuildName)
         assertEquals(
             ":platform:bukkit:1.20.1:runRealServerAcceptance",
             PlatformLane.BUKKIT.rootProjectTaskPath,
@@ -36,6 +41,10 @@ class PlatformLaneCatalogTest {
         assertEquals(
             ":platform:bukkit:1.12.2:runRealServerAcceptance",
             PlatformLane.CATSERVER.rootProjectTaskPath,
+        )
+        assertEquals(
+            ":platform:bukkit:26.2:runRealServerAcceptance",
+            PlatformLane.BUKKIT_262.rootProjectTaskPath,
         )
     }
 
@@ -63,5 +72,8 @@ class PlatformLaneCatalogTest {
     fun `R5 R6 默认矩阵绑定 CatServer 与 Folia`() {
         assertEquals("R5", PlatformLane.CATSERVER.defaultMatrix)
         assertEquals("R6", PlatformLane.FOLIA.defaultMatrix)
+        assertEquals("R7", PlatformLane.BUKKIT_262.defaultMatrix)
+        assertEquals("R7", PlatformLane.FABRIC_262.defaultMatrix)
+        assertEquals("R7", PlatformLane.FORGE_262.defaultMatrix)
     }
 }

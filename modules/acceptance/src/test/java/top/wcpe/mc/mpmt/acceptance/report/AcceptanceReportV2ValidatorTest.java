@@ -48,9 +48,9 @@ class AcceptanceReportV2ValidatorTest {
     }
 
     @Test
-    @DisplayName("未知 matrix 在构造预期时立即拒绝")
-    void 未知matrix拒绝() {
-        assertThrows(IllegalArgumentException.class, () -> expectation("R7"));
+    @DisplayName("R7 在构造预期时使用公共三场景")
+    void r7构造预期() {
+        assertDoesNotThrow(() -> expectation("R7"));
     }
 
     @Test

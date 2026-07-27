@@ -14,12 +14,13 @@ import org.junit.jupiter.api.Test;
 class MatrixScenarioCatalogTest {
 
     @Test
-    @DisplayName("R1–R4 仅产品三件套；R5/R6 含专属场景")
+    @DisplayName("R1–R4 与 R7 仅产品三件套；R5/R6 含专属场景")
     void 矩阵清单() {
         List<String> common =
                 Arrays.asList("product-handshake", "product-roundtrip", "client-hud");
         assertEquals(common, MatrixScenarioCatalog.requiredFor("R1"));
         assertEquals(common, MatrixScenarioCatalog.requiredFor("R4"));
+        assertEquals(common, MatrixScenarioCatalog.requiredFor("R7"));
         assertTrue(MatrixScenarioCatalog.requiredFor("R5").contains("hybrid-forge-bukkit"));
         assertTrue(MatrixScenarioCatalog.requiredFor("R6").contains("entity-scheduler"));
         assertFalse(MatrixScenarioCatalog.allowsInMatrix("R1", "real-round-trip"));

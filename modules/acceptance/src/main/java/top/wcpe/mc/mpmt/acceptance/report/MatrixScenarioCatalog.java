@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * R1–R6 矩阵 required 场景清单（单一真源）。
+ * R1–R7 矩阵 required 场景清单（单一真源）。
  *
  * <p>与 {@link AcceptanceReportV2Expectation} / 严格校验器对齐；各平台矩阵轨 SPI 装载须经
  * {@link #allowsInMatrix(String, String)} 过滤，避免把 P1 smoke / real-round-trip 混进矩阵报告。
@@ -57,6 +57,7 @@ public final class MatrixScenarioCatalog {
         map.put(
                 "R6",
                 withAdditional(COMMON, "global-scheduler", "region-scheduler", "entity-scheduler"));
+        map.put("R7", COMMON);
         return Collections.unmodifiableMap(map);
     }
 

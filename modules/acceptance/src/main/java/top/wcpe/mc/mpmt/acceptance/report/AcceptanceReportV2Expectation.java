@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/** validator 接收的本轮预期身份、JDK 与制品；required 场景由 R1-R6 矩阵固定决定。 */
+/** validator 接收的本轮预期身份、JDK 与制品；required 场景由矩阵目录固定决定。 */
 public final class AcceptanceReportV2Expectation {
 
     private static final Set<String> REQUIRED_ARTIFACT_ROLES = requiredArtifactRoles();

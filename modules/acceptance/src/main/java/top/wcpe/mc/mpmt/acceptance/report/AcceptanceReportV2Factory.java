@@ -100,9 +100,7 @@ public final class AcceptanceReportV2Factory {
             JavaRuntimeInfo clientJava) {
         ReportValueChecks.requireSingleLine("RUN_ID", runId);
         ReportValueChecks.requireSingleLine("MATRIX", matrix);
-        if (!Arrays.asList("R1", "R2", "R3", "R4", "R5", "R6").contains(matrix)) {
-            throw new IllegalArgumentException("未知 MATRIX：" + matrix);
-        }
+        MatrixScenarioCatalog.requiredFor(matrix);
         if (startEpochMs <= 0L) {
             throw new IllegalArgumentException("START_EPOCH_MS 必须为正数");
         }

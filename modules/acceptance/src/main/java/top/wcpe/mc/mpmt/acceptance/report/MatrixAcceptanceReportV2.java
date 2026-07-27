@@ -9,7 +9,7 @@ import java.util.List;
 import top.wcpe.mc.mpmt.acceptance.AcceptanceClient;
 
 /**
- * R1–R6 矩阵 realserver 的 v2 报告装配与本轮系统属性校验（平台无关）。
+ * R1–R7 矩阵 realserver 的 v2 报告装配与本轮系统属性校验（平台无关）。
  *
  * <p>各平台验收驱动在声明 {@code -Dmpmt.acceptance.matrix=Rn} 时使用本类；默认 P1 轨仍走
  * {@link AcceptanceReport} + {@link P1ScenarioMatrix}。
@@ -24,7 +24,7 @@ public final class MatrixAcceptanceReportV2 {
     private static final String JAVA_EXECUTABLE_PROPERTY = "mpmt.acceptance.javaExecutable";
     private static final String ARTIFACT_PROPERTY_PREFIX = "mpmt.acceptance.artifact.";
     private static final List<String> MATRICES =
-            Arrays.asList("R1", "R2", "R3", "R4", "R5", "R6");
+            Arrays.asList("R1", "R2", "R3", "R4", "R5", "R6", "R7");
     private static final List<String> ARTIFACT_ROLES =
             Arrays.asList(
                     "server-runtime",
@@ -37,7 +37,7 @@ public final class MatrixAcceptanceReportV2 {
         // 工具类不实例化
     }
 
-    /** 是否声明了 R1–R6 矩阵（有则走矩阵 v2 路径）。 */
+    /** 是否声明了 R1–R7 矩阵（有则走矩阵 v2 路径）。 */
     public static boolean matrixModeActive() {
         String matrix = System.getProperty(MATRIX_PROPERTY);
         return matrix != null && MATRICES.contains(matrix.trim());
