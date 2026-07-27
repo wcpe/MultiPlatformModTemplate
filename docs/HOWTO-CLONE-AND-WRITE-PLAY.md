@@ -40,20 +40,22 @@ cd mygame
 ### 3.1 L0 是什么
 
 - **L0（`core-domain`）**：纯 Java 8、零平台依赖的功能域。玩法规则、领域模型、端口接口都写在这里。
-- **端口（Port）**：L0 声明、L3 实现的能力抽象。Counter 只用两个：
+- **端口（Port）**：L0 声明、L3 实现的能力抽象。Counter 用三个：
   - `PersistencePort`：读写字符串键值（具体存储由平台决定）
   - `MessagePort`：向玩家发一条聊天文本
-- **EventBus**：域间协作总线。平台 L3 把原生"玩家加入"事件适配为 `PlayerJoinedEvent` 投递到总线，L0 订阅即可。
+  - `SchedulerPort`：把阻塞的持久化放到异步线程，并按玩家归属发消息或运行周期任务。
+- **EventBus**：域间协作总线。平台 L3 把原生玩家进、退事件分别适配为 `PlayerJoinedEvent` 与 `PlayerLeftEvent` 投递到总线，L0 订阅即可。
 
 ### 3.2 Counter 做了什么
 
 [`PlayerJoinCounterService`](../examples/counter/src/main/java/top/wcpe/mc/mpmt/examples/counter/PlayerJoinCounterService.java)：
 
-1. 玩家加入 → 读 `counter/join-count:<uuid>`
-2. 计数 +1 → 写回
-3. 发消息「你已加入 N 次」
+1. 玩家加入 → 异步读写 `counter/first-join:<uuid>`；仅首次加入时写入毫秒时间。
+2. 读 `counter/join-count:<uuid>` → 计数 +1 → 写回。
+3. 按玩家归属发消息「你已加入 N 次」，并登记一个周期提示句柄。
+4. 玩家离开 → 关闭其句柄，不留后台任务。
 
-比 [`PlatformCapabilityExample`](../core/domain/src/main/java/top/wcpe/mc/mpmt/domain/capability/PlatformCapabilityExample.java) 更简单：无调度、无心跳，一眼看懂数据流。
+这个示例只保留一个独立的玩家计数规则；完整平台能力组合见下文的 `PlatformCapabilityExample` 装配路径。
 
 ### 3.3 核心代码骨架
 
@@ -61,29 +63,36 @@ cd mygame
 public final class PlayerJoinCounterService {
     static final String NAMESPACE = "counter";
     static final String JOIN_COUNT_KEY_PREFIX = "join-count:";
+    static final String FIRST_JOIN_KEY_PREFIX = "first-join:";
 
     private final PersistencePort persistence;
     private final MessagePort message;
+    private final SchedulerPort scheduler;
 
-    public PlayerJoinCounterService(PersistencePort persistence, MessagePort message) {
+    public PlayerJoinCounterService(
+            PersistencePort persistence, MessagePort message, SchedulerPort scheduler, LongSupplier clock) {
         this.persistence = Objects.requireNonNull(persistence, "持久化端口不能为空");
         this.message = Objects.requireNonNull(message, "消息端口不能为空");
+        this.scheduler = Objects.requireNonNull(scheduler, "调度端口不能为空");
     }
 
     public void register(EventBusPort eventBus) {
         eventBus.subscribe(PlayerJoinedEvent.class, e -> onPlayerJoined(e.getPlayer()));
+        eventBus.subscribe(PlayerLeftEvent.class, e -> onPlayerLeft(e.getPlayer()));
     }
 
     void onPlayerJoined(PlayerRef player) {
-        String key = JOIN_COUNT_KEY_PREFIX + player.getUuid();
-        int next = persistence.read(NAMESPACE, key).map(Integer::parseInt).orElse(0) + 1;
-        persistence.write(NAMESPACE, key, Integer.toString(next));
-        message.send(player, "你已加入 " + next + " 次");
+        startReminder(player); // 留住句柄，以便离开时释放
+        scheduler.runAsync(() -> persistJoinAndNotify(player));
+    }
+
+    void onPlayerLeft(PlayerRef player) {
+        closeReminder(player);
     }
 }
 ```
 
-> 真实平台上，阻塞 IO 应经 `SchedulerPort.runAsync` 切异步；本示例为教学简洁直接同步读写。
+> 上面只展示流程骨架；完整可编译实现以 [`PlayerJoinCounterService`](../examples/counter/src/main/java/top/wcpe/mc/mpmt/examples/counter/PlayerJoinCounterService.java) 为准。持久化一定经 `SchedulerPort.runAsync`，发消息一定经 `SchedulerPort.runForEntity`，以兼容 Folia 的实体归属线程。
 
 ## 4. 编译与测试
 
@@ -100,30 +109,33 @@ public final class PlayerJoinCounterService {
 
 ## 5. 在平台入口接入域
 
-L0 写完后，在各平台 L3 入口实例化并注册。**本指南不改平台代码**，只给装配示意：
+Counter 本身**没有已落地的跨平台 L3 装配**：示例故意保持为纯 L0，不应把它伪装成已经部署到所有 loader。
+
+要把它用在自己的产品域中，复用已完整接线的 `PlatformCapabilityExample` 路径：各平台 capability bootstrap 先注册 `PersistencePort`、`MessagePort`、`SchedulerPort`，然后在同一个 `MpmtRuntime` 中实例化服务并注册至 `runtime.eventBus()`；最后把原生进、退事件分别发布为 `PlayerJoinedEvent` / `PlayerLeftEvent`。
+
+| 平台 | 已完整的 L3 装配范本 |
+|---|---|
+| Bukkit/Paper/Folia | [`BukkitCapabilityBootstrap`](../platform/bukkit/common/src/main/java/top/wcpe/mc/mpmt/platform/bukkit/capability/BukkitCapabilityBootstrap.java) |
+| Fabric 26.2 | [`FabricCapabilityBootstrap`](../platform/fabric/26.2/common/src/main/java/top/wcpe/mc/mpmt/platform/fabric/capability/FabricCapabilityBootstrap.java) |
+| Forge 26.2 | [`ForgeCapabilityBootstrap`](../platform/forge/26.2/common/src/main/java/top/wcpe/mc/mpmt/platform/forge/modern/capability/ForgeCapabilityBootstrap.java) |
+
+把范本中的 `PlatformCapabilityExample` 替换为 `PlayerJoinCounterService(persistence, message, scheduler, System::currentTimeMillis)`，并保留同样的 EventBus 和进退事件桥接，即可完成一次真实的平台装配。下方仅为上述装配的核心替换段，不是已经写入平台模块的代码：
 
 ```java
 // 伪代码：在平台 onEnable / SERVER_STARTED 阶段
 PersistencePort persistence = /* 平台提供的文件/DB 实现 */;
 MessagePort message = /* 平台提供的聊天实现 */;
+SchedulerPort scheduler = /* 平台提供的归属/异步调度实现 */;
 EventBusPort eventBus = /* 运行时装配的自有 EventBus */;
 
-PlayerJoinCounterService counter = new PlayerJoinCounterService(persistence, message);
+PlayerJoinCounterService counter =
+    new PlayerJoinCounterService(persistence, message, scheduler, System::currentTimeMillis);
 counter.register(eventBus);
 
-// 平台把原生 PlayerJoin 事件适配为 PlayerJoinedEvent 后投递：
+// 平台把原生进、退事件适配后投递：
 // eventBus.publish(new PlayerJoinedEvent(playerRef));
+// eventBus.publish(new PlayerLeftEvent(playerRef));
 ```
-
-入口位置参考：
-
-| 平台 | 入口类 |
-|---|---|
-| Bukkit/Paper/Folia | `platform/bukkit/*/…/MpmtBukkitPlugin` |
-| Fabric | `platform/fabric/*/…/MpmtFabricBootstrap` |
-| Forge | `platform/forge/*/…/MpmtForgeMod` |
-
-已有的 `PlatformCapabilityExample` 在各平台 `capability` 包里有完整 L3 装配范本，可对照。
 
 ## 6. 真服验证
 

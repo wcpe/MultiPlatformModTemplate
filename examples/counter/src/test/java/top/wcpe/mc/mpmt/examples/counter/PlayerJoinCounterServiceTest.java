@@ -10,23 +10,32 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import top.wcpe.mc.mpmt.core.domain.event.SimpleEventBus;
 import top.wcpe.mc.mpmt.core.domain.port.MessagePort;
 import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
+import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
+import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
 import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
 import top.wcpe.mc.mpmt.domain.capability.PlayerJoinedEvent;
+import top.wcpe.mc.mpmt.domain.capability.PlayerLeftEvent;
 
-/** 玩家加入计数服务（FR-18）L0 逻辑穷举：计数递增 / 多玩家隔离 / EventBus 订阅 / 入参校验。 */
+/** Counter（FR-18）L0 逻辑穷举：首次加入 / 计数 / 调度 / EventBus / 句柄释放。 */
 class PlayerJoinCounterServiceTest {
+
+    private static final long FIXED_NOW = 123456789L;
+    private static final LongSupplier CLOCK = () -> FIXED_NOW;
 
     private static PlayerRef player() {
         return new PlayerRef(UUID.randomUUID(), "Steve");
     }
 
-    private static PlayerJoinCounterService service(PersistencePort p, MessagePort m) {
-        return new PlayerJoinCounterService(p, m);
+    private static PlayerJoinCounterService service(
+            PersistencePort persistence, MessagePort message, SchedulerPort scheduler) {
+        return new PlayerJoinCounterService(persistence, message, scheduler, CLOCK);
     }
 
     @Test
@@ -34,11 +43,12 @@ class PlayerJoinCounterServiceTest {
     void 首次加入() {
         FakePersistence persistence = new FakePersistence();
         FakeMessage message = new FakeMessage();
+        FakeScheduler scheduler = new FakeScheduler();
         PlayerRef p = player();
 
-        service(persistence, message).onPlayerJoined(p);
+        service(persistence, message, scheduler).onPlayerJoined(p);
 
-        assertEquals(1, persistence.store.size());
+        assertEquals(2, persistence.store.size());
         assertEquals(
                 "1",
                 persistence.store.get(
@@ -46,8 +56,19 @@ class PlayerJoinCounterServiceTest {
                                 + "/"
                                 + PlayerJoinCounterService.JOIN_COUNT_KEY_PREFIX
                                 + p.getUuid()));
+        assertEquals(
+                Long.toString(FIXED_NOW),
+                persistence.store.get(
+                        PlayerJoinCounterService.NAMESPACE
+                                + "/"
+                                + PlayerJoinCounterService.FIRST_JOIN_KEY_PREFIX
+                                + p.getUuid()));
         assertEquals(1, message.sent.size());
         assertEquals("你已加入 1 次", message.sent.get(0));
+        assertEquals(1, scheduler.asyncCount);
+        assertTrue(scheduler.entityCalls.contains(new EntityRef(p.getUuid())));
+        assertEquals(PlayerJoinCounterService.REMINDER_DELAY_TICKS, scheduler.timerDelay);
+        assertEquals(PlayerJoinCounterService.REMINDER_PERIOD_TICKS, scheduler.timerPeriod);
     }
 
     @Test
@@ -55,16 +76,29 @@ class PlayerJoinCounterServiceTest {
     void 多次加入递增() {
         FakePersistence persistence = new FakePersistence();
         FakeMessage message = new FakeMessage();
-        PlayerJoinCounterService svc = service(persistence, message);
+        FakeScheduler scheduler = new FakeScheduler();
+        PlayerJoinCounterService svc = service(persistence, message, scheduler);
         PlayerRef p = player();
 
         svc.onPlayerJoined(p);
         svc.onPlayerJoined(p);
         svc.onPlayerJoined(p);
 
-        assertEquals("3", persistence.store.values().iterator().next());
+        assertEquals(
+                "3",
+                persistence.read(
+                                PlayerJoinCounterService.NAMESPACE,
+                                PlayerJoinCounterService.JOIN_COUNT_KEY_PREFIX + p.getUuid())
+                        .get());
         assertEquals(3, message.sent.size());
         assertEquals("你已加入 3 次", message.sent.get(2));
+        assertEquals(
+                Long.toString(FIXED_NOW),
+                persistence.read(
+                                PlayerJoinCounterService.NAMESPACE,
+                                PlayerJoinCounterService.FIRST_JOIN_KEY_PREFIX + p.getUuid())
+                        .get());
+        assertEquals(2, scheduler.closeCount);
     }
 
     @Test
@@ -72,7 +106,8 @@ class PlayerJoinCounterServiceTest {
     void 多玩家隔离() {
         FakePersistence persistence = new FakePersistence();
         FakeMessage message = new FakeMessage();
-        PlayerJoinCounterService svc = service(persistence, message);
+        FakeScheduler scheduler = new FakeScheduler();
+        PlayerJoinCounterService svc = service(persistence, message, scheduler);
         PlayerRef a = player();
         PlayerRef b = player();
 
@@ -102,7 +137,8 @@ class PlayerJoinCounterServiceTest {
     void 经事件总线订阅() {
         FakePersistence persistence = new FakePersistence();
         FakeMessage message = new FakeMessage();
-        PlayerJoinCounterService svc = service(persistence, message);
+        FakeScheduler scheduler = new FakeScheduler();
+        PlayerJoinCounterService svc = service(persistence, message, scheduler);
         SimpleEventBus bus = new SimpleEventBus();
         svc.register(bus);
         PlayerRef p = player();
@@ -110,7 +146,40 @@ class PlayerJoinCounterServiceTest {
         bus.publish(new PlayerJoinedEvent(p));
 
         assertEquals("你已加入 1 次", message.sent.get(0));
-        assertTrue(persistence.store.size() == 1);
+        assertEquals(2, persistence.store.size());
+
+        bus.publish(new PlayerLeftEvent(p));
+        assertEquals(1, scheduler.closeCount);
+    }
+
+    @Test
+    @DisplayName("周期提示：触发时按玩家归属发送加入次数")
+    void 周期提示() {
+        FakeMessage message = new FakeMessage();
+        FakeScheduler scheduler = new FakeScheduler();
+        PlayerRef p = player();
+
+        service(new FakePersistence(), message, scheduler).onPlayerJoined(p);
+        int before = message.sent.size();
+        scheduler.timerTask.run();
+
+        assertEquals(before + 1, message.sent.size());
+        assertEquals("你已加入 1 次", message.sent.get(message.sent.size() - 1));
+        assertTrue(scheduler.entityCalls.contains(new EntityRef(p.getUuid())));
+    }
+
+    @Test
+    @DisplayName("离开：释放周期提示句柄，重复离开无副作用")
+    void 离开释放句柄() {
+        FakeScheduler scheduler = new FakeScheduler();
+        PlayerJoinCounterService svc = service(new FakePersistence(), new FakeMessage(), scheduler);
+        PlayerRef p = player();
+
+        svc.onPlayerJoined(p);
+        svc.onPlayerLeft(p);
+        svc.onPlayerLeft(p);
+
+        assertEquals(1, scheduler.closeCount);
     }
 
     @Test
@@ -118,15 +187,21 @@ class PlayerJoinCounterServiceTest {
     void 脏数据容错() {
         FakePersistence persistence = new FakePersistence();
         FakeMessage message = new FakeMessage();
+        FakeScheduler scheduler = new FakeScheduler();
         PlayerRef p = player();
         persistence.write(
                 PlayerJoinCounterService.NAMESPACE,
                 PlayerJoinCounterService.JOIN_COUNT_KEY_PREFIX + p.getUuid(),
                 "not-a-number");
 
-        service(persistence, message).onPlayerJoined(p);
+        service(persistence, message, scheduler).onPlayerJoined(p);
 
-        assertEquals("1", persistence.store.values().iterator().next());
+        assertEquals(
+                "1",
+                persistence.read(
+                                PlayerJoinCounterService.NAMESPACE,
+                                PlayerJoinCounterService.JOIN_COUNT_KEY_PREFIX + p.getUuid())
+                        .get());
         assertEquals("你已加入 1 次", message.sent.get(0));
     }
 
@@ -135,9 +210,12 @@ class PlayerJoinCounterServiceTest {
     void 入参校验() {
         FakePersistence p = new FakePersistence();
         FakeMessage m = new FakeMessage();
-        assertThrows(NullPointerException.class, () -> new PlayerJoinCounterService(null, m));
-        assertThrows(NullPointerException.class, () -> new PlayerJoinCounterService(p, null));
-        assertThrows(NullPointerException.class, () -> service(p, m).register(null));
+        FakeScheduler s = new FakeScheduler();
+        assertThrows(NullPointerException.class, () -> new PlayerJoinCounterService(null, m, s, CLOCK));
+        assertThrows(NullPointerException.class, () -> new PlayerJoinCounterService(p, null, s, CLOCK));
+        assertThrows(NullPointerException.class, () -> new PlayerJoinCounterService(p, m, null, CLOCK));
+        assertThrows(NullPointerException.class, () -> new PlayerJoinCounterService(p, m, s, null));
+        assertThrows(NullPointerException.class, () -> service(p, m, s).register(null));
     }
 
     // —— 测试替身（手写假端口，纯内存）——
@@ -164,6 +242,46 @@ class PlayerJoinCounterServiceTest {
         @Override
         public void send(PlayerRef player, String text) {
             sent.add(text);
+        }
+    }
+
+    /** 假调度：立即运行一次性任务，记录周期任务与关闭次数。 */
+    private static final class FakeScheduler implements SchedulerPort {
+        final List<EntityRef> entityCalls = new ArrayList<>();
+        Runnable timerTask;
+        long timerDelay;
+        long timerPeriod;
+        int asyncCount;
+        int closeCount;
+
+        @Override
+        public void runForEntity(EntityRef entity, Runnable task) {
+            entityCalls.add(entity);
+            task.run();
+        }
+
+        @Override
+        public void runForLocation(WorldRef world, int x, int z, Runnable task) {
+            task.run();
+        }
+
+        @Override
+        public void runGlobal(Runnable task) {
+            task.run();
+        }
+
+        @Override
+        public void runAsync(Runnable task) {
+            asyncCount++;
+            task.run();
+        }
+
+        @Override
+        public AutoCloseable runTimer(long delayTicks, long periodTicks, Runnable task) {
+            timerDelay = delayTicks;
+            timerPeriod = periodTicks;
+            timerTask = task;
+            return () -> closeCount++;
         }
     }
 }
