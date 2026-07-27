@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "mpmt",
+  "version": "${version}",
+  "name": "MultiPlatformModTemplate",
+  "description": "多平台 mod 玩法脚手架 —— Fabric 平台。",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "top.wcpe.mc.mpmt.platform.fabric.MpmtFabricBootstrap"
+    ],
+    "client": [
+      "top.wcpe.mc.mpmt.platform.fabric.MpmtFabricClientBootstrap"
+    ]
+  },
+  "depends": {
+    "fabricloader": "${loaderDependency}",
+    "fabric-api": "${fabricApiDependency}",
+    "minecraft": "~${minecraftVersion}",
+    "java": ">=${javaVersion}"
+  }
+}

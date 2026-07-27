@@ -30,6 +30,7 @@ tasks.register("verifyPackaging") {
         ":platform:bukkit:1.12.2:verifyPackaging",
         ":platform:bukkit:1.20.1:verifyPackaging",
         ":platform:bukkit:1.21.1:verifyPackaging",
+        ":platform:bukkit:26.2:verifyPackaging",
     )
 }
 
@@ -41,6 +42,7 @@ tasks.named("build") {
         ":platform:bukkit:1.12.2:build",
         ":platform:bukkit:1.20.1:build",
         ":platform:bukkit:1.21.1:build",
+        ":platform:bukkit:26.2:build",
         "verifyPackaging",
     )
 }

@@ -17,6 +17,7 @@ class SupportedVersionTest {
         assertSame(SupportedVersion.V1_12, SupportedVersion.match("1.12.2"));
         assertSame(SupportedVersion.V1_20, SupportedVersion.match("1.20.1"));
         assertSame(SupportedVersion.V1_21, SupportedVersion.match("1.21.1"));
+        assertSame(SupportedVersion.V26_2, SupportedVersion.match("26.2"));
         assertEquals("1.20.1", SupportedVersion.V1_20.mcVersion());
     }
 

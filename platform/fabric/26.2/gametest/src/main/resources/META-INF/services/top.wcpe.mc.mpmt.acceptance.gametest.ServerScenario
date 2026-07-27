@@ -1,0 +1,4 @@
+top.wcpe.mc.mpmt.platform.fabric.gametest.scenario.RealRoundTripServerScenario
+top.wcpe.mc.mpmt.platform.fabric.gametest.scenario.ClientHudServerScenario
+top.wcpe.mc.mpmt.platform.fabric.gametest.scenario.ProductHandshakeServerScenario
+top.wcpe.mc.mpmt.platform.fabric.gametest.scenario.ProductRoundtripServerScenario

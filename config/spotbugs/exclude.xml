@@ -31,6 +31,14 @@
         <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
     </Match>
 
+    <!-- Fabric 客户端会话须向验收入口提供当前连接的同一网络特性，以读取真实握手与往返状态；该特性
+         由会话生命周期统一创建和断开，防御性复制会脱离活跃派发器。仅放行这个 getter 的 EI。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.fabric.client.FabricClientSession"/>
+        <Method name="networkFeature"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
     <!-- 协议包为短生命周期传输 DTO（@Value），byte[] 载荷仅在可靠性层内部流转；对其 getter/构造做
          防御性拷贝在分片热路径上不划算。protocol.packet 包内 EI/EI2 豁免。 -->
     <Match>

@@ -21,7 +21,7 @@ import java.util.zip.ZipFile
 // remapJar 消费 shadowJar 产物产出最终 remapped mod jar。映射用 Mojang 官方（ADR-0016）。
 
 plugins {
-    id("fabric-loom") version "1.7.4"
+    id("fabric-loom") version "1.17-wcpe-4"
     id("com.gradleup.shadow") version "8.3.3"
     // 静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
     // 核心 Gradle 插件经 apply(plugin=...) 接入（见下方装配块）；外部插件在此带版本直接 apply。

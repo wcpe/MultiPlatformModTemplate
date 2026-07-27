@@ -1,6 +1,7 @@
 // Fabric 1.20.1 独立构建（Loom）
 pluginManagement {
     repositories {
+        maven("https://maven.wcpe.top/repository/maven-releases/") { name = "WCPE Releases" }
         maven("https://maven.fabricmc.net/") { name = "Fabric" }
         gradlePluginPortal()
         mavenCentral()

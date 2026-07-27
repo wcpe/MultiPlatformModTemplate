@@ -12,11 +12,12 @@ import org.junit.jupiter.api.Test;
 class BukkitVersionApiTest {
 
     @Test
-    @DisplayName("三个锚点精确命中，未知版本明确拒绝")
+    @DisplayName("四个锚点精确命中，未知版本明确拒绝")
     void 版本选择与未知拒绝() {
         assertSame(SupportedVersion.V1_12, SupportedVersion.match("1.12.2"));
         assertSame(SupportedVersion.V1_20, SupportedVersion.match("1.20.1"));
         assertSame(SupportedVersion.V1_21, SupportedVersion.match("1.21.1"));
+        assertSame(SupportedVersion.V26_2, SupportedVersion.match("26.2"));
         assertThrows(IllegalStateException.class, () -> SupportedVersion.match("1.20.2"));
         assertThrows(IllegalStateException.class, () -> SupportedVersion.match(""));
         assertThrows(IllegalStateException.class, () -> SupportedVersion.match(null));

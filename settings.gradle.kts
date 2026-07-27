@@ -44,6 +44,7 @@ include(
     "platform:bukkit:1.12.2",
     "platform:bukkit:1.20.1",
     "platform:bukkit:1.21.1",
+    "platform:bukkit:26.2",
 )
 
 include(
@@ -66,6 +67,11 @@ if (gradle.parent == null) {
     if (!skip("mpmt.skip.fabric") && !skip("mpmt.skip.fabric.1.21.1")) {
         includeBuild("platform/fabric/1.21.1") {
             name = "platform-fabric-1.21.1"
+        }
+    }
+    if (!skip("mpmt.skip.fabric") && !skip("mpmt.skip.fabric.26.2")) {
+        includeBuild("platform/fabric/26.2") {
+            name = "platform-fabric-26.2"
         }
     }
     if (!skip("mpmt.skip.forge") && !skip("mpmt.skip.forge.1.20.1")) {

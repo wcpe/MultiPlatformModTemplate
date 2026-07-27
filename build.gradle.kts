@@ -174,6 +174,7 @@ val collectReleaseArtifacts by tasks.registering {
         ":platform:bukkit:1.12.2:shadowJar",
         ":platform:bukkit:1.20.1:shadowJar",
         ":platform:bukkit:1.21.1:shadowJar",
+        ":platform:bukkit:26.2:shadowJar",
     )
     dependsOnIncludedIfPresent("platform-fabric-1.20.1", ":remapJar")
     dependsOnIncludedIfPresent("platform-fabric-1.21.1", ":remapJar")
@@ -220,6 +221,11 @@ val collectReleaseArtifacts by tasks.registering {
             File(root, "platform/bukkit/1.21.1/build/libs/mpmt-bukkit-1.21.1-$version.jar"),
             "bukkit",
             "mpmt-bukkit-1.21.1-$version.jar",
+        )
+        copyNamed(
+            File(root, "platform/bukkit/26.2/build/libs/mpmt-bukkit-26.2-$version.jar"),
+            "bukkit",
+            "mpmt-bukkit-26.2-$version.jar",
         )
 
         // Fabric（remap 后权威 jar）
@@ -495,6 +501,7 @@ tasks.register("verifyVersionMatrixBuild") {
         ":platform:bukkit:1.12.2:verifyPackaging",
         ":platform:bukkit:1.20.1:verifyPackaging",
         ":platform:bukkit:1.21.1:verifyPackaging",
+        ":platform:bukkit:26.2:verifyPackaging",
     )
     dependsOnIncludedIfPresent("platform-fabric-1.20.1", ":verifyPackaging")
     dependsOnIncludedIfPresent("platform-fabric-1.21.1", ":verifyPackaging")

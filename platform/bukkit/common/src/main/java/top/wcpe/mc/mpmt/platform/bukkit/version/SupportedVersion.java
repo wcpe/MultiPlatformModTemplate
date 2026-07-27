@@ -8,7 +8,9 @@ public enum SupportedVersion {
     /** Paper/Spigot/Folia 1.20.1。 */
     V1_20("1.20.1"),
     /** Paper/Folia 1.21.1。 */
-    V1_21("1.21.1");
+    V1_21("1.21.1"),
+    /** Paper 26.2（新版号方案，无 1. 前缀）。 */
+    V26_2("26.2");
 
     private final String mcVersion;
 
