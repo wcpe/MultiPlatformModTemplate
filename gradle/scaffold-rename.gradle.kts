@@ -81,6 +81,12 @@ fun shouldSkipRelative(rel: Path): Boolean {
 
 fun isTextCandidate(path: Path): Boolean {
     val name = path.fileName.toString()
+    if (
+        path.parent?.fileName?.toString() == "services" &&
+            path.parent?.parent?.fileName?.toString() == "META-INF"
+    ) {
+        return true
+    }
     if (name in specialNames) {
         return true
     }

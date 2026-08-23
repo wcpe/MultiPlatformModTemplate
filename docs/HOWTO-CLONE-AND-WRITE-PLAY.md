@@ -1,7 +1,7 @@
 # 上手指南：克隆模板并编写自己的玩法
 
-> 目标读者：想用本脚手架写自己玩法的开发者。  
-> 对应规格：[`specs/p3-platform-scaling-and-onboarding.md`](specs/p3-platform-scaling-and-onboarding.md) §4.3 / FR-18。  
+> 目标读者：想用本脚手架写自己玩法的开发者。
+> 对应规格：[`specs/p3-platform-scaling-and-onboarding.md`](specs/p3-platform-scaling-and-onboarding.md) §4.3 / FR-18。
 > 示例域：[`examples/counter`](../examples/counter)（纯 L0、零平台依赖、可纯 JVM 单测）。
 
 ## 1. 前置条件
@@ -35,7 +35,7 @@ cd mygame
   renameScaffold
 ```
 
-参数含义见 [`tools/README.md`](../tools/README.md)。  
+参数含义见 [`tools/README.md`](../tools/README.md)。
 **产品化时**若要改协议通道名（`mpmt:main` 等），加 `-P mpmt.scaffold.rewriteChannels=true`；互通双方必须同一通道。
 
 ## 3. 在 L0 写一个最小玩法域——以 Counter 为参照

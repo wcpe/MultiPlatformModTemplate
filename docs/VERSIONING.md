@@ -1,11 +1,11 @@
 # 版本节奏
 
-> 对应规格：[`specs/p3-platform-scaling-and-onboarding.md`](specs/p3-platform-scaling-and-onboarding.md) §4.2 / FR-17。  
+> 对应规格：[`specs/p3-platform-scaling-and-onboarding.md`](specs/p3-platform-scaling-and-onboarding.md) §4.2 / FR-17。
 > 发版技能：`sdd-release-version`（本地 release 提交 + 附注 tag，**永不自动 push**）。
 
 ## 1. 版本来源
 
-根目录 **`VERSION`** 文件是**唯一**版本来源。各平台 `build.gradle(.kts)` 读该文件注入产物坐标（如 `mpmt-bukkit-1.20.1-0.2.0.jar`）。  
+根目录 **`VERSION`** 文件是**唯一**版本来源。各平台 `build.gradle(.kts)` 读该文件注入产物坐标（如 `mpmt-bukkit-1.20.1-0.2.0.jar`）。
 禁止在模块内硬编码版本号。
 
 ## 2. 语义化版本（SemVer）
