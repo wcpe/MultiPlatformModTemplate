@@ -150,11 +150,12 @@ Forge 1.12.2：**禁止** Forge 服务端 mod；真服走 CatServer R5：
 ## 4. 脚手架换名
 
 ```bash
-./gradlew renameScaffold \
-  -Pmpmt.scaffold.id=mygame \
-  -Pmpmt.scaffold.group=com.example.mygame \
-  -Pmpmt.scaffold.name=MyGame \
-  -Pmpmt.scaffold.dryRun=true
+./gradlew \
+  -P mpmt.scaffold.id=mygame \
+  -P mpmt.scaffold.group=com.example.mygame \
+  -P mpmt.scaffold.name=MyGame \
+  -P mpmt.scaffold.dryRun=true \
+  renameScaffold
 ```
 
 见 [`../tools/README.md`](../tools/README.md)。纯 kts，无需 python。

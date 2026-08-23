@@ -20,21 +20,23 @@ git clone <此仓库 URL> mygame
 cd mygame
 
 # 预览（dry-run，不修改文件）
-./gradlew renameScaffold \
-  -Pmpmt.scaffold.id=mygame \
-  -Pmpmt.scaffold.group=com.example.mygame \
-  -Pmpmt.scaffold.name=MyGame \
-  -Pmpmt.scaffold.dryRun=true
+./gradlew \
+  -P mpmt.scaffold.id=mygame \
+  -P mpmt.scaffold.group=com.example.mygame \
+  -P mpmt.scaffold.name=MyGame \
+  -P mpmt.scaffold.dryRun=true \
+  renameScaffold
 
 # 确认无误后写盘
-./gradlew renameScaffold \
-  -Pmpmt.scaffold.id=mygame \
-  -Pmpmt.scaffold.group=com.example.mygame \
-  -Pmpmt.scaffold.name=MyGame
+./gradlew \
+  -P mpmt.scaffold.id=mygame \
+  -P mpmt.scaffold.group=com.example.mygame \
+  -P mpmt.scaffold.name=MyGame \
+  renameScaffold
 ```
 
 参数含义见 [`tools/README.md`](../tools/README.md)。  
-**产品化时**若要改协议通道名（`mpmt:main` 等），加 `-Pmpmt.scaffold.rewriteChannels=true`；互通双方必须同一通道。
+**产品化时**若要改协议通道名（`mpmt:main` 等），加 `-P mpmt.scaffold.rewriteChannels=true`；互通双方必须同一通道。
 
 ## 3. 在 L0 写一个最小玩法域——以 Counter 为参照
 

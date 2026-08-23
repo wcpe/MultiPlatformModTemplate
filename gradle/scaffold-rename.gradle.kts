@@ -289,9 +289,9 @@ fun moveJavaPackageTrees(
 tasks.register("renameScaffold") {
     group = "help"
     description =
-        "一键换名脚手架身份（纯 kts）。必填 -Pmpmt.scaffold.id= -Pmpmt.scaffold.group= " +
-            "-Pmpmt.scaffold.name=；预览 -Pmpmt.scaffold.dryRun=true；改通道 " +
-            "-Pmpmt.scaffold.rewriteChannels=true"
+        "一键换名脚手架身份（纯 kts）。必填 -P mpmt.scaffold.id= -P mpmt.scaffold.group= " +
+            "-P mpmt.scaffold.name=；预览 -P mpmt.scaffold.dryRun=true；改通道 " +
+            "-P mpmt.scaffold.rewriteChannels=true"
     notCompatibleWithConfigurationCache("换名会改写源树")
 
     val idProp = providers.gradleProperty("mpmt.scaffold.id")
@@ -308,10 +308,10 @@ tasks.register("renameScaffold") {
     doLast {
         if (!idProp.isPresent || !groupProp.isPresent || !nameProp.isPresent) {
             throw GradleException(
-                "缺少 -Pmpmt.scaffold.id / group / name。例：\n" +
-                    "  ./gradlew renameScaffold -Pmpmt.scaffold.id=mygame " +
-                    "-Pmpmt.scaffold.group=com.example.mygame -Pmpmt.scaffold.name=MyGame " +
-                    "-Pmpmt.scaffold.dryRun=true",
+                "缺少 -P mpmt.scaffold.id / group / name。例：\n" +
+                    "  ./gradlew -P mpmt.scaffold.id=mygame " +
+                    "-P mpmt.scaffold.group=com.example.mygame -P mpmt.scaffold.name=MyGame " +
+                    "-P mpmt.scaffold.dryRun=true renameScaffold",
             )
         }
         val newId = idProp.get()
@@ -413,7 +413,7 @@ tasks.register("renameScaffold") {
         )
         if (dryRun) {
             logger.lifecycle(
-                "[renameScaffold] dry-run 未写盘。去掉 -Pmpmt.scaffold.dryRun=true 执行。",
+                "[renameScaffold] dry-run 未写盘。去掉 -P mpmt.scaffold.dryRun=true 执行。",
             )
         } else {
             logger.lifecycle(

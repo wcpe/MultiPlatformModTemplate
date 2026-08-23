@@ -6,32 +6,35 @@
 
 | 参数 | 默认（模板） | 含义 |
 |------|----------------|------|
-| `-Pmpmt.scaffold.id` | `mpmt` | 短 id、modId、产物前缀 `*-bukkit` |
-| `-Pmpmt.scaffold.group` | `top.wcpe.mc.mpmt` | Maven group + Java 包根 |
-| `-Pmpmt.scaffold.name` | `MultiPlatformModTemplate` | 展示名 / 插件 name |
-| `-Pmpmt.scaffold.rewriteChannels` | `false` | `true` 则改 `mpmt:main` 等通道（产品化时用） |
-| `-Pmpmt.scaffold.dryRun` | `false` | `true` 只预览不写盘 |
+| `-P mpmt.scaffold.id` | `mpmt` | 短 id、modId、产物前缀 `*-bukkit` |
+| `-P mpmt.scaffold.group` | `top.wcpe.mc.mpmt` | Maven group + Java 包根 |
+| `-P mpmt.scaffold.name` | `MultiPlatformModTemplate` | 展示名 / 插件 name |
+| `-P mpmt.scaffold.rewriteChannels` | `false` | `true` 则改 `mpmt:main` 等通道（产品化时用） |
+| `-P mpmt.scaffold.dryRun` | `false` | `true` 只预览不写盘 |
 
 ```bash
 # 先预览
-./gradlew renameScaffold \
-  -Pmpmt.scaffold.id=mygame \
-  -Pmpmt.scaffold.group=com.example.mygame \
-  -Pmpmt.scaffold.name=MyGame \
-  -Pmpmt.scaffold.dryRun=true
+./gradlew \
+  -P mpmt.scaffold.id=mygame \
+  -P mpmt.scaffold.group=com.example.mygame \
+  -P mpmt.scaffold.name=MyGame \
+  -P mpmt.scaffold.dryRun=true \
+  renameScaffold
 
 # 写盘（建议干净 git 工作区）
-./gradlew renameScaffold \
-  -Pmpmt.scaffold.id=mygame \
-  -Pmpmt.scaffold.group=com.example.mygame \
-  -Pmpmt.scaffold.name=MyGame
+./gradlew \
+  -P mpmt.scaffold.id=mygame \
+  -P mpmt.scaffold.group=com.example.mygame \
+  -P mpmt.scaffold.name=MyGame \
+  renameScaffold
 
 # 同时改协议通道（互通双方须同一通道）
-./gradlew renameScaffold \
-  -Pmpmt.scaffold.id=mygame \
-  -Pmpmt.scaffold.group=com.example.mygame \
-  -Pmpmt.scaffold.name=MyGame \
-  -Pmpmt.scaffold.rewriteChannels=true
+./gradlew \
+  -P mpmt.scaffold.id=mygame \
+  -P mpmt.scaffold.group=com.example.mygame \
+  -P mpmt.scaffold.name=MyGame \
+  -P mpmt.scaffold.rewriteChannels=true \
+  renameScaffold
 ```
 
 ### 不做的事

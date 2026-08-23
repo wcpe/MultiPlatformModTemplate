@@ -96,11 +96,12 @@ modules/       smoke acceptance
 ### 克隆后换名（脚手架）
 
 ```bash
-./gradlew renameScaffold \
-  -Pmpmt.scaffold.id=mygame \
-  -Pmpmt.scaffold.group=com.example.mygame \
-  -Pmpmt.scaffold.name=MyGame \
-  -Pmpmt.scaffold.dryRun=true
+./gradlew \
+  -P mpmt.scaffold.id=mygame \
+  -P mpmt.scaffold.group=com.example.mygame \
+  -P mpmt.scaffold.name=MyGame \
+  -P mpmt.scaffold.dryRun=true \
+  renameScaffold
 ```
 
 详见 [`tools/README.md`](tools/README.md)。纯 kts 实现，无需 python。
