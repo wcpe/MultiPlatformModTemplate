@@ -53,10 +53,10 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | FR-12 | 多版本扩展：按[有效版本矩阵规格](specs/p2-version-matrix.md)新增 1.21.1（仅 Paper/Fabric/Forge）与 1.12.2（Bukkit/CatServer + Forge 客户端）适配，以隔离工具链、golden vectors、realserver v2 报告和唯一严格脚本验证 L4 跨版本成立；严格门仅覆盖 P2 核心矩阵及受影响 1.20.1 基线 | P2 | 已交付@v0.2.0 |
 | FR-13 | Folia 支持：并入 Bukkit 家族构建，经 FeatureGate 适配 RegionScheduler（验证特判机制，不拆独立构建） | P1 | 已交付@v0.1.0 |
 | FR-14 | platform-sponge（SpongeGradle·独立 includeBuild）：基础网络与示例可用 | P1 | 已交付@v0.1.0 |
-| FR-15 | platform-neoforge（NeoGradle·独立 includeBuild；**NeoForge 无 1.20.1，锚点取 1.20.2**）：基础网络与示例可用 | P1 | 已交付@v0.1.0 |
-| FR-16 | 最新版本 26.2 适配（MC 今年最新版本号，新版号方案无 `1.` 前缀），验证架构前向可扩展；冻结见 [specs/fr-26_2-adapter.md](specs/fr-26_2-adapter.md) | P3 | 开发中 |
-| FR-17 | 脚手架发布与版本化：作为模板仓库（如 GitHub Template）发布 + VERSION 注入各平台构建产物 + 版本化/标签 | P3 | 开发中 |
-| FR-18 | 玩法开发者上手：克隆模板后如何在 L0 写玩法的文档 + 示例（非产品玩法） | P3 | 开发中 |
+| FR-15 | platform-neoforge（NeoGradle·NeoForge 1.20.2 使用 Gradle 8.14.5 自有 wrapper 与受控内部 JAR；**NeoForge 无 1.20.1，锚点取 1.20.2**）：基础网络与示例可用 | P1 | 已交付@v0.1.0 |
+| FR-16 | 最新版本 26.2 适配（MC 今年最新版本号，新版号方案无 `1.` 前缀）：仅 Paper/Bukkit、Fabric、Forge 三个有效车道；`v26_2` 与 R7 三公共场景的同轮本地报告、根 `:runP3R7Gate` 已通过，冻结见 [specs/fr-26_2-adapter.md](specs/fr-26_2-adapter.md)，仍待用户第三期实机确认 | P3 | 开发中 |
+| FR-17 | 脚手架发布与版本化：VERSION 注入与发布说明已进入仓库，公开 GitHub Template 已启用；尚无 `v0.3.0` 或 GitHub Release | P3 | 开发中 |
+| FR-18 | 玩法开发者上手：克隆模板后如何在 L0 写玩法的文档 + Counter 示例（非产品玩法）；示例的当前实现含异步持久化、归属消息调度与离开时释放周期句柄，仍待干净克隆复现 | P3 | 开发中 |
 | FR-19 | 跨端网络收发框架：基于 protocol 的 C2S/S2C 收发管线 + 各平台经 `TransportPort` 注册通道（具体平台见 FR-20），附若干发包示例 | P1 | 已交付@v0.1.0 |
 | FR-20 | 跨平台传输：Bukkit/Folia/Sponge（插件消息）+ Fabric/Forge/NeoForge 服务端（各网络 API）+ 单人世界（集成服内存回环）均实现 `TransportPort`；上层逻辑不变 | P1 | 已交付@v0.1.0 |
 | FR-21 | 进服握手 + 客户端标识上报：握手协商后客户端上报**弱客户端标识**（默认基于可得弱硬件/系统属性 SHA-256，可伪造/可随机化，`MachineCodeProvider` 可插拔），服务端接收并回发消息 | P1 | 已交付@v0.1.0 |
@@ -93,6 +93,8 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 - **【需用户实机确认】MVP 单端一致运行**：`smoke` 冒烟特性在**真实** Paper 服务端、Fabric 客户端/服务端、Forge 客户端/服务端上均正确运行且行为一致——此项有实机维度，**测试绿不替代真机能用**，须由用户在真实环境复验并确认通过。
 - **【需用户实机确认】跨端跨平台桥接互通**（项目桥接价值的核心验收）：异构组合下冒烟特性经协议完成握手 + 版本协商 + 往返通信且行为正确，至少覆盖 **Fabric 客户端 ↔ Paper/Bukkit 服务端**、**Forge 客户端 ↔ Paper/Bukkit 服务端**、**Forge 客户端 ↔ Forge 服务端** 三组用户点名场景；须用户在真实异构环境复验确认。
 - **平台/版本扩展验收**：每新增一个平台（P2/P3）或版本（P2/P3），其冒烟特性须在该目标上实机通过（用户确认）。
+- **P3 / FR-16**：仅 Paper/Bukkit 26.2、Fabric 26.2、Forge 26.2 三车道共同提供本轮 **R7**；每车道均须有属于当前运行的 `SERVER-GAMETEST-REPORT v2`、`MATRIX R7`、制品哈希、三个 required 场景各恰好一次 PASS 与末行 `RESULT PASS`。R7 源码、构建产物或历史 P2 报告均不能替代这一证据，且仍须用户第三期实机确认。
+- **P3 / FR-17、FR-18**：仓库内说明、Counter 源码或本地 release/tag 都不足以标交付；FR-17 的公开 GitHub Template 已启用，但仍须完成目标版本的 `v0.3.0` / GitHub Release，FR-18 须在干净工作区按上手路径复现其编译与纯 JVM 测试。三项 FR 分别验收，任一未齐均不得预标 `已交付`。
 
 ## 7. 分期（路线）
 
@@ -102,7 +104,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 
 > 第一期**实施顺序**（评审）：先 **Paper + Fabric + Forge** 跑通"一份 L0 逻辑 + 一次往返 + 握手"作骨架证明（FR-11 两证），再铺 Folia/Sponge/NeoForge 与完整可靠性 / 三组示例——"全平台跑通"是 P1 收尾目标、非 MVP 必过门。NeoForge 锚点取 1.20.2（无 1.20.1）。客户端侧**渲染必在 L3/L4、各平台各版本各写**，"写一次"主要在协议 / 状态 / 输入意图层（core-client 较薄），不夸大客户端复用。
 - **第二期**：**沿版本轴铺开**——1.21.1 / 1.12.2 验证 L4 跨版本；CatServer 实跑（需 1.12.2）。对应 FR-12；状态以 §4 为准（**已交付@v0.2.0**）。交付门（R1–R6 合规矩阵 v2 + `:runVersionMatrixGate` + 用户第二期实机确认）已齐；详见 [p2-version-matrix §11.1](specs/p2-version-matrix.md)。
-- **第三期**：**规模化与对外**——最新版本（26.2）、脚手架模板化发布、玩法开发者上手文档与示例。对应 FR-16/FR-17/FR-18；规格见 [`specs/p3-platform-scaling-and-onboarding.md`](specs/p3-platform-scaling-and-onboarding.md)（草拟：分 T1–T8 任务，按 §6 验收独立交付，**任何一项未齐不得预标 `已交付`**）。
+- **第三期**：**规模化与对外**——最新版本（26.2）、脚手架模板化发布、玩法开发者上手文档与示例。对应 FR-16/FR-17/FR-18；基线为 `v0.2.0`，现处开发中。三车道当前同轮 R7 报告与根聚合门已通过，发布元信息、Counter 上手路径及公开 GitHub Template 已就绪；但尚缺用户第三期实机确认、`v0.3.0` 对外 Release 及 FR-18 的干净工作区复现；详见 [`specs/p3-platform-scaling-and-onboarding.md`](specs/p3-platform-scaling-and-onboarding.md)。
 
 > 分期是少数粗粒度阶段，不随 FR 增长而改。某期是否完成看 §4 表里该期 FR 状态是否都 `已交付`。
 

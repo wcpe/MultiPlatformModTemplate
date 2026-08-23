@@ -95,4 +95,4 @@
 
 4. **Java 8 强制（成立）**：core 用 JDK 8 工具链编译；JDK 8 `javac 1.8.0_482` 拒绝 `List.of(...)`（退出码 1，"找不到符号 method of"），`Arrays.asList(...)` 正常（退出码 0）——证明误用 Java 9+ API 会编译失败（ADR-0004）。
 
-> 后续平台轮次（Paper/Fabric/Forge 胶水）沿用本结论：Bukkit 走根构建常规模块 + shadow（含 relocate），Forge/NeoForge 各为独立 includeBuild、按此打包链路套用并各自验证 core 进产物不被 remap。
+> 后续平台轮次（Paper/Fabric/Forge 胶水）沿用本结论：Bukkit 走根构建常规模块 + shadow（含 relocate），Forge 走独立 includeBuild；NeoForge 1.20.2 已例外改为 Gradle 8.14.5 自有 wrapper + 受控内部 JAR，根 Gradle 9 只校验其已生成产物 / 报告。各车道都须验证 core 进产物且不被错误 remap。

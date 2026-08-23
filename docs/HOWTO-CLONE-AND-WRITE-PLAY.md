@@ -11,6 +11,7 @@
 | JDK | 根构建建议 **JDK 17 或 21**；1.12.2 车道另需 JDK 8（普通上手只用 17+ 即可） |
 | Gradle | 用仓库自带 `./gradlew` wrapper，无需单独安装 |
 | Git | 克隆 / 分支管理 |
+| mc-testkit | 上游 plugin marker 当前不可用；根构建只会从本机 Maven 缓存回退解析插件及实现模块。首次配置失败时，先按 [`OPERATIONS.md`](OPERATIONS.md) 准备本地制品；此临时前提不等于冷缓存或新机器验证已通过。 |
 
 ## 2. 克隆并重命名
 

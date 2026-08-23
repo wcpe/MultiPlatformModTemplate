@@ -7,9 +7,24 @@
 ## 未发布版本
 
 ### 新增
-- **上手指南与 Counter 示例域（FR-18 进行中）**：`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`；`examples/counter` 纯 L0 加入计数服务 + 纯 JVM 单测（不依赖 L3）。
-- **版本节奏与发布说明模板（FR-17 进行中）**：`docs/VERSIONING.md`；`.github/RELEASE_TEMPLATE.md`；README 顶部强化「克隆本模板」入口。
-- **26.2 适配冻结规格（FR-16 T1）**：`docs/specs/fr-26_2-adapter.md`——确认 Paper/Fabric/Forge 26.2 均存在并冻结坐标；Folia 无 26.2 不建格；Paper 宿主要求 Java 25+。
+- **26.2 三车道在制实现（FR-16 进行中）**：新增 Paper/Bukkit `platform/bukkit/26.2`、Fabric `platform/fabric/26.2`、Forge `platform/forge/26.2` 的物理车道、`v26_2` L4 适配和产品 / 验收入口；Folia、NeoForge、Sponge 不建 26.2 格。
+- **R7 三平台验收目录（FR-16 进行中）**：`MatrixScenarioCatalog` 为 R7 固定 `product-handshake`、`product-roundtrip`、`client-hud` 三个 required 场景；根 P3 门聚合 Paper、Fabric、Forge 26.2 的构建与当前报告。
+- **上手指南与 Counter 示例域（FR-18 进行中）**：`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`；`examples/counter` 是纯 L0 非产品玩法，玩家加入时异步记录首次加入与计数、按实体归属发送消息，离开时释放周期句柄，并有纯 JVM 测试。
+- **版本节奏、公开 GitHub Template 与发布说明（FR-17 进行中）**：`docs/VERSIONING.md`；`.github/RELEASE_TEMPLATE.md`；README 顶部强化「克隆本模板」入口；GitHub 仓库已启用为公开 Template。
+
+### 变更
+- **根构建工具链**：wrapper 升至 Gradle **9.6.1**，为 Java 25 与 26.2 车道提供受支持的构建运行时；Forge 26.2 仍使用其自有 wrapper，根不得嵌套调用。
+- **NeoForge 1.20.2 工具链隔离**：改为自有 Gradle **8.14.5** 车道，消费根预构建的受控内部 JAR；根 Gradle 9 不再加载或嵌套执行该车道，只严格检查其已生成的产品 / 验收产物及当前权威报告。
+- **26.1+ 命名策略**：新增 ADR-0022 并取代 ADR-0016；Fabric 26.2 使用上游无混淆命名链路，不声明 Mojmap、Yarn 或 intermediary remap，ForgeGradle 内部转换不等同于依赖 Mojang mappings。
+
+### 修复
+- **mc-testkit 本地回退**：上游 plugin marker 暂不可用时，根插件解析限域优先使用本机 Maven 仓库中的 `top.wcpe.mc-testkit` marker 与 `top.wcpe.mc` 实现模块；不改变插件版本，也不将整座本地仓库暴露给构建。
+- **Bukkit 26.2 打包兼容性**：Shadow 升至 8.3.11，兼容根 Gradle 9 的 ASM 链路，避免重定位 `FoliaSchedulerPort` 时失败。
+- **Paper 26.2 R7 宿主编排**：宿主服务按目标工程隔离，传递 Java 25、R7 轮次与服务端 / 客户端制品元数据；`ensurePaperRealServerHost` 可等待本轮权威报告，避免与 Fabric 26.2 客户端伴侣出现制品或轮次漂移。
+- **R7 报告编排与聚合**：Fabric 运行进程以后注入的矩阵属性覆盖 Loom 默认值，并为 Java 25 冷启动保留起服窗口；根 P3 门按实际制表符格式解析报告，严格拒绝跨轮、重复场景或伪造的通过结果。
+
+### 交付状态
+- 上述均是 `v0.2.0` 之后的在制变更，FR-16/FR-17/FR-18 均保持**开发中**：Paper、Fabric、Forge 26.2 的当前同轮 R7 `RESULT PASS` 报告与根聚合门均已通过，公开 GitHub Template 已启用；仍缺用户第三期实机确认、`v0.3.0` 对外 Release 与 FR-18 的干净工作区复现。不得据此创建 `v0.3.0` 或标记已交付。
 
 ## [0.2.0] - 2026-07-26
 

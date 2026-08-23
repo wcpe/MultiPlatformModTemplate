@@ -10,19 +10,19 @@
 
 ## 决策
 1. **共享核心 L0–L2**（core-domain / core-runtime / core-server / core-client、protocol、platform-spi）为**根构建内的常规 `java-library` 模块**（Java 8）。
-2. **每个带专属 Gradle 插件的平台——Fabric(Loom)、Forge(ForgeGradle)、NeoForge(NeoGradle)、Sponge(SpongeGradle)——各是一个自包含的独立 Gradle 构建**（各自 `settings.gradle.kts`、只应用自己的 loader 插件、设自己的 JDK），由根 `settings.gradle.kts` 经 **`includeBuild`** 复合引入；各构建经**依赖替换**消费 `top.wcpe.mc.mpmt:core-*` 共享坐标，无需发布。
+2. **每个带专属 Gradle 插件的平台——Fabric(Loom)、Forge(ForgeGradle)、NeoForge(NeoGradle)、Sponge(SpongeGradle)——各是一个自包含的独立 Gradle 构建**（各自 `settings.gradle.kts`、只应用自己的 loader 插件、设自己的 JDK），通常由根 `settings.gradle.kts` 经 **`includeBuild`** 复合引入并经依赖替换消费 `top.wcpe.mc.mpmt:core-*`。例外是 **NeoForge 1.20.2**：其使用 Gradle 8.14.5 自有 wrapper、消费根预构建的受控内部 JAR；根 Gradle 9 不得反向引入或嵌套执行，只校验该车道已生成的产物和报告。
 3. **Bukkit 家族（Bukkit/Spigot/Paper/Folia）按一个系列收敛为单个插件构建 `platform-bukkit`**（普通 Java + shadow，无专属冲突插件，作根构建常规模块）：编译针对 **Bukkit 基线**，Paper/Folia 增强 API 用 `compileOnly`；**Paper/Folia 差异（尤以 Folia 区域调度 `RegionScheduler` vs 全局主线程为关键）运行期经 `FeatureGate` 探测并适配**，产出单个 jar 在 Bukkit/Spigot/Paper/Folia 通用（`plugin.yml` 声明 `folia-supported: true`）。不为 Folia/Paper 各拆独立构建/模块。
 4. （承接 ADR-0005 仍然有效的核心）仍是自定义 Gradle、**不引入 Architectury**（其不覆盖 Bukkit/Sponge）。
 
 ## 理由
-- 复合构建（`includeBuild`）是 Gradle 隔离相互冲突插件的规范手段：各加载器构建有独立 `settings` 与 `pluginManagement`，彻底互不污染，同时经依赖替换共享同一份核心。
+- 复合构建（`includeBuild`）是隔离相互冲突插件的规范手段；NeoForge 1.20.2 的自有 wrapper + 受控 JAR 则在根 Gradle 9 与 NeoGradle 工具链不兼容时保留物理隔离，二者都避免把 loader 插件塞进根构建。
 - Bukkit 家族本是继承谱系，运行期 FeatureGate 收敛符合"特判经能力探测、不散落分支"的不变量（见 ADR-0002 §FeatureGate、ADR-0003），避免模块爆炸与适配器重复。
-- 新增加载器 = 加一个 `includeBuild`，不动其他构建；新增 Bukkit 家族能力 = 在单一构建内加 FeatureGate 分支。
+- 新增加载器 = 增加一条独立车道，通常加一个 `includeBuild`；若出现类似 NeoForge 1.20.2 的工具链冲突，则明确建立自有 wrapper 与根侧只读校验；新增 Bukkit 家族能力 = 在单一构建内加 FeatureGate 分支。
 
 ## 后果
 - 正面：各 loader 插件零冲突；加载器可独立演进；Bukkit 家族一个 jar 跑全系列。
-- 负面：复合构建的配置与 IDE 导入略复杂；跨构建依赖替换需统一坐标 `top.wcpe.mc.mpmt:*`；**单个加载器内支持多 MC 版本**仍需在该构建内用版本适配子结构（源集 / 子模块，必要时再分构建），待 P2 落地 1.21.1 / 1.12.2 时细化（见 ADR-0003）。
-- 约束（写入 architecture-invariants）：带专属插件的平台一律独立 `includeBuild`，**禁止把 Loom/ForgeGradle/NeoGradle/SpongeGradle 塞进同一构建**；**Folia 不得另起独立构建/模块，只走 FeatureGate**。
+- 负面：复合构建或独立 wrapper 的配置与 IDE 导入略复杂；依赖替换与受控 JAR 输入都需统一坐标 / 文件名；**单个加载器内支持多 MC 版本**仍需在该构建内用版本适配子结构（源集 / 子模块，必要时再分构建），待 P2 落地 1.21.1 / 1.12.2 时细化（见 ADR-0003）。
+- 约束（写入 architecture-invariants）：带专属插件的平台一律独立车道；**禁止把 Loom/ForgeGradle/NeoGradle/SpongeGradle 塞进同一构建；NeoForge 1.20.2 禁止反向 include 根构建或在根任务中嵌套其 wrapper**；**Folia 不得另起独立构建/模块，只走 FeatureGate**。
 - 约束（评审）：core-* 如何进各 loader 产物（shade / JiJ / 不被 remap）见 [ADR-0012](0012-packaging-and-dependency-isolation.md)，且 M0 先做最小打包 spike，必要时回退"core 发 mavenLocal + 各 loader shadow 消费"。
 - 约束（评审）：**"Bukkit 家族单 jar 通用"只在同一 MC 大版本族成立**；跨到 1.12.2（CatServer）Bukkit API 有大量破坏性变化，需 Bukkit 平台的 **L4**（version-api：通道注册 / 调度 / 聊天组件等），而非"P2 含糊细化"。
 

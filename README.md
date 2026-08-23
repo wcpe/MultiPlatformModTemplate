@@ -4,9 +4,9 @@
 
 ## 状态
 
-当前正式版 **v0.2.0**：第一期 MVP 与第二期多版本矩阵（FR-12，1.21.1 / 1.12.2）已交付；第三期（FR-16 26.2 / FR-17 模板发布 / FR-18 上手文档）进行中。
+当前正式版 **v0.2.0**：第一期 MVP 与第二期多版本矩阵（FR-12，1.21.1 / 1.12.2）已交付。第三期（FR-16 26.2 / FR-17 模板发布 / FR-18 上手文档）仍在开发：Paper、Fabric、Forge 26.2 的同轮 R7 权威报告与根 `:runP3R7Gate` 已通过，仓库已启用为公开 GitHub Template；但尚无 `v0.3.0` 或 GitHub Release，且仍缺用户第三期实机确认及 FR-18 的干净克隆复现。
 
-**克隆本模板起步**：见 [`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`](docs/HOWTO-CLONE-AND-WRITE-PLAY.md)（含 Counter 示例域）。版本节奏见 [`docs/VERSIONING.md`](docs/VERSIONING.md)。
+**从模板起步**：本仓库已启用 GitHub Template；在 GitHub 选择 `Use this template` 创建新仓库后，见 [`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`](docs/HOWTO-CLONE-AND-WRITE-PLAY.md)（含 Counter 示例域）。版本节奏见 [`docs/VERSIONING.md`](docs/VERSIONING.md)。
 
 ## 架构一览
 
@@ -16,7 +16,7 @@
 L0 core-domain   功能域：玩法规则 + 领域模型 + 端口(Port) + 自有 EventBus(域间解耦)   ← 玩法只写这里
 L1 core-runtime / core-server / core-client / protocol            框架编排 / 端逻辑 / 跨端协议
 L2 platform-spi  平台抽象 SPI + PlatformProvider + FeatureGate     平台可插拔的唯一机制
-L3 平台胶水：Bukkit/Sponge 根多模块；Fabric/Forge/NeoForge 每 MC 版本独立 includeBuild
+L3 平台胶水：Bukkit 为根多模块；兼容车道经 includeBuild，Gradle 不兼容车道用自有 wrapper + 受控 JAR
      各版本内 common / server / client（或仅 server）分目录，平台只做胶水
 L4 版本差异只在「该版本构建」内，禁止单工程多源集堆多版本
 ```
@@ -55,23 +55,24 @@ L0/L1 不含任何平台 / 版本代码；跨平台、跨版本的差异全部�
 
 ## 快速开始
 
-平台无关核心（L0–L2）与首个平台胶水已落地，其余平台随后续迭代补全（进度见 [`docs/PRD.md`](docs/PRD.md) FR 状态）。需本机有 JDK（构建自动选用 JDK 8 编译核心、JDK 17 编译平台胶水，缺失时按需下载）。
+P1/P2 已交付，P3 以 [`docs/PRD.md`](docs/PRD.md) 的 FR 状态为准。根 wrapper 为 Gradle **9.6.1**；L0–L2 编译为 Java 8 字节码，26.2 三车道须准备 Java 25。
+
+> 当前上游 `mc-testkit` plugin marker 不可用时，根构建仅会从本机 Maven 缓存回退解析该插件及实现模块；首次配置失败时，先按 [`docs/OPERATIONS.md`](docs/OPERATIONS.md) 准备对应本地制品。该临时前提不等于冷缓存或新机器验证已通过。
 
 **物理布局（不拍平到仓库根）**：
 
 ```
 core/          domain runtime server client paths config protocol spi
 platform/
-  bukkit/      api common modern 1.12.2 1.20.1 1.21.1
-  fabric/      api 1.20.1 1.21.1
-  forge/       api 1.12.2 1.20.1 1.21.1
+  bukkit/      api common modern 1.12.2 1.20.1 1.21.1 26.2
+  fabric/      api 1.20.1 1.21.1 26.2
+  forge/       api 1.12.2 1.20.1 1.21.1 26.2
   neoforge/    api 1.20.2
   sponge/      api 1.20.1
 modules/       smoke acceptance
 ```
 
 ```bash
-./gradlew :buildAll
 # 可发布 jar 聚合到 build/dist/{bukkit,fabric,forge,neoforge,sponge}/
 ./gradlew :collectReleaseArtifacts
 
@@ -83,9 +84,14 @@ modules/       smoke acceptance
 ./gradlew -p platform/fabric/1.20.1 remapJar
 ./gradlew -p platform/fabric/1.21.1 remapJar
 ./gradlew -p platform/forge/1.20.1 reobfShadowJar
+
+# 26.2（P3 在制车道；Java 25）
+./gradlew :platform:bukkit:26.2:shadowJar
+./gradlew :buildFabric262
+./platform/forge/26.2/gradlew --no-daemon packageArtifacts
 ```
 
-产物放入对应服务端 `plugins/` 或双端 `mods/`；运维见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)。
+26.2 的三个命令只构建车道；Paper、Fabric、Forge 的同轮 R7 报告与 `./gradlew :runP3R7Gate` 已在本地通过。该证据不等于 P3 交付：仍须用户第三期实机确认、FR-18 干净克隆复现与 `v0.3.0` 对外 Release。产物放入对应服务端 `plugins/` 或双端 `mods/`；运维见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)。
 
 ### 克隆后换名（脚手架）
 

@@ -5,8 +5,8 @@
 ## 当前规格
 
 - [P2 版本矩阵与工具链隔离](p2-version-matrix.md)（已交付@v0.2.0，FR-12/FR-25）
-- [第三期 · 平台规模化与对外上手](p3-platform-scaling-and-onboarding.md)（草拟，FR-16/FR-17/FR-18）
-- [FR-16 · MC 26.2 版本适配（冻结）](fr-26_2-adapter.md)（T1 冻结完成；Paper/Fabric/Forge 可开，Folia 无 26.2）
+- [第三期 · 平台规模化与对外上手](p3-platform-scaling-and-onboarding.md)（开发中，FR-16/FR-17/FR-18；基线 `v0.2.0`）
+- [FR-16 · MC 26.2 版本适配（冻结）](fr-26_2-adapter.md)（T1–T4 的本地验证已完成：仅 Paper/Fabric/Forge，Folia 无 26.2；三车道同轮 R7 与根门已通过，待用户实机确认）
 
 ## 何时写
 
