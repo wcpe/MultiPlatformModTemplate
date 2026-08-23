@@ -81,10 +81,7 @@ fun shouldSkipRelative(rel: Path): Boolean {
 
 fun isTextCandidate(path: Path): Boolean {
     val name = path.fileName.toString()
-    if (
-        path.parent?.fileName?.toString() == "services" &&
-            path.parent?.parent?.fileName?.toString() == "META-INF"
-    ) {
+    if (isServiceDescriptor(path)) {
         return true
     }
     if (name in specialNames) {
@@ -96,6 +93,10 @@ fun isTextCandidate(path: Path): Boolean {
     }
     return name.substring(dot) in textSuffixes
 }
+
+fun isServiceDescriptor(path: Path): Boolean =
+    path.parent?.fileName?.toString() == "services" &&
+        path.parent?.parent?.fileName?.toString() == "META-INF"
 
 fun replaceScaffoldText(
     content: String,
@@ -292,6 +293,44 @@ fun moveJavaPackageTrees(
     return moves
 }
 
+fun findServiceDescriptorFiles(root: Path): List<Path> {
+    val candidates = mutableListOf<Path>()
+    Files.walkFileTree(
+        root,
+        object : SimpleFileVisitor<Path>() {
+            override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+                val rel = root.relativize(dir)
+                return if (shouldSkipRelative(rel)) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
+            }
+
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                if (isServiceDescriptor(file) && file.fileName.toString().contains(oldGroup)) {
+                    candidates.add(file)
+                }
+                return FileVisitResult.CONTINUE
+            }
+        },
+    )
+    return candidates
+}
+
+fun renameServiceDescriptorFiles(
+    root: Path,
+    newGroup: String,
+    dryRun: Boolean,
+    log: (String) -> Unit,
+): Int {
+    val candidates = findServiceDescriptorFiles(root)
+    candidates.forEach { file ->
+        val dest = file.resolveSibling(file.fileName.toString().replace(oldGroup, newGroup))
+        log("MOVE ${root.relativize(file)} -> ${root.relativize(dest)}")
+        if (!dryRun) {
+            Files.move(file, dest, StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+    return candidates.size
+}
+
 tasks.register("renameScaffold") {
     group = "help"
     description =
@@ -409,13 +448,18 @@ tasks.register("renameScaffold") {
             },
         )
 
-        val moves =
+        val serviceMoves =
+            renameServiceDescriptorFiles(root, newGroup, dryRun) { line ->
+                logger.lifecycle("  $line")
+            }
+        val packageMoves =
             moveJavaPackageTrees(root, newGroup, dryRun) { line ->
                 logger.lifecycle("  $line")
             }
 
         logger.lifecycle(
-            "[renameScaffold] done: text_files=$changedFiles, package_moves=$moves",
+            "[renameScaffold] done: text_files=$changedFiles, service_moves=$serviceMoves, " +
+                "package_moves=$packageMoves",
         )
         if (dryRun) {
             logger.lifecycle(
