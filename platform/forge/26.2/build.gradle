@@ -63,18 +63,30 @@ ext {
         'platform-spi': 'core/spi',
         'acceptance': 'modules/acceptance',
     ]
+    // Gradle 默认以工程名命名产物；逻辑模块名与工程名不同时显式映射。
+    sharedModuleArchives = [
+        'core-domain': 'domain',
+        'core-runtime': 'runtime',
+        'core-client': 'client',
+        'core-server': 'server',
+        'protocol': 'protocol',
+        'platform-spi': 'spi',
+        'acceptance': 'acceptance',
+    ]
     sharedJars = sharedModules.collectEntries { module ->
         def dir = sharedModuleDirs[module] ?: module
-        [(module): new File(repositoryRoot, "${dir}/build/libs/${module}-0.1.0.jar")]
+        def archive = sharedModuleArchives[module] ?: module
+        [(module): new File(repositoryRoot, "${dir}/build/libs/${archive}-${repositoryVersion}.jar")]
     }
 }
 
 def verifySharedJar = { String module, File jarFile ->
     if (!jarFile.isFile()) {
-        throw new GradleException("缺少共享 JAR：${jarFile}。独立车道不会 includeBuild 根工程，请先由调用方准备 0.1.0 JAR。")
+        throw new GradleException("缺少共享 JAR：${jarFile}。独立车道不会 includeBuild 根工程，请先由调用方准备 ${repositoryVersion} JAR。")
     }
-    if (jarFile.name != "${module}-0.1.0.jar") {
-        throw new GradleException("共享 JAR 文件名不匹配：${jarFile.name}，期望 ${module}-0.1.0.jar")
+    def expectedArchive = sharedModuleArchives[module] ?: module
+    if (jarFile.name != "${expectedArchive}-${repositoryVersion}.jar") {
+        throw new GradleException("共享 JAR 文件名不匹配：${jarFile.name}，期望 ${expectedArchive}-${repositoryVersion}.jar")
     }
     JarFile jar = new JarFile(jarFile)
     try {
@@ -260,7 +272,6 @@ def acceptanceJar = tasks.register('acceptanceJar', Jar) {
 }
 
 minecraft {
-    mappings channel: 'official', version: minecraftVersion
     runs {
         // Forge 26.2 的 launcher metadata 不消费 FG7 生成的 source_roots，因此 mods/source
         // 不会进入实际启动参数。独立验收 JAR 在启动前安装到各自 mods 目录。
@@ -284,7 +295,7 @@ minecraft {
 
 def verifySharedInputs = tasks.register('verifySharedInputs') {
     group = 'verification'
-    description = '校验独立车道全部 0.1.0 共享 JAR 输入'
+    description = '校验独立车道全部当前版本共享 JAR 输入'
     inputs.files files(sharedJars.values())
     doLast {
         sharedJars.each(verifySharedJar)

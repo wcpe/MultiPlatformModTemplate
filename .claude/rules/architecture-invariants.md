@@ -30,7 +30,7 @@
 - **L0–L2 严格编译为 Java 8 字节码**（`sourceCompatibility = 8`），不得使用 Java 9+ 语法 / API——须以 `javac --release 8` 或 animal-sniffer **强制**（仅锁 sourceCompatibility 不够，依据 ADR-0004）；Lombok 仅用于 L0/L1 Java 模块。
 - 平台胶水（L3/L4）按各 loader 最低 JDK 编译，但仍依赖 Java 8 核心。
 - 第三方运行期依赖（snakeyaml/gson 等）**统一 relocate 到 `top.wcpe.mc.mpmt.libs.*`**；core 打进各 loader 产物的方式逐平台明确、core 不被 remap（依据 ADR-0012）。
-- 构建为自定义 Gradle **复合构建**（Kotlin DSL）：核心与 Bukkit 家族为根构建常规模块，带专属插件的平台（Fabric/Loom、Forge/ForgeGradle、NeoForge/NeoGradle、Sponge/SpongeGradle）各为经 `includeBuild` 引入的独立构建——**禁止把这些 loader 插件塞进同一构建**（依据 ADR-0007）。**不引入 Architectury** 或与之冲突的统包框架；换构建框架 = 架构决策，走新 ADR。
+- 构建为自定义 Gradle 复合 / 独立车道（Kotlin DSL）：核心与 Bukkit 家族为根构建常规模块，Fabric/Loom、Forge/ForgeGradle、Sponge/SpongeGradle 经 `includeBuild` 隔离；NeoForge 1.20.2 固定为 Gradle 8.14.5 自有 wrapper + 根预构建受控 JAR，根 Gradle 9 只校验其已生成产物 / 报告——**禁止把这些 loader 插件塞进同一构建，禁止根嵌套 NeoForge wrapper 或 NeoForge 反向 include 根工程**（依据 ADR-0007）。**不引入 Architectury** 或与之冲突的统包框架；换构建框架 = 架构决策，走新 ADR。
 
 ## 5. 跨端协议单一真源（依据 ADR-0006）
 - 协议包定义 / 字节布局 / 版本号**只在 `protocol` 一处权威定义**，客户端与服务端共用，禁止双源各自定义。

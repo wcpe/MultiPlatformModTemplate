@@ -12,5 +12,3 @@ plugins {
 }
 
 rootProject.name = "platform-neoforge"
-
-includeBuild("../../..")

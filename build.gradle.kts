@@ -149,14 +149,86 @@ fun org.gradle.api.Task.dependsOnIncludedIfPresent(buildName: String, taskPath: 
 
 val verifyReleasePackaging by tasks.registering {
     group = "verification"
-    description = "校验五平台最终自包含发布产物（已 skip 的 includeBuild 仅 warn）"
+    description = "校验五平台最终自包含发布产物（NeoForge 必须由独立车道预先生成）"
     // Bukkit 已拆为每版本子工程；聚合任务在 platform-bukkit 壳上
     dependsOn(":platform:bukkit:verifyPackaging")
     dependsOnIncludedIfPresent("platform-fabric-1.20.1", ":verifyPackaging")
     dependsOnIncludedIfPresent("platform-fabric-1.21.1", ":verifyPackaging")
     dependsOnIncludedIfPresent("platform-forge-1.20.1", ":verifyPackaging")
-    dependsOnIncludedIfPresent("platform-neoforge", ":verifyPackaging")
     dependsOnIncludedIfPresent("platform-sponge", ":verifyPackaging")
+}
+
+val prepareFabric262Inputs by tasks.registering {
+    group = "build"
+    description = "构建 Fabric 26.2 独立车道消费的内部 JAR 输入"
+    dependsOn(
+        ":core:domain:jar",
+        ":core:runtime:jar",
+        ":core:protocol:jar",
+        ":core:spi:jar",
+        ":core:server:jar",
+        ":core:client:jar",
+        ":platform:fabric:fabric-api:jar",
+        ":modules:acceptance:jar",
+    )
+}
+
+val prepareNeoForge1202Inputs by tasks.registering {
+    group = "build"
+    description = "构建 NeoForge 1.20.2 独立车道消费的内部 JAR 输入"
+    dependsOn(
+        ":core:domain:jar",
+        ":core:runtime:jar",
+        ":core:protocol:jar",
+        ":core:spi:jar",
+        ":core:server:jar",
+        ":core:client:jar",
+        ":platform:neoforge:neoforge-api:jar",
+        ":modules:acceptance:jar",
+    )
+}
+
+val neoForge1202ProductArtifact =
+    file("platform/neoforge/1.20.2/build/libs/mpmt-neoforge-1.20.2-$mpmtVersion.jar")
+val neoForge1202AcceptanceArtifact =
+    file("platform/neoforge/1.20.2/build/libs/mpmt-acceptance-neoforge-$mpmtVersion.jar")
+
+fun requireNeoForge1202Artifact(artifact: File, displayName: String) {
+    if (!artifact.isFile) {
+        throw GradleException(
+            "缺少 NeoForge 1.20.2 $displayName：${artifact.absolutePath}${System.lineSeparator()}" +
+                "请先执行 cd platform/neoforge/1.20.2; .\\gradlew.bat --no-daemon packageArtifacts；" +
+                "根构建不会嵌套调用该 Gradle 8.14.5 wrapper。",
+        )
+    }
+}
+
+val verifyNeoForge1202ProductArtifact by tasks.registering {
+    group = "verification"
+    description = "校验 NeoForge 1.20.2 独立车道已生成产品产物"
+    doLast { requireNeoForge1202Artifact(neoForge1202ProductArtifact, "产品产物") }
+}
+
+val verifyNeoForge1202Artifacts by tasks.registering {
+    group = "verification"
+    description = "校验 NeoForge 1.20.2 独立车道已生成产品与验收产物"
+    dependsOn(verifyNeoForge1202ProductArtifact)
+    doLast { requireNeoForge1202Artifact(neoForge1202AcceptanceArtifact, "验收产物") }
+}
+
+verifyReleasePackaging.configure {
+    dependsOn(verifyNeoForge1202ProductArtifact)
+}
+
+val buildFabric262 by tasks.registering {
+    group = "build"
+    description = "先准备内部 JAR，再构建 Fabric 26.2 独立车道"
+    dependsOn(prepareFabric262Inputs)
+    includedBuildOrNull("platform-fabric-26.2")?.let { dependsOn(it.task(":build")) }
+}
+
+verifyReleasePackaging.configure {
+    dependsOn(buildFabric262)
 }
 
 /**
@@ -178,8 +250,9 @@ val collectReleaseArtifacts by tasks.registering {
     )
     dependsOnIncludedIfPresent("platform-fabric-1.20.1", ":remapJar")
     dependsOnIncludedIfPresent("platform-fabric-1.21.1", ":remapJar")
+    dependsOn(buildFabric262)
     dependsOnIncludedIfPresent("platform-forge-1.20.1", ":reobfShadowJar")
-    dependsOnIncludedIfPresent("platform-neoforge", ":shadowJar")
+    dependsOn(verifyNeoForge1202ProductArtifact)
     dependsOnIncludedIfPresent("platform-sponge", ":shadowJar")
 
     val distRoot = layout.buildDirectory.dir("dist")
@@ -228,7 +301,7 @@ val collectReleaseArtifacts by tasks.registering {
             "mpmt-bukkit-26.2-$version.jar",
         )
 
-        // Fabric（remap 后权威 jar）
+        // Fabric 1.20.1 / 1.21.1（remap 后权威 jar）
         copyNamed(
             File(root, "platform/fabric/1.20.1/build/libs/mpmt-fabric-1.20.1-$version.jar"),
             "fabric",
@@ -238,6 +311,12 @@ val collectReleaseArtifacts by tasks.registering {
             File(root, "platform/fabric/1.21.1/build/libs/mpmt-fabric-1.21.1-$version.jar"),
             "fabric",
             "mpmt-fabric-1.21.1-$version.jar",
+        )
+        // Fabric 26.2（MC 26.1+ 无混淆，shadowJar 直接为权威 jar）
+        copyNamed(
+            File(root, "platform/fabric/26.2/build/libs/mpmt-fabric-26.2-$version.jar"),
+            "fabric",
+            "mpmt-fabric-26.2-$version.jar",
         )
 
         // Forge 1.20.1：必须用 reobf 输出（SRG），勿用 libs 中间 named jar
@@ -285,6 +364,18 @@ val collectReleaseArtifacts by tasks.registering {
                 """.trimMargin(),
             )
         }
+        val forge262 = File(root, "platform/forge/26.2/build/libs/mpmt-forge-26.2-$version.jar")
+        if (forge262.isFile) {
+            copyNamed(forge262, "forge", "mpmt-forge-26.2-$version.jar")
+        } else {
+            logger.lifecycle(
+                """
+                |[dist] 未找到 Forge 26.2 产物（可选）。请用自有 wrapper（Java 25 + Gradle 9.6.1）：
+                |  ./platform/forge/26.2/gradlew --no-daemon packageArtifacts
+                |然后再跑 :collectReleaseArtifacts
+                """.trimMargin(),
+            )
+        }
 
         logger.lifecycle("[dist] 完成：${dist.absolutePath}")
     }
@@ -296,7 +387,8 @@ tasks.register("buildAll") {
     group = "build"
     description = "构建全部模块、校验发布产物并聚合到 build/dist/"
     dependsOn(subprojects.map { "${it.path}:build" })
-    dependsOn(gradle.includedBuilds.map { it.task(":build") })
+    dependsOn(gradle.includedBuilds.filter { it.name != "platform-fabric-26.2" }.map { it.task(":build") })
+    dependsOn(verifyNeoForge1202Artifacts)
     dependsOn(verifyReleasePackaging)
     dependsOn(collectReleaseArtifacts)
 }
@@ -368,6 +460,13 @@ registerLaneGate(
 }
 
 registerLaneGate(
+    "runRealServerAcceptanceFabric262",
+    "Fabric 26.2 R7 专用服门禁：须先完成服务端与 Fabric gametest 客户端实跑",
+) {
+    dependsOnIncludedIfPresent("platform-fabric-26.2", ":runRealServerAcceptance")
+}
+
+registerLaneGate(
     "runRealServerAcceptanceForge",
     "Forge 1.20.1 专用服门禁：须先实跑 Forge 服 + Forge acceptance 客户端伴侣",
 ) {
@@ -395,6 +494,45 @@ tasks.register("runRealServerAcceptanceForge121") {
     }
 }
 
+tasks.register("runRealServerAcceptanceForge262") {
+    group = "verification"
+    description = "Forge 26.2 R7 专用服门禁：读取自有 wrapper 生成的当前权威报告"
+    doLast {
+        val matrix = providers.gradleProperty("mpmt.acceptance.matrix").orNull?.trim().orEmpty()
+        val runId = providers.gradleProperty("mpmt.acceptance.runId").orNull?.trim().orEmpty()
+        if (matrix != "R7" || runId.isEmpty()) {
+            throw GradleException("Forge 26.2 R7 门禁需要 -Pmpmt.acceptance.matrix=R7 与 -Pmpmt.acceptance.runId=<本轮标识>")
+        }
+        val custom = providers.gradleProperty("mpmt.acceptance.report").orNull?.trim().orEmpty()
+        val candidates =
+            listOfNotNull(
+                custom.takeIf { it.isNotEmpty() }?.let(::file),
+                file("platform/forge/26.2/run-realserver/acceptance-report.txt"),
+                file("platform/forge/26.2/run-acceptance-server/acceptance-report.txt"),
+            )
+        val report = candidates.firstOrNull(File::isFile)
+            ?: throw GradleException(
+                "未找到 Forge 26.2 R7 报告。请先在 platform/forge/26.2 用自有 wrapper 完成实跑并运行 verifyAcceptanceReport；根构建不会嵌套调用该 wrapper。",
+            )
+        val lines = report.readLines().map(String::trim).filter(String::isNotEmpty)
+        if (lines.firstOrNull() != "SERVER-GAMETEST-REPORT v2") {
+            throw GradleException("Forge 26.2 R7 报告不是 acceptance v2：${report.absolutePath}")
+        }
+        if (lines.none { it == "MATRIX\tR7" || it == "MATRIX R7" } ||
+            lines.none { it == "RUN_ID\t$runId" || it == "RUN_ID $runId" } ||
+            lines.lastOrNull() != "RESULT PASS"
+        ) {
+            throw GradleException("Forge 26.2 R7 报告未通过或不属于当前运行：${report.absolutePath}")
+        }
+        listOf("product-handshake", "product-roundtrip", "client-hud").forEach { scenario ->
+            if (lines.none { it.startsWith("SCENARIO\t$scenario\tPASS") || it.startsWith("PASS $scenario") }) {
+                throw GradleException("Forge 26.2 R7 报告缺少公共场景 PASS：$scenario")
+            }
+        }
+        logger.lifecycle("[realserver] Forge 26.2 R7 报告 PASS：${report.absolutePath}")
+    }
+}
+
 /** Forge 1.12.2 client-only：真服走 CatServer R5，禁止 Forge 专用服。 */
 tasks.register("runRealServerAcceptanceForge112") {
     group = "verification"
@@ -417,11 +555,54 @@ tasks.register("runRealServerAcceptanceForge112") {
     }
 }
 
-registerLaneGate(
-    "runRealServerAcceptanceNeoForge",
-    "NeoForge 专用服门禁：须先实跑 NeoForge 服 + NeoForge acceptance 客户端伴侣",
-) {
-    dependsOnIncludedIfPresent("platform-neoforge", ":runRealServerAcceptance")
+val verifyNeoForge1202CurrentReport by tasks.registering {
+    group = "verification"
+    description = "校验 NeoForge 1.20.2 独立车道当前 realserver 权威报告"
+    dependsOn(verifyNeoForge1202Artifacts)
+    doLast {
+        val matrix = providers.gradleProperty("mpmt.acceptance.matrix").orNull?.trim().orEmpty()
+        val runId = providers.gradleProperty("mpmt.acceptance.runId").orNull?.trim().orEmpty()
+        val startEpochMs = providers.gradleProperty("mpmt.acceptance.startEpochMs").orNull?.trim().orEmpty()
+        if (matrix.isEmpty() || runId.isEmpty() || startEpochMs.isEmpty()) {
+            throw GradleException(
+                "NeoForge 1.20.2 门禁需要 -Pmpmt.acceptance.matrix=<R1-R7>、" +
+                    "-Pmpmt.acceptance.runId=<本轮标识> 与 -Pmpmt.acceptance.startEpochMs=<本轮开始毫秒>。",
+            )
+        }
+        val custom = providers.gradleProperty("mpmt.acceptance.report").orNull?.trim().orEmpty()
+        val report =
+            listOfNotNull(
+                custom.takeIf { it.isNotEmpty() }?.let(::file),
+                file("platform/neoforge/1.20.2/run-server/acceptance-report.txt"),
+            ).firstOrNull(File::isFile)
+                ?: throw GradleException(
+                    "未找到 NeoForge 1.20.2 realserver 报告。请先执行 cd platform/neoforge/1.20.2; " +
+                        ".\\gradlew.bat --no-daemon verifyAcceptanceReport；根构建不会嵌套调用该 Gradle 8.14.5 wrapper。",
+                )
+        val lines = report.readLines().map(String::trim).filter(String::isNotEmpty)
+        if (lines.firstOrNull() != "SERVER-GAMETEST-REPORT v2") {
+            throw GradleException("NeoForge 1.20.2 报告不是 acceptance v2：${report.absolutePath}")
+        }
+        if (lines.none { it == "MATRIX\\t$matrix" } ||
+            lines.none { it == "RUN_ID\\t$runId" } ||
+            lines.none { it == "START_EPOCH_MS\\t$startEpochMs" } ||
+            lines.lastOrNull() != "RESULT PASS"
+        ) {
+            throw GradleException("NeoForge 1.20.2 报告未通过或不属于当前运行：${report.absolutePath}")
+        }
+        listOf("product-handshake", "product-roundtrip", "client-hud").forEach { scenario ->
+            if (lines.none { it.startsWith("SCENARIO\\t$scenario\\tPASS") }) {
+                throw GradleException("NeoForge 1.20.2 报告缺少公共场景 PASS：$scenario")
+            }
+        }
+        logger.lifecycle("[realserver] NeoForge 1.20.2 报告 PASS：${report.absolutePath}")
+    }
+}
+
+tasks.register("runRealServerAcceptanceNeoForge") {
+    group = "verification"
+    description = "NeoForge 专用服门禁：读取独立 Gradle 8 车道生成的当前权威报告"
+    dependsOn(verifyNeoForge1202CurrentReport)
 }
 
 registerLaneGate(
@@ -429,6 +610,13 @@ registerLaneGate(
     "Paper/Bukkit 宿主门禁（默认 1.20.1）：产品+验收插件部署后，Fabric gametest 客户端进服写报告",
 ) {
     dependsOn(":platform:bukkit:1.20.1:runRealServerAcceptance")
+}
+
+registerLaneGate(
+    "runRealServerAcceptanceBukkit262",
+    "Paper 26.2 R7 宿主门禁：须先部署产品与验收插件并完成客户端进服",
+) {
+    dependsOn(":platform:bukkit:26.2:runRealServerAcceptance")
 }
 
 registerLaneGate(
@@ -460,9 +648,12 @@ tasks.register("runRealServerAcceptance") {
     dependsOn(
         "runRealServerAcceptanceFabric",
         "runRealServerAcceptanceFabric121",
+        "runRealServerAcceptanceFabric262",
         "runRealServerAcceptanceForge",
+        "runRealServerAcceptanceForge262",
         "runRealServerAcceptanceNeoForge",
         "runRealServerAcceptanceBukkit",
+        "runRealServerAcceptanceBukkit262",
         "runRealServerAcceptanceFolia",
         "runRealServerAcceptanceCatServer",
         "runRealServerAcceptanceSponge",
@@ -501,7 +692,6 @@ tasks.register("verifyVersionMatrixBuild") {
         ":platform:bukkit:1.12.2:verifyPackaging",
         ":platform:bukkit:1.20.1:verifyPackaging",
         ":platform:bukkit:1.21.1:verifyPackaging",
-        ":platform:bukkit:26.2:verifyPackaging",
     )
     dependsOnIncludedIfPresent("platform-fabric-1.20.1", ":verifyPackaging")
     dependsOnIncludedIfPresent("platform-fabric-1.21.1", ":verifyPackaging")
@@ -533,6 +723,83 @@ tasks.register("verifyVersionMatrixBuild") {
             """.trimMargin(),
         )
     }
+}
+
+tasks.register("runP3R7Build") {
+    group = "verification"
+    description = "P3 R7 构建门：Paper 26.2、Fabric 26.2 与 Forge 26.2 自有产物"
+    dependsOn(":platform:bukkit:26.2:verifyPackaging", buildFabric262)
+    doLast {
+        val version = mpmtVersion
+        val forgeProduct = file("platform/forge/26.2/build/libs/mpmt-forge-26.2-$version.jar")
+        val forgeAcceptance = file("platform/forge/26.2/build/libs/mpmt-forge-acceptance-26.2-$version.jar")
+        if (!forgeProduct.isFile || !forgeAcceptance.isFile) {
+            throw GradleException(
+                "缺少 Forge 26.2 产品或验收产物。请在 platform/forge/26.2 用自有 wrapper 运行 ./gradlew --no-daemon packageArtifacts；根构建不会嵌套调用该 wrapper。",
+            )
+        }
+    }
+}
+
+fun verifyP3R7Report(lane: String, report: File, runId: String) {
+    if (!report.isFile) {
+        throw GradleException("$lane 26.2 R7 缺少当前权威报告：${report.absolutePath}")
+    }
+    val lines = report.readLines().map(String::trim).filter(String::isNotEmpty)
+    if (lines.firstOrNull() != "SERVER-GAMETEST-REPORT v2") {
+        throw GradleException("$lane 26.2 R7 报告不是 acceptance v2：${report.absolutePath}")
+    }
+    if (lines.none { it == "MATRIX\tR7" || it == "MATRIX R7" } ||
+        lines.none { it == "RUN_ID\t$runId" || it == "RUN_ID $runId" } ||
+        lines.lastOrNull() != "RESULT PASS" ||
+        lines.count { it == "RESULT PASS" } != 1
+    ) {
+        throw GradleException("$lane 26.2 R7 报告未通过或不属于当前运行：${report.absolutePath}")
+    }
+    if (lines.none { it.matches(Regex("ARTIFACT\\t[^\\t]+\\t[0-9a-fA-F]{64}")) }) {
+        throw GradleException("$lane 26.2 R7 报告缺少制品哈希：${report.absolutePath}")
+    }
+    listOf("product-handshake", "product-roundtrip", "client-hud").forEach { scenario ->
+        val passed = lines.count { it == "SCENARIO\t$scenario\tPASS" || it.startsWith("SCENARIO\t$scenario\tPASS\t") }
+        if (passed != 1) {
+            throw GradleException("$lane 26.2 R7 场景必须恰好一次 PASS：$scenario")
+        }
+    }
+}
+
+tasks.register("runP3R7RealServerAcceptance") {
+    group = "verification"
+    description = "P3 R7 真服门：Paper、Fabric、Forge 26.2 三车道当前报告全通过"
+    dependsOn(
+        "runRealServerAcceptanceBukkit262",
+        "runRealServerAcceptanceFabric262",
+        "runRealServerAcceptanceForge262",
+    )
+    doLast {
+        val matrix = providers.gradleProperty("mpmt.acceptance.matrix").orNull?.trim().orEmpty()
+        val runId = providers.gradleProperty("mpmt.acceptance.runId").orNull?.trim().orEmpty()
+        val startEpochMs = providers.gradleProperty("mpmt.acceptance.startEpochMs").orNull?.trim().orEmpty()
+        if (matrix != "R7" || runId.isEmpty() || startEpochMs.isEmpty()) {
+            throw GradleException(
+                "P3 R7 真服门需要 -Pmpmt.acceptance.matrix=R7、-Pmpmt.acceptance.runId=<本轮标识> 与 -Pmpmt.acceptance.startEpochMs=<本轮开始毫秒>",
+            )
+        }
+        verifyP3R7Report("Paper", file("platform/bukkit/26.2/build/acceptance/server-report-r7.txt"), runId)
+        verifyP3R7Report("Fabric", file("platform/fabric/26.2/build/acceptance/server-report-r7.txt"), runId)
+        verifyP3R7Report(
+            "Forge",
+            file("platform/forge/26.2/run-realserver/acceptance-report.txt")
+                .takeIf(File::isFile)
+                ?: file("platform/forge/26.2/run-acceptance-server/acceptance-report.txt"),
+            runId,
+        )
+    }
+}
+
+tasks.register("runP3R7Gate") {
+    group = "verification"
+    description = "P3 R7 交付门：构建三车道并校验当前真服报告"
+    dependsOn("runP3R7Build", "runP3R7RealServerAcceptance")
 }
 
 /**
@@ -600,4 +867,3 @@ tasks.register("runMcTestkitFoliaSmoke") {
     // 任务名由 scenario key 生成：smoke-folia → SmokeFolia
     dependsOn("e2eSmokeFolia")
 }
-

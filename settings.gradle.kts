@@ -4,6 +4,13 @@
 
 pluginManagement {
     repositories {
+        // 上游 marker 临时不可用时，仅从本机 Maven 仓库解析 mc-testkit marker 与实现模块。
+        mavenLocal {
+            content {
+                includeGroup("top.wcpe.mc-testkit")
+                includeGroup("top.wcpe.mc")
+            }
+        }
         gradlePluginPortal()
         mavenCentral()
         maven("https://maven.wcpe.top/repository/maven-public/")
@@ -74,15 +81,17 @@ if (gradle.parent == null) {
             name = "platform-fabric-26.2"
         }
     }
-    if (!skip("mpmt.skip.forge") && !skip("mpmt.skip.forge.1.20.1")) {
+    val rootCannotRunForge120 =
+        org.gradle.util.GradleVersion.current() >= org.gradle.util.GradleVersion.version("9.0")
+    if (!skip("mpmt.skip.forge") && !skip("mpmt.skip.forge.1.20.1") && !rootCannotRunForge120) {
         includeBuild("platform/forge/1.20.1") {
             name = "platform-forge-1.20.1"
         }
+    } else if (rootCannotRunForge120) {
+        logger.lifecycle("[mpmt] 根 Gradle 9 不加载 Forge 1.20.1（ForgeGradle 6 仅支持 Gradle 8；请用其独立车道）")
     }
     if (!skip("mpmt.skip.neoforge")) {
-        includeBuild("platform/neoforge/1.20.2") {
-            name = "platform-neoforge"
-        }
+        logger.lifecycle("[mpmt] 根 Gradle 不加载 NeoForge 1.20.2（请使用其 Gradle 8.14.5 自有 wrapper）")
     }
     if (!skip("mpmt.skip.sponge")) {
         includeBuild("platform/sponge/1.20.1") {

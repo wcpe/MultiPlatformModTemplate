@@ -19,6 +19,8 @@ public final class Forge262ContractMain {
 
     private static final Pattern ENCODED =
             Pattern.compile("\\\"encoded\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+    private static final Pattern MAPPINGS_DECLARATION =
+            Pattern.compile("(?m)^\\s*mappings\\s+channel\\s*:");
 
     private Forge262ContractMain() {
         // 契约入口不实例化
@@ -64,11 +66,18 @@ public final class Forge262ContractMain {
                         || settings.contains("includeBuild('../../..')"),
                 "settings 须反向 includeBuild 仓库根以替换共享坐标");
         require(build.contains("options.release = 25"), "Java 编译目标必须为 25");
+        require(!MAPPINGS_DECLARATION.matcher(build).find(),
+                "Minecraft 26.2 不得声明 Mojang mappings");
         require(build.contains("net.minecraftforge.gradle' version '7.0.31'")
                         || build.contains("net.minecraftforge.gradle\" version \"7.0.31\""),
                 "必须使用 ForgeGradle 7.0.31");
         require(build.contains("productSharedModules"), "产品必须本地消费共享产品核心");
         require(build.contains("sharedJars.each(verifySharedJar)"), "配置期必须校验共享 JAR");
+        require(build.contains("sharedModuleArchives"), "共享 JAR 必须显式映射工程产物名");
+        require(build.contains("${archive}-${repositoryVersion}.jar"),
+                "共享 JAR 输入必须跟随仓库 VERSION 真源");
+        require(!build.contains("${module}-0.1.0.jar"),
+                "共享 JAR 输入不得钉死历史 0.1.0 文件名");
         require(build.contains("独立车道不会 includeBuild 根工程"),
                 "共享 JAR 校验文案须声明不依赖根 launcher 复合构建");
         require(build.contains("register('server')")
@@ -95,6 +104,8 @@ public final class Forge262ContractMain {
                 "common/src/main/java/top/wcpe/mc/mpmt/platform/forge/modern/net/ForgeTypedPayloadChannel.java"));
         String entry = read(projectDir.resolve(
                 "common/src/main/java/top/wcpe/mc/mpmt/platform/forge/modern/MpmtForge262Mod.java"));
+        String transport = read(projectDir.resolve(
+                "server/src/main/java/top/wcpe/mc/mpmt/platform/forge/modern/net/ForgeServerTransport.java"));
         require(payload.contains("CustomPacketPayload"), "L4 必须实现 CustomPacketPayload");
         require(payload.contains("StreamCodec"), "L4 必须使用 StreamCodec");
         require(channel.contains("ChannelBuilder") && channel.contains("PayloadConnection"),
@@ -102,6 +113,11 @@ public final class Forge262ContractMain {
         require(channel.contains(".optional()"), "产品与控制 payload 通道必须为 optional");
         require(entry.contains("fromNamespaceAndPath(\"mpmt\", \"main\")"),
                 "产品通道必须为 mpmt:main");
+        require(entry.contains("ServerStartedEvent.BUS")
+                        && entry.contains("ServerStoppedEvent.BUS"),
+                "产品入口必须按 Forge 26.2 生命周期装配和清理服务端闭环");
+        require(transport.contains("onConnected") && transport.contains("onDisconnected"),
+                "服务端传输必须为同一底层玩家维持稳定连接句柄");
         require(channel.contains("BiConsumer<ServerPlayer, byte[]>"), "服务端上层必须只接收裸 byte[]");
         require(channel.contains("Consumer<byte[]>"), "客户端上层必须只接收裸 byte[]");
     }

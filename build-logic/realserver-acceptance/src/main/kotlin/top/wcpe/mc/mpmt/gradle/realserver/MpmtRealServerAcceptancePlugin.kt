@@ -5,6 +5,7 @@ import org.gradle.api.Project
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
 
 /**
  * MPMT 真服验收编排约定插件。
@@ -29,10 +30,13 @@ class MpmtRealServerAcceptancePlugin : Plugin<Project> {
         ext.extraDependsOn.convention(emptyList())
         ext.autoStartPaperHost.convention(false)
         ext.paperVersion.convention("1.20.1")
+        ext.paperJavaVersion.convention(17)
         ext.paperPort.convention(25599)
         ext.readyTimeoutMinutes.convention(8)
         ext.globalTimeoutMinutes.convention(24)
         ext.acceptanceOnly.convention("")
+        ext.acceptanceRunId.convention("")
+        ext.acceptanceStartEpochMs.convention("")
 
         target.tasks.register("verifyMpmtAcceptanceReport") {
             group = "verification"
@@ -96,7 +100,7 @@ class MpmtRealServerAcceptancePlugin : Plugin<Project> {
         val javaToolchains = target.extensions.getByType(JavaToolchainService::class.java)
         val javaExec =
             javaToolchains
-                .launcherFor { languageVersion.set(JavaLanguageVersion.of(17)) }
+                .launcherFor { languageVersion.set(ext.paperJavaVersion.map(JavaLanguageVersion::of)) }
                 .map { it.executablePath.asFile.absolutePath }
 
         val port =
@@ -117,6 +121,7 @@ class MpmtRealServerAcceptancePlugin : Plugin<Project> {
 
         val paperVersion = ext.paperVersion
         val productJarProvider = ext.pluginJar
+        val serviceName = "mpmtPaperHostService" + target.path.replace(':', '_')
         val commitProvider =
             target.providers
                 .exec {
@@ -140,7 +145,7 @@ class MpmtRealServerAcceptancePlugin : Plugin<Project> {
 
         val paper =
             target.gradle.sharedServices.registerIfAbsent(
-                "mpmtPaperHostService",
+                serviceName,
                 PaperHostService::class.java,
             ) {
                 parameters.runDir.set(
@@ -151,6 +156,8 @@ class MpmtRealServerAcceptancePlugin : Plugin<Project> {
                 )
                 parameters.pluginJar.set(ext.pluginJar)
                 parameters.acceptanceDriverJar.set(ext.acceptanceDriverJar)
+                parameters.acceptanceClientProductJar.set(ext.acceptanceClientProductJar)
+                parameters.acceptanceClientAcceptanceJar.set(ext.acceptanceClientAcceptanceJar)
                 parameters.port.set(port)
                 parameters.javaExecutable.set(javaExec)
                 parameters.paperVersion.set(ext.paperVersion)
@@ -160,6 +167,8 @@ class MpmtRealServerAcceptancePlugin : Plugin<Project> {
                 parameters.acceptanceReportFile.set(ext.reportFile)
                 parameters.acceptanceOnly.set(ext.acceptanceOnly)
                 parameters.acceptanceMatrix.set(ext.matrix)
+                parameters.acceptanceRunId.set(ext.acceptanceRunId)
+                parameters.acceptanceStartEpochMs.set(ext.acceptanceStartEpochMs)
                 parameters.acceptanceCommit.set(commitProvider)
                 parameters.acceptanceVersion.set(target.provider { target.version.toString() })
                 parameters.acceptanceMcVersion.set(paperVersion)
@@ -171,6 +180,33 @@ class MpmtRealServerAcceptancePlugin : Plugin<Project> {
 
         val clientTaskName = ext.clientTaskName.get()
         val log = target.logger
+        val clientTaskExists = target.tasks.findByName(clientTaskName) != null
+        if (target.tasks.findByName("ensurePaperRealServerHost") == null) {
+            target.tasks.register("ensurePaperRealServerHost") {
+                group = "verification"
+                description = "启动托管 Paper 宿主；传 -Pmpmt.realserver.waitForReport=true 时等待验收报告"
+                usesService(paper)
+                ext.extraDependsOn.getOrElse(emptyList()).forEach { dependency ->
+                    if (target.tasks.findByName(dependency) != null) {
+                        dependsOn(dependency)
+                    }
+                }
+                doLast {
+                    paper.get().ensureStarted()
+                    if (target.providers.gradleProperty("mpmt.realserver.waitForReport").orNull != "true") {
+                        return@doLast
+                    }
+                    val report = ext.reportFile.get().asFile
+                    val deadline =
+                        System.nanoTime() +
+                            TimeUnit.MINUTES.toNanos(ext.globalTimeoutMinutes.get().toLong())
+                    while (!report.isFile && System.nanoTime() < deadline) {
+                        Thread.sleep(250)
+                    }
+                    AcceptanceReportGate.verify(report)
+                }
+            }
+        }
         target.tasks.matching { it.name == clientTaskName }.configureEach {
             usesService(paper)
             doFirst {
@@ -184,7 +220,7 @@ class MpmtRealServerAcceptancePlugin : Plugin<Project> {
         // 门禁任务依赖客户端（客户端 doFirst 起服 → 进服 → 写报告 → 本任务读）
         target.tasks.matching { it.name == "runRealServerAcceptance" }.configureEach {
             usesService(paper)
-            if (target.tasks.findByName(clientTaskName) != null) {
+            if (clientTaskExists) {
                 dependsOn(clientTaskName)
             }
             // 确保 jar 已构建
@@ -197,6 +233,9 @@ class MpmtRealServerAcceptancePlugin : Plugin<Project> {
 
         target.tasks.matching { it.name == "verifyMpmtAcceptanceReport" }.configureEach {
             usesService(paper)
+            if (clientTaskExists) {
+                mustRunAfter(clientTaskName)
+            }
         }
 
         log.lifecycle(

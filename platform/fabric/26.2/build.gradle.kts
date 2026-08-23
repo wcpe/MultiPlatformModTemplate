@@ -3,6 +3,7 @@ import com.github.spotbugs.snom.Confidence
 import com.github.spotbugs.snom.Effort
 import com.github.spotbugs.snom.SpotBugsExtension
 import com.github.spotbugs.snom.SpotBugsTask
+import org.gradle.api.file.FileCollection
 import org.gradle.api.plugins.quality.Checkstyle
 import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.plugins.quality.Pmd
@@ -42,20 +43,31 @@ val mcVersion = "26.2"
 val loaderVersion = "0.19.3"
 val fabricApiVersion = "0.155.2+26.2"
 val targetJavaVersion = 25
+
 val selectedL4Name = "v26_2"
 val unselectedL4Name = "v1_21"
 val loaderDependency = loaderVersion
 val fabricApiDependency = fabricApiVersion
 val snakeyamlVersion = "2.2"
-// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经 includeBuild 依赖替换消费
-val platformApiCoordinate = "top.wcpe.mc.mpmt:fabric-api:$version"
-val spiCoordinate = "top.wcpe.mc.mpmt:spi:$version"
-// 依赖 core-server（服务端网络装配特性 ServerNetworkFeature；经 api 传递 protocol + core-runtime）
-val serverCoordinate = "top.wcpe.mc.mpmt:server:$version"
-// 依赖 core-client（客户端网络装配特性 ClientNetworkFeature + 弱标识提供者）
-val clientCoordinate = "top.wcpe.mc.mpmt:client:$version"
-// realserver 验收 harness 平台无关核心（仅 gametest 接入层用，不入产品 jar，ADR-0014）
-val acceptanceCoordinate = "top.wcpe.mc.mpmt:acceptance:$version"
+// 复合构建不能让被包含的 Fabric 工程再反向 include 根工程；否则会形成根→Fabric→根
+// 的循环，并在 Loom 配置期把内部坐标错误地交给远程仓库解析。根工程先产出这些受控 JAR，
+// 本车道只按文件消费，避免嵌套 Gradle 调用和陈旧 mavenLocal 输入。
+val repositoryRoot = rootProject.file("../../..").canonicalFile
+
+fun internalJar(modulePath: String, archiveName: String) =
+    files(File(repositoryRoot, "$modulePath/build/libs/$archiveName-$version.jar"))
+
+val domainJar = internalJar("core/domain", "domain")
+val runtimeJar = internalJar("core/runtime", "runtime")
+val protocolJar = internalJar("core/protocol", "protocol")
+val spiJar = internalJar("core/spi", "spi")
+val serverJar = internalJar("core/server", "server")
+val clientJar = internalJar("core/client", "client")
+val fabricApiJar = internalJar("platform/fabric/fabric-api", "fabric-api")
+val acceptanceJar = internalJar("modules/acceptance", "acceptance")
+val productInternalJars: List<FileCollection> =
+    listOf(domainJar, runtimeJar, protocolJar, spiJar, serverJar, clientJar, fabricApiJar)
+val requiredInternalJars: List<FileCollection> = productInternalJars + listOf(acceptanceJar)
 
 base {
     // 最终产物名同时标识平台与 MC 目标，避免跨车道串扰
@@ -187,26 +199,18 @@ dependencies {
     // Fabric 平台 API：提供网络收发（fabric-networking-api-v1）等；编译期依赖，运行期由宿主提供
     implementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
 
-    // 共享核心（platform-spi + 传递的 core-runtime/core-domain）：纯 Java、非 mod 依赖、不参与 remap
-    implementation(platformApiCoordinate)
-    implementation(spiCoordinate)
-    shadowBundle(platformApiCoordinate)
-    shadowBundle(spiCoordinate)
-
-    // 服务端公共逻辑（core-server + 传递的 protocol）：同样纯 Java、shade 进产物、不参与 remap
-    implementation(serverCoordinate)
-    shadowBundle(serverCoordinate)
-
-    // 客户端公共逻辑（core-client）：客户端网络装配 + 弱标识提供者，shade 进产物、不参与 remap
-    implementation(clientCoordinate)
-    shadowBundle(clientCoordinate)
+    // 共享核心：文件输入没有 POM 传递关系，故显式列出完整闭包并一并 shade。
+    productInternalJars.forEach {
+        implementation(it)
+        shadowBundle(it)
+    }
 
     // 第三方运行期依赖：shade 进产物并 relocate 到 top.wcpe.mc.mpmt.libs.*（ADR-0012，防类冲突的统一约定）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
 
     // gametest 接入层依赖 realserver 验收平台无关核心（控制协议 / 协调 / 报告 / GameTest 框架）
-    "gametestImplementation"(acceptanceCoordinate)
+    "gametestImplementation"(acceptanceJar)
 
     // 跨栈字节对齐 spike 的纯 JVM 测试
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
@@ -219,6 +223,11 @@ dependencies {
 // 服务端可 headless 跑（runAcceptanceServer）；客户端需显示，由用户本机经 quickPlay 自连（runAcceptanceClient）。
 val acceptanceReportFile = layout.buildDirectory.file("acceptance/server-report.txt")
 val simReportFile = layout.buildDirectory.file("acceptance/sim-report.txt")
+val configuredAcceptanceReport =
+    (project.findProperty("mpmt.acceptance.report") as String?)
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: acceptanceReportFile.get().asFile.absolutePath
 loom {
     runs {
         // 模拟服 GameTest 套件（FR-23①）：headless 起服跑 in-process 回环网络 GameTest，无外部客户端、可自动跑
@@ -234,7 +243,8 @@ loom {
             configName = "Acceptance Server"
             source(gametest)
             property("mpmt.acceptance", "true")
-            property("mpmt.acceptance.report", acceptanceReportFile.get().asFile.absolutePath)
+            // Loom 运行配置的默认 JVM 参数也必须随矩阵报告路径变化，避免覆盖任务注入。
+            property("mpmt.acceptance.report", configuredAcceptanceReport)
             // 看门狗绝对截止：须覆盖客户端冷启动 + 首场景 awaitClientReady（常 >3min）
             property("mpmt.acceptance.deadlineMs", "660000")
         }
@@ -266,6 +276,24 @@ fun requiredMatrixProperty(matrixId: String, name: String): String {
         throw GradleException("矩阵 $matrixId 缺少 -P$name")
     }
     return value
+}
+
+val verifyInternalJars by tasks.registering {
+    group = "verification"
+    description = "校验 Fabric $mcVersion 受控内部 JAR 输入已由根工程准备"
+    doLast {
+        val missing = requiredInternalJars.flatMap { it.files }.filterNot(File::isFile)
+        if (missing.isNotEmpty()) {
+            val paths = missing.joinToString(System.lineSeparator()) { "  - ${it.absolutePath}" }
+            throw GradleException(
+                "缺少 Fabric $mcVersion 内部 JAR 输入：${System.lineSeparator()}$paths${System.lineSeparator()}" +
+                    "请先在仓库根运行 ./gradlew :prepareFabric262Inputs；不要在本工程反向 includeBuild 或嵌套调用 Gradle。",
+            )
+        }
+    }
+}
+tasks.withType<JavaCompile>().configureEach {
+    dependsOn(verifyInternalJars)
 }
 
 fun matrixJavaExecutable(): File {
@@ -498,7 +526,10 @@ fun launchAcceptanceProcess(task: JavaExec, logFile: File, runDirectory: File): 
         throw GradleException("无法创建验收运行目录：${runDirectory.absolutePath}")
     }
     val command = mutableListOf(task.javaLauncher.get().executablePath.asFile.absolutePath)
-    command += task.allJvmArgs
+    // Loom 预置的参数可能与任务在矩阵轨重新注入的同名系统属性重复；以后者为准。
+    val systemPropertyPrefixes = task.systemProperties.keys.map { "-D$it=" }
+    command += task.allJvmArgs.filterNot { argument -> systemPropertyPrefixes.any(argument::startsWith) }
+    command += task.systemProperties.map { (key, value) -> "-D$key=$value" }
     command += task.mainClass.get()
     command += task.args
     task.argumentProviders.forEach { command += it.asArguments().toList() }
@@ -511,7 +542,8 @@ fun launchAcceptanceProcess(task: JavaExec, logFile: File, runDirectory: File): 
 }
 
 fun awaitAcceptancePort(server: Process, logFile: File, port: Int) {
-    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(120)
+    // Java 25 首次加载 26.2 资源和模组时会明显慢于热启动，须留出客户端验收前的起服窗口。
+    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(300)
     while (System.nanoTime() < deadline) {
         try {
             Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 500) }
@@ -555,7 +587,7 @@ tasks.register("runFabricR7Acceptance") {
         if (matrixId != "R7") throw GradleException("该任务仅支持 MATRIX R7：$matrixId")
         val runId = requiredMatrixProperty(matrixId, "mpmt.acceptance.runId")
         requiredMatrixProperty(matrixId, "mpmt.acceptance.startEpochMs")
-        val report = acceptanceReportFile.get().asFile
+        val report = matrixReportFile(matrixId)
         val serverTask = tasks.named<JavaExec>("runAcceptanceServer").get()
         val clientTask = tasks.named<JavaExec>("runAcceptanceClient").get()
         configureAcceptanceServer(serverTask)

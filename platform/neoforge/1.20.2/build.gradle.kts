@@ -3,6 +3,7 @@ import com.github.spotbugs.snom.Confidence
 import com.github.spotbugs.snom.Effort
 import com.github.spotbugs.snom.SpotBugsExtension
 import com.github.spotbugs.snom.SpotBugsTask
+import org.gradle.api.file.FileCollection
 import org.gradle.api.plugins.quality.Checkstyle
 import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.plugins.quality.Pmd
@@ -14,10 +15,10 @@ import org.gradle.language.jvm.tasks.ProcessResources
 import java.security.MessageDigest
 import java.util.zip.ZipFile
 
-// platform-neoforge（L3）：独立 includeBuild，应用 NeoGradle（ADR-0007，隔离加载器专属插件）。
+// platform-neoforge（L3）：自有 Gradle 8 车道，应用 NeoGradle（ADR-0007，隔离加载器专属插件）。
 // 锚点 MC 1.20.2（NeoForge 无 1.20.1；PRD §7）。NeoForge 运行期用官方 Mojmap、无 SRG/reobf（区别于 Forge）；
 // Mixin 内置（mods.toml [[mixins]] 声明、无 MixinGradle、无 refmap）。打包：shade 共享核心 + relocate snakeyaml（ADR-0012）。
-// dev run classpath 墙同 FG：includeBuild/shaded 库默认不在 dev 运行期类路径，经 additionalRuntimeClasspath 暴露。
+// dev run classpath 墙同 FG：受控 JAR 不会自动进入 modSource 运行期类路径，经 additionalRuntimeClasspath 暴露。
 
 plugins {
     `java-library`
@@ -36,13 +37,23 @@ version = file("../../../VERSION").readText().trim()
 
 val neoforgeVersion = "20.2.93"
 val snakeyamlVersion = "2.2"
-// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经 includeBuild 依赖替换消费
-val platformApiCoordinate = "top.wcpe.mc.mpmt:neoforge-api:$version"
-val spiCoordinate = "top.wcpe.mc.mpmt:spi:$version"
-// 服务端公共网络特性（经 api 传递 protocol + core-runtime）
-val serverCoordinate = "top.wcpe.mc.mpmt:server:$version"
-// 客户端公共网络特性（握手、心跳与重同步），仅复用仓库现有第一方模块
-val clientCoordinate = "top.wcpe.mc.mpmt:client:$version"
+// 自有 Gradle 8 车道不能反向 include 根工程；根工程先产出这些受控 JAR，
+// 本车道只按文件消费，避免复合构建循环和嵌套 Gradle 调用。
+val repositoryRoot = rootProject.file("../../..").canonicalFile
+fun internalJar(modulePath: String, archiveName: String) =
+    files(File(repositoryRoot, "$modulePath/build/libs/$archiveName-$version.jar"))
+
+val domainJar = internalJar("core/domain", "domain")
+val runtimeJar = internalJar("core/runtime", "runtime")
+val protocolJar = internalJar("core/protocol", "protocol")
+val spiJar = internalJar("core/spi", "spi")
+val serverJar = internalJar("core/server", "server")
+val clientJar = internalJar("core/client", "client")
+val neoforgeApiJar = internalJar("platform/neoforge/neoforge-api", "platform-neoforge-api")
+val acceptanceCoreJar = internalJar("modules/acceptance", "acceptance")
+val productInternalJars: List<FileCollection> =
+    listOf(domainJar, runtimeJar, protocolJar, spiJar, serverJar, clientJar, neoforgeApiJar)
+val requiredInternalJars: List<FileCollection> = productInternalJars + listOf(acceptanceCoreJar)
 
 base {
     // 单锚点 1.20.2；产物名带版本以免与多版本矩阵混淆
@@ -75,7 +86,7 @@ repositories {
 
 // ============================================================================
 // 静态分析 / 质量工具链装配（严格门禁，static-analysis.md）——本独立 includeBuild 单工程直接 apply。
-// includeBuild 的 rootProject 即本目录，共享规则集在仓库根 config/，故引用 ../config/*；
+// 本独立车道的 rootProject 即本目录，共享规则集在仓库根 config/，故引用 ../../../config/*；
 // .editorconfig / lombok.config 在仓库根，ktlint / Lombok 自动向上查找，无需额外配置。
 // 违规即失败构建（isIgnoreFailures=false），与根构建口径一致。
 // ============================================================================
@@ -147,17 +158,11 @@ dependencies {
     // NeoForge userdev：单一依赖传递性引入 patched MC + loader（NeoGradle 7，非 minecraft(...)）
     implementation("net.neoforged:neoforge:$neoforgeVersion")
 
-    // 共享核心（platform-spi + 传递 core-runtime/core-domain）：纯 Java、shade 进 mod jar
-    implementation(platformApiCoordinate)
-    implementation(spiCoordinate)
-    shadowBundle(platformApiCoordinate)
-    shadowBundle(spiCoordinate)
-    // 服务端公共网络特性（FR-19）：纯 Java、shade 进 mod jar（传递 protocol）
-    implementation(serverCoordinate)
-    shadowBundle(serverCoordinate)
-    // 客户端公共网络特性（FR-22/FR-28）：纯 Java、shade 进同一产品 jar
-    implementation(clientCoordinate)
-    shadowBundle(clientCoordinate)
+    // 文件输入没有 POM 传递关系，故显式列出完整内部闭包并一并 shade。
+    productInternalJars.forEach {
+        implementation(it)
+        shadowBundle(it)
+    }
     // 第三方运行期依赖：shade 并 relocate（ADR-0012）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
@@ -166,8 +171,26 @@ dependencies {
 
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
-    testImplementation("top.wcpe.mc.mpmt:acceptance:$version")
+    testImplementation(acceptanceCoreJar)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+val verifyInternalJars by tasks.registering {
+    group = "verification"
+    description = "校验 NeoForge 1.20.2 受控内部 JAR 输入已由根工程准备"
+    doLast {
+        val missing = requiredInternalJars.flatMap { it.files }.filterNot(File::isFile)
+        if (missing.isNotEmpty()) {
+            val paths = missing.joinToString(System.lineSeparator()) { "  - ${it.absolutePath}" }
+            throw GradleException(
+                "缺少 NeoForge 1.20.2 内部 JAR 输入：${System.lineSeparator()}$paths${System.lineSeparator()}" +
+                    "请先在仓库根运行 ./gradlew :prepareNeoForge1202Inputs；不要反向 includeBuild 或嵌套调用 Gradle。",
+            )
+        }
+    }
+}
+tasks.withType<JavaCompile>().configureEach {
+    dependsOn(verifyInternalJars)
 }
 
 // NeoGradle 运行配置：client/server dev run（NeoGradle 自动装好 MC 客户端 + 资源）。
@@ -293,6 +316,12 @@ tasks.named("assemble") {
     dependsOn(verifyPackaging)
 }
 
+tasks.register("packageArtifacts") {
+    group = "build"
+    description = "构建 NeoForge 产品与 realserver 验收产物"
+    dependsOn(verifyPackaging, "acceptanceJar")
+}
+
 tasks.test {
     useJUnitPlatform()
 }
@@ -304,9 +333,6 @@ tasks.test {
 // 编译期继承 main 的类路径（含 NeoGradle 提供的 patched MC + NeoForge API）+ main 产物，并叠加 acceptance 核心 + protocol。
 // NeoForge 运行期官方 Mojmap、无 SRG/reobf（区别于 Forge），故无 reobf 步骤。
 // ============================================================================
-val acceptanceCoordinate = "top.wcpe.mc.mpmt:acceptance:$version"
-val protocolCoordinate = "top.wcpe.mc.mpmt:protocol:$version"
-
 val acceptance: SourceSet by sourceSets.creating {
     compileClasspath += sourceSets["main"].compileClasspath + sourceSets["main"].output
     runtimeClasspath += sourceSets["main"].runtimeClasspath + sourceSets["main"].output
@@ -328,10 +354,10 @@ val acceptanceShadowBundle: Configuration by configurations.creating
 
 dependencies {
     // 平台无关验收核心（控制协议 / 协调 / GameTest 框架 / 报告）：验收 jar 独有，shade 进去
-    "acceptanceImplementation"(acceptanceCoordinate)
-    acceptanceShadowBundle(acceptanceCoordinate)
+    "acceptanceImplementation"(acceptanceCoreJar)
+    acceptanceShadowBundle(acceptanceCoreJar)
     // protocol（编 HUD 包用）：仅编译期可见，运行期由产品 mod 提供——绝不打进验收 jar（防 split package）
-    "acceptanceCompileOnly"(protocolCoordinate)
+    "acceptanceCompileOnly"(protocolJar)
 }
 
 // 验收 mod mods.toml 的 ${version} 占位由构建注入
@@ -349,6 +375,7 @@ val acceptanceJar by tasks.registering(ShadowJar::class) {
     archiveBaseName.set("mpmt-acceptance-neoforge")
     archiveClassifier.set("")
     from(acceptance.output)
+    dependsOn(tasks.named("acceptanceClasses"))
     configurations = listOf(acceptanceShadowBundle)
     exclude("META-INF/maven/**")
     // shadow 改配置不刷新缓存指纹，令其确定性重跑（与产品 shadowJar 一致）

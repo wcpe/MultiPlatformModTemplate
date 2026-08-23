@@ -9,7 +9,7 @@ import java.util.zip.ZipFile
 /**
  * 托管后台 Paper 宿主进程的 BuildService（B 增强）。
  *
- * <p>[ensureStarted] 幂等：首次调用时下载 paperclip、准备 runDir、用 Java 17 后台启动、
+ * <p>[ensureStarted] 幂等：首次调用时下载 paperclip、准备 runDir、用目标车道声明的 Java 后台启动、
  * 轮询日志直到 `Done (`；后续调用直接返回。
  * <p>[close] 在 build 结束时由 Gradle 调用，强杀进程树。
  *
@@ -33,10 +33,16 @@ abstract class PaperHostService :
         /** 验收驱动插件 jar（可选；不设则不部署）。 */
         val acceptanceDriverJar: org.gradle.api.file.RegularFileProperty
 
+        /** 客户端产品 jar；未设置时复用服务端产品 jar。 */
+        val acceptanceClientProductJar: org.gradle.api.file.RegularFileProperty
+
+        /** 客户端验收驱动 jar；未设置时复用服务端验收驱动 jar。 */
+        val acceptanceClientAcceptanceJar: org.gradle.api.file.RegularFileProperty
+
         /** 服务端监听端口。 */
         val port: Property<Int>
 
-        /** Java 可执行文件路径（Paper 1.20.1 用 Java 17）。 */
+        /** Java 可执行文件路径（由目标车道决定）。 */
         val javaExecutable: Property<String>
 
         /** Paper 目标 MC 版本。 */
@@ -59,6 +65,12 @@ abstract class PaperHostService :
 
         /** 矩阵 id（可选，如 R6）。 */
         val acceptanceMatrix: Property<String>
+
+        /** 矩阵本轮运行标识。 */
+        val acceptanceRunId: Property<String>
+
+        /** 矩阵本轮开始时间戳（毫秒）。 */
+        val acceptanceStartEpochMs: Property<String>
 
         /** P1 报告元数据：git commit。 */
         val acceptanceCommit: Property<String>
@@ -99,6 +111,10 @@ abstract class PaperHostService :
         val mcVersion = parameters.paperVersion.get()
 
         val paperJar = resolvePaperJar(cacheDir, mcVersion)
+        val productJar = parameters.pluginJar.get().asFile
+        val acceptanceJar = parameters.acceptanceDriverJar.get().asFile
+        val clientProductJar = parameters.acceptanceClientProductJar.orNull?.asFile ?: productJar
+        val clientAcceptanceJar = parameters.acceptanceClientAcceptanceJar.orNull?.asFile ?: acceptanceJar
 
         runDir.mkdirs()
         File(runDir, "eula.txt").writeText("eula=true\n")
@@ -138,23 +154,18 @@ abstract class PaperHostService :
         )
 
         val pluginsDir = File(runDir, "plugins").apply { mkdirs() }
-        val pluginJar = parameters.pluginJar.get().asFile
-        require(pluginJar.exists()) {
-            "[mpmt-realserver] 产品插件 jar 缺失：${pluginJar.absolutePath}"
+        require(productJar.exists()) {
+            "[mpmt-realserver] 产品插件 jar 缺失：${productJar.absolutePath}"
         }
-        purgeStalePluginJars(pluginsDir, pluginJar.name)
-        deployPluginJarSafely(pluginJar, File(pluginsDir, pluginJar.name))
+        purgeStalePluginJars(pluginsDir, productJar.name)
+        deployPluginJarSafely(productJar, File(pluginsDir, productJar.name))
 
         if (parameters.acceptanceEnabled.getOrElse(false)) {
-            val driverProp = parameters.acceptanceDriverJar.orNull
-            if (driverProp != null) {
-                val driverJar = driverProp.asFile
-                require(driverJar.exists()) {
-                    "[mpmt-realserver] 验收驱动 jar 缺失：${driverJar.absolutePath}"
-                }
-                purgeStalePluginJars(pluginsDir, driverJar.name)
-                deployPluginJarSafely(driverJar, File(pluginsDir, driverJar.name))
+            require(acceptanceJar.exists()) {
+                "[mpmt-realserver] 验收驱动 jar 缺失：${acceptanceJar.absolutePath}"
             }
+            purgeStalePluginJars(pluginsDir, acceptanceJar.name)
+            deployPluginJarSafely(acceptanceJar, File(pluginsDir, acceptanceJar.name))
             runCatching { parameters.acceptanceReportFile.get().asFile.delete() }
             logger.lifecycle("[mpmt-realserver] acceptance 模式：已部署验收驱动 + 启用 -Dmpmt.acceptance")
         }
@@ -182,6 +193,18 @@ abstract class PaperHostService :
                     parameters.acceptanceMatrix.getOrElse("").takeIf { it.isNotBlank() }?.let {
                         add("-Dmpmt.acceptance.matrix=$it")
                     }
+                    parameters.acceptanceRunId.getOrElse("").takeIf { it.isNotBlank() }?.let {
+                        add("-Dmpmt.acceptance.runId=$it")
+                    }
+                    parameters.acceptanceStartEpochMs.getOrElse("").takeIf { it.isNotBlank() }?.let {
+                        add("-Dmpmt.acceptance.startEpochMs=$it")
+                    }
+                    add("-Dmpmt.acceptance.javaExecutable=${parameters.javaExecutable.get()}")
+                    add("-Dmpmt.acceptance.artifact.server-runtime=${paperJar.absolutePath}")
+                    add("-Dmpmt.acceptance.artifact.server-product=${productJar.absolutePath}")
+                    add("-Dmpmt.acceptance.artifact.server-acceptance=${acceptanceJar.absolutePath}")
+                    add("-Dmpmt.acceptance.artifact.client-product=${clientProductJar.absolutePath}")
+                    add("-Dmpmt.acceptance.artifact.client-acceptance=${clientAcceptanceJar.absolutePath}")
                     // P1 权威报告元数据（缺任一项驱动会 ERROR framework/driver-error）
                     parameters.acceptanceCommit.getOrElse("").takeIf { it.isNotBlank() }?.let {
                         add("-Dmpmt.acceptance.commit=$it")

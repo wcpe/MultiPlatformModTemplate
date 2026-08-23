@@ -54,8 +54,17 @@ abstract class MpmtRealServerAcceptanceExtension {
     /** 验收驱动插件 jar（autoStart 时必填）。 */
     abstract val acceptanceDriverJar: RegularFileProperty
 
+    /** 验收客户端产品 jar；未设置时复用服务端产品 jar。 */
+    abstract val acceptanceClientProductJar: RegularFileProperty
+
+    /** 验收客户端驱动 jar；未设置时复用服务端验收驱动 jar。 */
+    abstract val acceptanceClientAcceptanceJar: RegularFileProperty
+
     /** Paper MC 版本，默认 1.20.1。 */
     abstract val paperVersion: Property<String>
+
+    /** Paper 运行时 Java 主版本，默认 17。 */
+    abstract val paperJavaVersion: Property<Int>
 
     /** Paper 端口，默认 25599。 */
     abstract val paperPort: Property<Int>
@@ -68,4 +77,10 @@ abstract class MpmtRealServerAcceptanceExtension {
 
     /** 场景白名单（逗号分隔），透传 -Dmpmt.acceptance.only。 */
     abstract val acceptanceOnly: Property<String>
+
+    /** 矩阵本轮运行标识；矩阵模式下必须透传至服务端。 */
+    abstract val acceptanceRunId: Property<String>
+
+    /** 矩阵本轮开始时间戳（毫秒）；矩阵模式下必须透传至服务端。 */
+    abstract val acceptanceStartEpochMs: Property<String>
 }

@@ -13,5 +13,3 @@ plugins {
 }
 
 rootProject.name = "platform-fabric-26.2"
-
-includeBuild("../../..")

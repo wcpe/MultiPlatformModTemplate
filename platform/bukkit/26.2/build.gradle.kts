@@ -11,7 +11,7 @@ import java.util.zip.ZipFile
 
 plugins {
     java
-    id("com.gradleup.shadow") version "8.3.3"
+    id("com.gradleup.shadow") version "8.3.11"
     id("top.wcpe.mc.mpmt.realserver-acceptance")
 }
 
@@ -45,7 +45,6 @@ repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/") { name = "PaperMC" }
 }
-
 
 val acceptance: SourceSet = sourceSets.create("acceptance")
 val mainSourceSet = sourceSets.getByName("main")
@@ -360,23 +359,37 @@ tasks.named("build") {
     dependsOn(tasks.named("shadowJar"), acceptance.classesTaskName, verifyPackaging, verifyApiSnapshotFreeze)
 }
 
-val bukkitReportFile = layout.buildDirectory.file("acceptance/server-report.txt")
+val acceptanceMatrix = providers.gradleProperty("mpmt.acceptance.matrix").orElse("")
+val bukkitReportFile =
+    acceptanceMatrix.flatMap { matrix ->
+        val reportName = if (matrix.isBlank()) "server-report.txt" else "server-report-${matrix.lowercase()}.txt"
+        layout.buildDirectory.file("acceptance/$reportName")
+    }
+val fabric262Product =
+    rootProject.layout.projectDirectory.file(
+        "platform/fabric/26.2/build/libs/mpmt-fabric-26.2-${rootProject.version}.jar",
+    )
 val autoHost =
     providers.gradleProperty("mpmt.realserver.autoHost").map { it == "true" }.orElse(false)
 
 mpmtRealServerAcceptance {
     reportFile.set(bukkitReportFile)
     laneId.set("Bukkit")
-    matrix.set(providers.gradleProperty("mpmt.acceptance.matrix").orElse(""))
+    matrix.set(acceptanceMatrix)
     autoStartPaperHost.set(autoHost)
     paperVersion.set(minecraftVersion)
+    paperJavaVersion.set(compilerJavaVersion)
     paperPort.set(
         providers.gradleProperty("mpmt.realserver.port").map { it.toInt() }.orElse(25599),
     )
     pluginJar.set(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
     acceptanceDriverJar.set(acceptanceJar.flatMap { it.archiveFile })
+    acceptanceClientProductJar.set(fabric262Product)
+    acceptanceClientAcceptanceJar.set(fabric262Product)
     clientTaskName.set("runAcceptanceClient")
     extraDependsOn.set(listOf("shadowJar", "acceptanceJar"))
+    acceptanceRunId.set(providers.gradleProperty("mpmt.acceptance.runId").orElse(""))
+    acceptanceStartEpochMs.set(providers.gradleProperty("mpmt.acceptance.startEpochMs").orElse(""))
 }
 
 tasks.named("runRealServerAcceptance") {
