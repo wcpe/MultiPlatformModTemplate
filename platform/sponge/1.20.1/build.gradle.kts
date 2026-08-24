@@ -23,7 +23,7 @@ import java.util.zip.ZipFile
 plugins {
     `java-library`
     id("org.spongepowered.gradle.plugin") version "2.3.0"
-    id("com.gradleup.shadow") version "8.3.3"
+    id("com.gradleup.shadow") version "8.3.11"
     // 静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
     // 核心 Gradle 插件经 apply(plugin=...) 接入（见下方装配块）；外部插件在此带版本直接 apply。
     id("com.github.spotbugs") version "6.0.26"
@@ -207,7 +207,6 @@ tasks.named<ProcessResources>("processResources") {
 }
 tasks.named<Jar>("jar") {
     archiveClassifier.set("plain")
-    from(spongeGeneratedMetadata)
 }
 // 最终插件 jar = shadowJar（shade core/spi + relocate snakeyaml）。Sponge 运行期不 remap、无 reobf。
 tasks.named<ShadowJar>("shadowJar") {
