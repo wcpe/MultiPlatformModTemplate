@@ -1,4 +1,5 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import com.github.spotbugs.snom.SpotBugsExtension
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
@@ -227,6 +228,10 @@ tasks.named<Test>("test") {
         "mpmt.test.acceptanceMetadata",
         layout.buildDirectory.file("resources/acceptance/plugin.yml").get().asFile.absolutePath,
     )
+}
+
+configure<SpotBugsExtension> {
+    toolVersion.set("4.9.8")
 }
 
 fun sha256(file: File): String {
