@@ -11,7 +11,7 @@ import java.util.zip.ZipFile
 
 plugins {
     java
-    id("com.gradleup.shadow") version "8.3.3"
+    id("com.gradleup.shadow") version "8.3.11"
     id("top.wcpe.mc.mpmt.realserver-acceptance")
 }
 
@@ -406,8 +406,8 @@ tasks.named("runRealServerAcceptance") {
     group = "verification"
     description =
         "Bukkit $minecraftVersion realserver 门禁" +
-            "（-Pmpmt.realserver.autoHost=true 时接线 PaperHostService；" +
-            "-Pmpmt.acceptance.matrix=R6 时读 server-report-r6.txt）"
+        "（-Pmpmt.realserver.autoHost=true 时接线 PaperHostService；" +
+        "-Pmpmt.acceptance.matrix=R6 时读 server-report-r6.txt）"
     dependsOn(tasks.named("shadowJar"), acceptanceJar, "verifyMpmtAcceptanceReport")
 }
 
@@ -424,6 +424,7 @@ tasks.register("ensurePaperRealServerHost") {
         val reg =
             gradle.sharedServices.registrations.findByName("mpmtPaperHostService")
                 ?: throw GradleException("未注册 mpmtPaperHostService")
+
         @Suppress("UNCHECKED_CAST")
         val service =
             reg.service.get() as top.wcpe.mc.mpmt.gradle.realserver.PaperHostService

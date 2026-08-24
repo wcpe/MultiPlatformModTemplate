@@ -22,7 +22,7 @@ import java.util.zip.ZipFile
 
 plugins {
     id("fabric-loom") version "1.17-wcpe-4"
-    id("com.gradleup.shadow") version "8.3.3"
+    id("com.gradleup.shadow") version "8.3.11"
     // 静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
     // 核心 Gradle 插件经 apply(plugin=...) 接入（见下方装配块）；外部插件在此带版本直接 apply。
     id("com.github.spotbugs") version "6.0.26"

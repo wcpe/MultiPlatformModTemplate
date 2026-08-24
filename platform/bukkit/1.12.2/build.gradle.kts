@@ -11,7 +11,7 @@ import java.util.zip.ZipFile
 
 plugins {
     java
-    id("com.gradleup.shadow") version "8.3.3"
+    id("com.gradleup.shadow") version "8.3.11"
     id("top.wcpe.mc.mpmt.realserver-acceptance")
 }
 
