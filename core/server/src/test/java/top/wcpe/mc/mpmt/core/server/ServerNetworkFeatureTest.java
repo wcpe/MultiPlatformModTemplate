@@ -104,7 +104,9 @@ class ServerNetworkFeatureTest {
 
         // 客户端上报标识 → 服务端回欢迎，会话建立
         transport.receive(c, codec.encode(new ClientIdReportPacket("honest")));
-        ServerMessagePacket welcome = (ServerMessagePacket) lastSent(transport);
+        Packet welcomePacket = codec.decode(transport.sends.get(1));
+        assertTrue(welcomePacket instanceof ServerMessagePacket);
+        ServerMessagePacket welcome = (ServerMessagePacket) welcomePacket;
         assertEquals("欢迎", welcome.getText());
         assertEquals(HandshakeStateMachine.State.ESTABLISHED, feature.handshakeService().stateOf(c));
         assertTrue(feature.sessionRegistry().get(c).isPresent());

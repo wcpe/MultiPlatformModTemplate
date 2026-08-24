@@ -26,7 +26,6 @@ import top.wcpe.mc.mpmt.core.server.SessionRegistry;
 import top.wcpe.mc.mpmt.domain.capability.PlatformCapabilityExample;
 import top.wcpe.mc.mpmt.domain.capability.PlayerJoinedEvent;
 import top.wcpe.mc.mpmt.domain.capability.PlayerLeftEvent;
-import top.wcpe.mc.mpmt.protocol.Packet;
 import top.wcpe.mc.mpmt.protocol.PacketCodec;
 import top.wcpe.mc.mpmt.protocol.PacketDispatcher;
 import top.wcpe.mc.mpmt.protocol.PacketIds;
