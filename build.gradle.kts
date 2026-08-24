@@ -386,7 +386,11 @@ val collectReleaseArtifacts by tasks.registering {
 tasks.register("buildAll") {
     group = "build"
     description = "构建全部模块、校验发布产物并聚合到 build/dist/"
-    dependsOn(subprojects.map { "${it.path}:build" })
+    dependsOn(
+        subprojects
+            .filterNot { it.path == ":platform:bukkit" }
+            .map { project -> project.tasks.matching { it.name == "build" } },
+    )
     dependsOn(gradle.includedBuilds.filter { it.name != "platform-fabric-26.2" }.map { it.task(":build") })
     dependsOn(verifyNeoForge1202Artifacts)
     dependsOn(verifyReleasePackaging)
