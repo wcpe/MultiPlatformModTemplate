@@ -65,7 +65,7 @@ P2 有效矩阵**不是笛卡尔积**：
 
 ### 4.2 其它车道
 
-- **废除** `-Pmpmt.minecraftVersion`：Bukkit 用 `:platform-bukkit:server-x.y.z`；Fabric 用 `platform-fabric-1.20.1` / `1.21.1` 独立 includeBuild。
+- **废除** `-P mpmt.minecraftVersion`：Bukkit 用 `:platform-bukkit:server-x.y.z`；Fabric 用 `platform-fabric-1.20.1` / `1.21.1` 独立 includeBuild。
 - 1.21.1 产品编译与 realserver 使用 Java 21；1.12.2 使用 Java 8；Folia 1.20.1 使用 Java 17。
 - 根 Gradle 8.10.2 需 Java 17+ 启动时，1.12.2 Bukkit **目标字节码仍固定 Java 8**。
 - L0–L2 继续 `--release 8`。

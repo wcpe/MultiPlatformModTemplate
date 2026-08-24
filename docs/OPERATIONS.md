@@ -83,8 +83,8 @@ Forge 跨代（自有 launcher，目录在 `platform/forge/`，禁止从根嵌�
 ```bash
 # 全 lane（含 NeoForge / Sponge 与 26.2）另用：
 ./gradlew :runRealServerAcceptance
-# Folia R6 报告路径：-Pmpmt.acceptance.matrix=R6 时读 server-report-r6.txt
-./gradlew :runRealServerAcceptanceFolia -Pmpmt.acceptance.matrix=R6
+# Folia R6 报告路径：-P mpmt.acceptance.matrix=R6 时读 server-report-r6.txt
+./gradlew :runRealServerAcceptanceFolia -P mpmt.acceptance.matrix=R6
 ```
 
 请使用 **绝对路径** `:task`，避免无 `:` 时匹配到子工程同名 `runRealServerAcceptance`。
@@ -97,13 +97,13 @@ P3 / 26.2 R7 三车道：
 
 # 三车道以同一轮标识写出 R7 权威报告后，才运行报告聚合门
 ./gradlew :runP3R7RealServerAcceptance \
-  -Pmpmt.acceptance.matrix=R7 \
-  -Pmpmt.acceptance.runId=<同一轮-run-id> \
-  -Pmpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
+  -P mpmt.acceptance.matrix=R7 \
+  -P mpmt.acceptance.runId=<同一轮-run-id> \
+  -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
 ./gradlew :runP3R7Gate \
-  -Pmpmt.acceptance.matrix=R7 \
-  -Pmpmt.acceptance.runId=<同一轮-run-id> \
-  -Pmpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
+  -P mpmt.acceptance.matrix=R7 \
+  -P mpmt.acceptance.runId=<同一轮-run-id> \
+  -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
 
 # Forge 真服的独立操作说明（在 platform/forge/26.2 下执行）
 ./platform/forge/26.2/gradlew --no-daemon printRealServerAcceptanceRecipe
@@ -116,18 +116,18 @@ Paper 26.2 宿主 + Fabric 26.2 客户端伴侣（R7）：
 ```bash
 # 终端 A：先起 Paper；两个占位值必须原样传给终端 B。
 ./gradlew :platform:bukkit:26.2:ensurePaperRealServerHost \
-  -Pmpmt.realserver.autoHost=true \
-  -Pmpmt.realserver.waitForReport=true \
-  -Pmpmt.acceptance.matrix=R7 \
-  -Pmpmt.acceptance.runId=<同一轮-run-id> \
-  -Pmpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
+  -P mpmt.realserver.autoHost=true \
+  -P mpmt.realserver.waitForReport=true \
+  -P mpmt.acceptance.matrix=R7 \
+  -P mpmt.acceptance.runId=<同一轮-run-id> \
+  -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
 
 # 终端 B：确认 25599 已监听后运行 Fabric 客户端伴侣。
 ./gradlew -p platform/fabric/26.2 runAcceptanceClient \
-  -Pmpmt.acceptance.server=127.0.0.1:25599 \
-  -Pmpmt.acceptance.matrix=R7 \
-  -Pmpmt.acceptance.runId=<同一轮-run-id> \
-  -Pmpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
+  -P mpmt.acceptance.server=127.0.0.1:25599 \
+  -P mpmt.acceptance.matrix=R7 \
+  -P mpmt.acceptance.runId=<同一轮-run-id> \
+  -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
 ```
 
 该组合会由 Paper 车道产出当前 R7 报告；Fabric 与 Forge 各自的服务端车道仍须另行产出相同轮次的报告，才能运行根聚合门。
