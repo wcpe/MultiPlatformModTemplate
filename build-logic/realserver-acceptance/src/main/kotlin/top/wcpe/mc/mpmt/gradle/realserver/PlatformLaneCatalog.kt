@@ -6,7 +6,6 @@ package top.wcpe.mc.mpmt.gradle.realserver
  * <p>B 完整要求：五宿主全覆盖；mod 客户端只走自有 gametest 伴侣进服。
  */
 object PlatformLaneCatalog {
-
     fun all(): List<PlatformLane> = PlatformLane.allLanes()
 
     fun modDedicated(): List<PlatformLane> =

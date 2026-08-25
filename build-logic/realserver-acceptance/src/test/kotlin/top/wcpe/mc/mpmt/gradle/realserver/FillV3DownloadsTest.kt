@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 class FillV3DownloadsTest {
-
     @Test
     fun `解析 builds latest 的 id`() {
         val json = """{"id": 123, "downloads": {}}"""

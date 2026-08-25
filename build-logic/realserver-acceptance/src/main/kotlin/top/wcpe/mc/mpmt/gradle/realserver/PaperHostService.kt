@@ -2,6 +2,9 @@ package top.wcpe.mc.mpmt.gradle.realserver
 
 import org.gradle.api.provider.Property
 import java.io.File
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
@@ -19,7 +22,6 @@ import java.util.zip.ZipFile
 abstract class PaperHostService :
     org.gradle.api.services.BuildService<PaperHostService.Params>,
     AutoCloseable {
-
     interface Params : org.gradle.api.services.BuildServiceParameters {
         /** Paper 运行目录（跨 build 不整体清空，保留 libraries）。 */
         val runDir: org.gradle.api.file.DirectoryProperty
@@ -47,6 +49,15 @@ abstract class PaperHostService :
 
         /** Paper 目标 MC 版本。 */
         val paperVersion: Property<String>
+
+        /** Paper 运行时冻结 build（可选）。 */
+        val paperBuild: Property<Int>
+
+        /** Paper 运行时冻结文件大小（字节）。 */
+        val paperJarSizeBytes: Property<Long>
+
+        /** Paper 运行时冻结 SHA-256。 */
+        val paperJarSha256: Property<String>
 
         /** 等待 Paper 就绪超时（分钟）。 */
         val readyTimeoutMinutes: Property<Int>
@@ -110,7 +121,7 @@ abstract class PaperHostService :
         val port = parameters.port.get()
         val mcVersion = parameters.paperVersion.get()
 
-        val paperJar = resolvePaperJar(cacheDir, mcVersion)
+        val paperJar = resolvePaperJar(cacheDir, mcVersion, frozenPaperArtifact())
         val productJar = parameters.pluginJar.get().asFile
         val acceptanceJar = parameters.acceptanceDriverJar.get().asFile
         val clientProductJar = parameters.acceptanceClientProductJar.orNull?.asFile ?: productJar
@@ -309,7 +320,73 @@ abstract class PaperHostService :
             }
         }.getOrDefault(false)
 
-    private fun resolvePaperJar(cacheDir: File, mcVersion: String): File {
+    private fun frozenPaperArtifact(): FrozenPaperArtifact? {
+        val build = parameters.paperBuild.orNull
+        val sizeBytes = parameters.paperJarSizeBytes.orNull
+        val sha256 = parameters.paperJarSha256.orNull
+        if (build == null && sizeBytes == null && sha256 == null) return null
+        check(build != null && sizeBytes != null && sha256 != null) { "冻结 Paper 输入必须同时提供 build、大小和 SHA-256" }
+        return FrozenPaperArtifact(parameters.paperVersion.get(), build, sizeBytes, sha256)
+    }
+
+    private fun resolvePaperJar(
+        cacheDir: File,
+        mcVersion: String,
+        frozen: FrozenPaperArtifact?,
+    ): File = frozen?.let { resolveFrozenPaperJar(cacheDir, it) } ?: resolveLatestPaperJar(cacheDir, mcVersion)
+
+    private fun resolveFrozenPaperJar(cacheDir: File, frozen: FrozenPaperArtifact): File {
+        cacheDir.mkdirs()
+        val target = File(cacheDir, frozen.jarName())
+        if (target.isFile) {
+            frozen.verify(target)
+            logger.lifecycle("[mpmt-realserver] 复用冻结 paperclip jar：${target.name}")
+            return target
+        }
+        val metadataUrl = "${FillV3Downloads.ENDPOINT}projects/paper/versions/${frozen.mcVersion}/builds/${frozen.build}"
+        val json = fetchPaperMetadata(metadataUrl)
+        if (FillV3Downloads.parseLatestBuildId(json) != frozen.build) {
+            throw org.gradle.api.GradleException("[mpmt-realserver] Paper 元数据 build 与冻结值不一致：$metadataUrl")
+        }
+        val downloadUrl = FillV3Downloads.parseDownloadUrl(json, FillV3Downloads.KEY_PRIMARY)
+        if (!FrozenPaperArtifact.isTrustedDownloadUrl(downloadUrl)) {
+            throw org.gradle.api.GradleException("[mpmt-realserver] Paper 下载地址不受信任：$downloadUrl")
+        }
+        val temporary = File(cacheDir, "${frozen.jarName()}.${UUID.randomUUID()}.part")
+        try {
+            logger.lifecycle("[mpmt-realserver] 下载冻结 paperclip jar：${frozen.jarName()}")
+            FillV3Downloads.download(downloadUrl, temporary)
+            frozen.verify(temporary)
+            replaceAtomically(temporary, target)
+        } catch (failure: Throwable) {
+            temporary.delete()
+            throw failure
+        }
+        logger.lifecycle("[mpmt-realserver] 冻结 paperclip jar 就绪：${target.name}")
+        return target
+    }
+
+    private fun fetchPaperMetadata(url: String): String =
+        try {
+            FillV3Downloads.fetchText(url)
+        } catch (failure: Throwable) {
+            throw org.gradle.api.GradleException("[mpmt-realserver] 访问 PaperMC Fill v3 API 失败：$url", failure)
+        }
+
+    private fun replaceAtomically(temporary: File, target: File) {
+        try {
+            Files.move(
+                temporary.toPath(),
+                target.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+
+    private fun resolveLatestPaperJar(cacheDir: File, mcVersion: String): File {
         cacheDir.mkdirs()
         cacheDir
             .listFiles { f -> f.name.matches(Regex("paper-$mcVersion-\\d+\\.jar")) }

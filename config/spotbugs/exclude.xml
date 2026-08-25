@@ -39,6 +39,14 @@
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
 
+    <!-- Forge 26.2 客户端会话与 Fabric 同样须把活跃网络特性提供给验收伴侣读取真实状态；复制该对象会
+         脱离当前派发器，故仅放行该生命周期 getter 的 EI。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.modern.client.ForgeClientSession"/>
+        <Method name="networkFeature"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
     <!-- 协议包为短生命周期传输 DTO（@Value），byte[] 载荷仅在可靠性层内部流转；对其 getter/构造做
          防御性拷贝在分片热路径上不划算。protocol.packet 包内 EI/EI2 豁免。 -->
     <Match>
@@ -82,5 +90,13 @@
     <Match>
         <Class name="top.wcpe.mc.mpmt.platform.neoforge.MpmtNeoForgeMod"/>
         <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD,MS_EXPOSE_REP"/>
+    </Match>
+
+    <!-- Forge 26.2 的产品通道由 @Mod 入口创建，并在同一加载器内由客户端事件注册复用；通道并非
+         可变集合或数组，复制会注册到另一条网络通道。仅放行该静态访问器的 MS。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.modern.MpmtForge262Mod"/>
+        <Method name="productChannel"/>
+        <Bug pattern="MS_EXPOSE_REP"/>
     </Match>
 </FindBugsFilter>

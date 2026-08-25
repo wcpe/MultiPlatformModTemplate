@@ -63,6 +63,15 @@ abstract class MpmtRealServerAcceptanceExtension {
     /** Paper MC 版本，默认 1.20.1。 */
     abstract val paperVersion: Property<String>
 
+    /** Paper 运行时冻结 build；未设置时保持既有非冻结车道行为。 */
+    abstract val paperBuild: Property<Int>
+
+    /** Paper 运行时冻结文件大小（字节）。 */
+    abstract val paperJarSizeBytes: Property<Long>
+
+    /** Paper 运行时冻结 SHA-256。 */
+    abstract val paperJarSha256: Property<String>
+
     /** Paper 运行时 Java 主版本，默认 17。 */
     abstract val paperJavaVersion: Property<Int>
 

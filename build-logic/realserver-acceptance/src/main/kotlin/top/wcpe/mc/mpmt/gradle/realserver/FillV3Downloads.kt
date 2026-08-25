@@ -29,6 +29,10 @@ internal object FillV3Downloads {
     fun download(url: String, dest: File) {
         val conn = open(url)
         try {
+            conn.instanceFollowRedirects = false
+            if (conn.responseCode !in 200..299) {
+                throw IllegalStateException("下载响应状态异常：${conn.responseCode}")
+            }
             conn.inputStream.use { input -> dest.outputStream().use { output -> input.copyTo(output) } }
         } finally {
             conn.disconnect()

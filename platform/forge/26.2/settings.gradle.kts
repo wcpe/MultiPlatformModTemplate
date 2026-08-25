@@ -11,7 +11,6 @@ pluginManagement {
 
 rootProject.name = "platform-forge-26.2"
 
-
 // 反向消费仓库根：坐标 → 收纳后工程路径（禁止拍平路径）
 includeBuild("../../..") {
     dependencySubstitution {

@@ -1,14 +1,13 @@
 package top.wcpe.mc.mpmt.gradle.realserver
 
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Path
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
 
 class P3R7BuildContractTest {
-
     @Test
     fun `P2 门不混入 26_2 且 R7 有独立三车道入口`() {
         val build = readRootFile("build.gradle.kts")
@@ -31,8 +30,9 @@ class P3R7BuildContractTest {
         assertTrue(build.contains("platform-fabric-26.2", ignoreCase = false))
         assertTrue(build.contains("mpmt-fabric-26.2-${'$'}version.jar"))
         assertTrue(build.contains("mpmt-forge-26.2-${'$'}version.jar"))
-        assertTrue(build.contains("Forge 26.2 产物（可选）"))
-        assertTrue(build.contains("./platform/forge/26.2/gradlew --no-daemon packageArtifacts"))
+        assertFalse(build.contains("Forge 26.2 产物（可选）"))
+        assertTrue(build.contains("platform/forge/26.2 用自有 wrapper 运行 ./gradlew --no-daemon packageArtifacts"))
+        assertTrue(build.contains("发布制品缺失"))
     }
 
     @Test
@@ -99,15 +99,18 @@ class P3R7BuildContractTest {
 
     @Test
     fun `Paper 26_2 R7 将本轮标识和 Java 25 透传给托管宿主`() {
-        val extension = readRootFile(
-            "build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/MpmtRealServerAcceptanceExtension.kt",
-        )
-        val plugin = readRootFile(
-            "build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/MpmtRealServerAcceptancePlugin.kt",
-        )
-        val host = readRootFile(
-            "build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/PaperHostService.kt",
-        )
+        val extension =
+            readRootFile(
+                "build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/MpmtRealServerAcceptanceExtension.kt",
+            )
+        val plugin =
+            readRootFile(
+                "build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/MpmtRealServerAcceptancePlugin.kt",
+            )
+        val host =
+            readRootFile(
+                "build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/PaperHostService.kt",
+            )
         val bukkitBuild = readRootFile("platform/bukkit/26.2/build.gradle.kts")
         val rootBuild = readRootFile("build.gradle.kts")
 
@@ -131,11 +134,65 @@ class P3R7BuildContractTest {
         assertTrue(bukkitBuild.contains("server-report-${'$'}{matrix.lowercase()}.txt"))
         assertTrue(bukkitBuild.contains("paperJavaVersion.set(compilerJavaVersion)"))
         assertTrue(bukkitBuild.contains("acceptanceClientProductJar.set(fabric262Product)"))
-        assertTrue(rootBuild.contains("fun verifyP3R7Report"))
-        assertTrue(rootBuild.contains("场景必须恰好一次 PASS"))
-        assertTrue(rootBuild.contains("\"MATRIX\\tR7\""))
-        assertTrue(rootBuild.contains("\"SCENARIO\\t${'$'}scenario\\tPASS\""))
-        assertFalse(rootBuild.contains("\"MATRIX\\\\tR7\""))
+        assertTrue(rootBuild.contains("top.wcpe.mc.mpmt.p3-r7-report-gate"))
+        assertTrue(rootBuild.contains("verifyP3R7ReportsStrict"))
+    }
+
+    @Test
+    fun `P3 R7 门使用严格报告校验器与本轮实际制品`() {
+        val rootBuild = readRootFile("build.gradle.kts")
+        val gate =
+            readRootFile(
+                "build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/P3R7ReportGatePlugin.kt",
+            )
+        val forgeRuntimeProperty = "mpmt.acceptance.forge.serverRuntime"
+        val forgeRuntimeExpression = "required(project, \"$forgeRuntimeProperty\")"
+
+        assertTrue(rootBuild.contains("verifyP3R7ReportsStrict"))
+        assertTrue(gate.contains("P3R7ReportValidator.verify"))
+        assertTrue(gate.contains(forgeRuntimeProperty))
+        assertTrue(gate.contains("File($forgeRuntimeExpression)"))
+        assertFalse(gate.contains("artifact(project.rootDir, $forgeRuntimeExpression)"))
+        assertTrue(gate.contains("paper-26.2-71.jar"))
+        assertTrue(gate.contains("start"))
+    }
+
+    @Test
+    fun `P3 R7 严格报告校验在三个车道完成后执行`() {
+        val rootBuild = readRootFile("build.gradle.kts")
+        val ordering = block(rootBuild, "tasks.named(\"verifyP3R7ReportsStrict\")")
+
+        assertTrue(ordering.contains("mustRunAfter("))
+        assertTrue(ordering.contains("runRealServerAcceptanceBukkit262"))
+        assertTrue(ordering.contains("runRealServerAcceptanceFabric262"))
+        assertTrue(ordering.contains("runRealServerAcceptanceForge262"))
+    }
+
+    @Test
+    fun `Forge 26_2 与真服编排接入静态质量门`() {
+        val forgeBuild = readRootFile("platform/forge/26.2/build.gradle")
+        val acceptanceBuild = readRootFile("build-logic/realserver-acceptance/build.gradle.kts")
+
+        assertTrue(forgeBuild.contains("com.github.spotbugs"))
+        assertTrue(forgeBuild.contains("apply plugin: 'checkstyle'"))
+        assertTrue(forgeBuild.contains("apply plugin: 'pmd'"))
+        assertTrue(forgeBuild.contains("findsecbugs-plugin"))
+        assertTrue(forgeBuild.contains("def staticQualityTasks"))
+        assertFalse(forgeBuild.contains("dependsOn check, verifyPackaging"))
+        assertTrue(acceptanceBuild.contains("org.jlleitschuh.gradle.ktlint"))
+        assertTrue(acceptanceBuild.contains("io.gitlab.arturbosch.detekt"))
+        assertTrue(acceptanceBuild.contains("org.jetbrains.kotlinx.kover"))
+        assertTrue(acceptanceBuild.contains("config/detekt/baseline.xml"))
+    }
+
+    @Test
+    fun `mc testkit 指南使用当前 Bukkit 工程与产品产物路径`() {
+        val guide = readRootFile("e2e/README.md")
+
+        assertTrue(guide.contains(":platform:bukkit:1.20.1:shadowJar"))
+        assertTrue(guide.contains("platform/bukkit/1.20.1/build/libs/mpmt-bukkit-1.20.1-<version>.jar"))
+        assertFalse(guide.contains(":platform-bukkit:server-1.20.1:shadowJar"))
+        assertFalse(guide.contains("${'$'}PWD/platform-bukkit/build/libs/"))
     }
 
     private fun readRootFile(name: String): String =

@@ -21,9 +21,6 @@ if (!versionFile.isFile()) {
     throw new GradleException("缺少仓库版本文件：${versionFile}")
 }
 def repositoryVersion = versionFile.getText('UTF-8').trim()
-if (repositoryVersion != '0.1.0') {
-    throw new GradleException("Forge 1.21.1 车道固定消费 0.1.0 共享 JAR，当前 VERSION=${repositoryVersion}")
-}
 
 group = 'top.wcpe.mc.mpmt'
 version = repositoryVersion
@@ -63,18 +60,29 @@ ext {
         'platform-spi': 'core/spi',
         'acceptance': 'modules/acceptance',
     ]
+    sharedModuleArchives = [
+        'core-domain': 'domain',
+        'core-runtime': 'runtime',
+        'core-client': 'client',
+        'core-server': 'server',
+        'protocol': 'protocol',
+        'platform-spi': 'spi',
+        'acceptance': 'acceptance',
+    ]
     sharedJars = sharedModules.collectEntries { module ->
         def dir = sharedModuleDirs[module] ?: module
-        [(module): new File(repositoryRoot, "${dir}/build/libs/${module}-0.1.0.jar")]
+        def archive = sharedModuleArchives[module] ?: module
+        [(module): new File(repositoryRoot, "${dir}/build/libs/${archive}-${repositoryVersion}.jar")]
     }
 }
 
 def verifySharedJar = { String module, File jarFile ->
     if (!jarFile.isFile()) {
-        throw new GradleException("缺少共享 JAR：${jarFile}。独立车道不会 includeBuild 根工程，请先由调用方准备 0.1.0 JAR。")
+        throw new GradleException("缺少共享 JAR：${jarFile}。独立车道不会 includeBuild 根工程，请先由调用方准备 ${repositoryVersion} JAR。")
     }
-    if (jarFile.name != "${module}-0.1.0.jar") {
-        throw new GradleException("共享 JAR 文件名不匹配：${jarFile.name}，期望 ${module}-0.1.0.jar")
+    def expectedArchive = sharedModuleArchives[module] ?: module
+    if (jarFile.name != "${expectedArchive}-${repositoryVersion}.jar") {
+        throw new GradleException("共享 JAR 文件名不匹配：${jarFile.name}，期望 ${expectedArchive}-${repositoryVersion}.jar")
     }
     JarFile jar = new JarFile(jarFile)
     try {
@@ -137,7 +145,7 @@ sourceSets {
         resources.setSrcDirs(['src/acceptance/resources'])
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
         // FG6 MinecraftRunTask 会把各 sourceSet.runtimeClasspath 整表塞进模块层。
-        // 若此处再拼 compileClasspath，compileOnly 共享 jar（如 acceptance-0.1.0.jar）
+        // 若此处再拼 compileClasspath，compileOnly 共享 jar（如 acceptance 的共享 JAR）
         // 会以自动模块名与 SecureJar 内嵌同名包冲突（split package）。
         // 运行期只靠：本源集输出（含 embed）+ main 输出（含产品共享 embed）+ main 运行时。
         runtimeClasspath = output + sourceSets.main.output + sourceSets.main.runtimeClasspath
@@ -303,7 +311,7 @@ minecraft {
 
 def verifySharedInputs = tasks.register('verifySharedInputs') {
     group = 'verification'
-    description = '校验独立车道全部 0.1.0 共享 JAR 输入'
+    description = '校验独立车道全部当前 VERSION 共享 JAR 输入'
     inputs.files files(sharedJars.values())
     doLast {
         sharedJars.each(verifySharedJar)

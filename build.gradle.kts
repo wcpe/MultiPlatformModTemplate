@@ -23,6 +23,7 @@ plugins {
     // A 车道：mc-testkit（Bukkit/Folia bot e2e；与 B 真 mod 客户端分 lane）
     // 仅经 maven.wcpe.top 解析插件坐标；禁止 sibling includeBuild 联调
     id("top.wcpe.mc-testkit") version "0.5.1"
+    id("top.wcpe.mc.mpmt.p3-r7-report-gate")
 }
 
 val mpmtVersion: String = rootProject.file("VERSION").readText().trim()
@@ -262,119 +263,43 @@ val collectReleaseArtifacts by tasks.registering {
         val version = mpmtVersion
         val root = project.rootDir
         val dist = distRoot.get().asFile
+
+        data class ReleaseArtifact(val source: File, val loader: String, val targetName: String)
+
+        val requiredArtifacts =
+            listOf(
+                ReleaseArtifact(File(root, "platform/bukkit/1.12.2/build/libs/mpmt-bukkit-1.12.2-$version.jar"), "bukkit", "mpmt-bukkit-1.12.2-$version.jar"),
+                ReleaseArtifact(File(root, "platform/bukkit/1.20.1/build/libs/mpmt-bukkit-1.20.1-$version.jar"), "bukkit", "mpmt-bukkit-1.20.1-$version.jar"),
+                ReleaseArtifact(File(root, "platform/bukkit/1.21.1/build/libs/mpmt-bukkit-1.21.1-$version.jar"), "bukkit", "mpmt-bukkit-1.21.1-$version.jar"),
+                ReleaseArtifact(File(root, "platform/bukkit/26.2/build/libs/mpmt-bukkit-26.2-$version.jar"), "bukkit", "mpmt-bukkit-26.2-$version.jar"),
+                ReleaseArtifact(File(root, "platform/fabric/1.20.1/build/libs/mpmt-fabric-1.20.1-$version.jar"), "fabric", "mpmt-fabric-1.20.1-$version.jar"),
+                ReleaseArtifact(File(root, "platform/fabric/1.21.1/build/libs/mpmt-fabric-1.21.1-$version.jar"), "fabric", "mpmt-fabric-1.21.1-$version.jar"),
+                ReleaseArtifact(File(root, "platform/fabric/26.2/build/libs/mpmt-fabric-26.2-$version.jar"), "fabric", "mpmt-fabric-26.2-$version.jar"),
+                ReleaseArtifact(File(root, "platform/forge/1.20.1/build/reobfShadowJar/output.jar"), "forge", "mpmt-forge-1.20.1-$version.jar"),
+                ReleaseArtifact(File(root, "platform/forge/1.21.1/build/libs/mpmt-forge-1.21.1-$version.jar"), "forge", "mpmt-forge-1.21.1-$version.jar"),
+                ReleaseArtifact(File(root, "platform/forge/1.12.2/build/reobfJar/output.jar"), "forge", "mpmt-forge-1.12.2-$version.jar"),
+                ReleaseArtifact(File(root, "platform/forge/26.2/build/libs/mpmt-forge-26.2-$version.jar"), "forge", "mpmt-forge-26.2-$version.jar"),
+                ReleaseArtifact(File(root, "platform/neoforge/1.20.2/build/libs/mpmt-neoforge-1.20.2-$version.jar"), "neoforge", "mpmt-neoforge-1.20.2-$version.jar"),
+                ReleaseArtifact(File(root, "platform/sponge/1.20.1/build/libs/mpmt-sponge-1.20.1-$version.jar"), "sponge", "mpmt-sponge-1.20.1-$version.jar"),
+            )
+        val missing = requiredArtifacts.filterNot { it.source.isFile }
+        if (missing.isNotEmpty()) {
+            throw GradleException(
+                "[dist] 发布制品缺失：\n" +
+                    missing.joinToString("\n") { " - ${it.loader}/${it.targetName} ← ${it.source.absolutePath}" } +
+                    "\n请先按 docs/VERSIONING.md 构建各独立 Forge/NeoForge 车道，再运行 :collectReleaseArtifacts。",
+            )
+        }
         if (dist.exists()) {
             dist.deleteRecursively()
         }
         listOf("bukkit", "fabric", "forge", "neoforge", "sponge").forEach { name ->
             File(dist, name).mkdirs()
         }
-
-        fun copyNamed(src: File, loader: String, fileName: String) {
-            if (!src.isFile) {
-                logger.warn("[dist] 缺少产物，跳过 $loader/$fileName ← ${src.absolutePath}")
-                return
-            }
-            val dest = File(File(dist, loader), fileName)
-            src.copyTo(dest, overwrite = true)
-            logger.lifecycle("[dist] $loader/$fileName  (${src.length()} bytes)")
-        }
-
-        // Bukkit
-        copyNamed(
-            File(root, "platform/bukkit/1.12.2/build/libs/mpmt-bukkit-1.12.2-$version.jar"),
-            "bukkit",
-            "mpmt-bukkit-1.12.2-$version.jar",
-        )
-        copyNamed(
-            File(root, "platform/bukkit/1.20.1/build/libs/mpmt-bukkit-1.20.1-$version.jar"),
-            "bukkit",
-            "mpmt-bukkit-1.20.1-$version.jar",
-        )
-        copyNamed(
-            File(root, "platform/bukkit/1.21.1/build/libs/mpmt-bukkit-1.21.1-$version.jar"),
-            "bukkit",
-            "mpmt-bukkit-1.21.1-$version.jar",
-        )
-        copyNamed(
-            File(root, "platform/bukkit/26.2/build/libs/mpmt-bukkit-26.2-$version.jar"),
-            "bukkit",
-            "mpmt-bukkit-26.2-$version.jar",
-        )
-
-        // Fabric 1.20.1 / 1.21.1（remap 后权威 jar）
-        copyNamed(
-            File(root, "platform/fabric/1.20.1/build/libs/mpmt-fabric-1.20.1-$version.jar"),
-            "fabric",
-            "mpmt-fabric-1.20.1-$version.jar",
-        )
-        copyNamed(
-            File(root, "platform/fabric/1.21.1/build/libs/mpmt-fabric-1.21.1-$version.jar"),
-            "fabric",
-            "mpmt-fabric-1.21.1-$version.jar",
-        )
-        // Fabric 26.2（MC 26.1+ 无混淆，shadowJar 直接为权威 jar）
-        copyNamed(
-            File(root, "platform/fabric/26.2/build/libs/mpmt-fabric-26.2-$version.jar"),
-            "fabric",
-            "mpmt-fabric-26.2-$version.jar",
-        )
-
-        // Forge 1.20.1：必须用 reobf 输出（SRG），勿用 libs 中间 named jar
-        copyNamed(
-            File(root, "platform/forge/1.20.1/build/reobfShadowJar/output.jar"),
-            "forge",
-            "mpmt-forge-1.20.1-$version.jar",
-        )
-
-        // NeoForge / Sponge
-        copyNamed(
-            File(root, "platform/neoforge/1.20.2/build/libs/mpmt-neoforge-1.20.2-$version.jar"),
-            "neoforge",
-            "mpmt-neoforge-1.20.2-$version.jar",
-        )
-        copyNamed(
-            File(root, "platform/sponge/1.20.1/build/libs/mpmt-sponge-1.20.1-$version.jar"),
-            "sponge",
-            "mpmt-sponge-1.20.1-$version.jar",
-        )
-
-        // 跨代 Forge：仅捞已存在产物（禁止嵌套 gradlew）
-        val forge121 =
-            File(root, "platform/forge/1.21.1/build/libs/mpmt-forge-1.21.1-$version.jar")
-        if (forge121.isFile) {
-            copyNamed(forge121, "forge", "mpmt-forge-1.21.1-$version.jar")
-        } else {
-            logger.lifecycle(
-                """
-                |[dist] 未找到 Forge 1.21.1 产物（可选）。请用自有 wrapper（Java 21 + Gradle 8.12.1）：
-                |  ./platform/forge/1.21.1/gradlew --no-daemon jar
-                |然后再跑 :collectReleaseArtifacts
-                """.trimMargin(),
-            )
-        }
-        val forge112Reobf = File(root, "platform/forge/1.12.2/build/reobfJar/output.jar")
-        if (forge112Reobf.isFile) {
-            copyNamed(forge112Reobf, "forge", "mpmt-forge-1.12.2-$version.jar")
-        } else {
-            logger.lifecycle(
-                """
-                |[dist] 未找到 Forge 1.12.2 reobf 产物（可选，client-only）。请用自有 wrapper（Java 8 + Gradle 5.6.4）：
-                |  ./platform/forge/1.12.2/gradlew --no-daemon reobfJar
-                |然后再跑 :collectReleaseArtifacts
-                """.trimMargin(),
-            )
-        }
-        val forge262 = File(root, "platform/forge/26.2/build/libs/mpmt-forge-26.2-$version.jar")
-        if (forge262.isFile) {
-            copyNamed(forge262, "forge", "mpmt-forge-26.2-$version.jar")
-        } else {
-            logger.lifecycle(
-                """
-                |[dist] 未找到 Forge 26.2 产物（可选）。请用自有 wrapper（Java 25 + Gradle 9.6.1）：
-                |  ./platform/forge/26.2/gradlew --no-daemon packageArtifacts
-                |然后再跑 :collectReleaseArtifacts
-                """.trimMargin(),
-            )
+        requiredArtifacts.forEach { artifact ->
+            val destination = File(File(dist, artifact.loader), artifact.targetName)
+            artifact.source.copyTo(destination, overwrite = true)
+            logger.lifecycle("[dist] ${artifact.loader}/${artifact.targetName}  (${artifact.source.length()} bytes)")
         }
 
         logger.lifecycle("[dist] 完成：${dist.absolutePath}")
@@ -745,30 +670,12 @@ tasks.register("runP3R7Build") {
     }
 }
 
-fun verifyP3R7Report(lane: String, report: File, runId: String) {
-    if (!report.isFile) {
-        throw GradleException("$lane 26.2 R7 缺少当前权威报告：${report.absolutePath}")
-    }
-    val lines = report.readLines().map(String::trim).filter(String::isNotEmpty)
-    if (lines.firstOrNull() != "SERVER-GAMETEST-REPORT v2") {
-        throw GradleException("$lane 26.2 R7 报告不是 acceptance v2：${report.absolutePath}")
-    }
-    if (lines.none { it == "MATRIX\tR7" || it == "MATRIX R7" } ||
-        lines.none { it == "RUN_ID\t$runId" || it == "RUN_ID $runId" } ||
-        lines.lastOrNull() != "RESULT PASS" ||
-        lines.count { it == "RESULT PASS" } != 1
-    ) {
-        throw GradleException("$lane 26.2 R7 报告未通过或不属于当前运行：${report.absolutePath}")
-    }
-    if (lines.none { it.matches(Regex("ARTIFACT\\t[^\\t]+\\t[0-9a-fA-F]{64}")) }) {
-        throw GradleException("$lane 26.2 R7 报告缺少制品哈希：${report.absolutePath}")
-    }
-    listOf("product-handshake", "product-roundtrip", "client-hud").forEach { scenario ->
-        val passed = lines.count { it == "SCENARIO\t$scenario\tPASS" || it.startsWith("SCENARIO\t$scenario\tPASS\t") }
-        if (passed != 1) {
-            throw GradleException("$lane 26.2 R7 场景必须恰好一次 PASS：$scenario")
-        }
-    }
+tasks.named("verifyP3R7ReportsStrict") {
+    mustRunAfter(
+        "runRealServerAcceptanceBukkit262",
+        "runRealServerAcceptanceFabric262",
+        "runRealServerAcceptanceForge262",
+    )
 }
 
 tasks.register("runP3R7RealServerAcceptance") {
@@ -778,26 +685,8 @@ tasks.register("runP3R7RealServerAcceptance") {
         "runRealServerAcceptanceBukkit262",
         "runRealServerAcceptanceFabric262",
         "runRealServerAcceptanceForge262",
+        "verifyP3R7ReportsStrict",
     )
-    doLast {
-        val matrix = providers.gradleProperty("mpmt.acceptance.matrix").orNull?.trim().orEmpty()
-        val runId = providers.gradleProperty("mpmt.acceptance.runId").orNull?.trim().orEmpty()
-        val startEpochMs = providers.gradleProperty("mpmt.acceptance.startEpochMs").orNull?.trim().orEmpty()
-        if (matrix != "R7" || runId.isEmpty() || startEpochMs.isEmpty()) {
-            throw GradleException(
-                "P3 R7 真服门需要 -Pmpmt.acceptance.matrix=R7、-Pmpmt.acceptance.runId=<本轮标识> 与 -Pmpmt.acceptance.startEpochMs=<本轮开始毫秒>",
-            )
-        }
-        verifyP3R7Report("Paper", file("platform/bukkit/26.2/build/acceptance/server-report-r7.txt"), runId)
-        verifyP3R7Report("Fabric", file("platform/fabric/26.2/build/acceptance/server-report-r7.txt"), runId)
-        verifyP3R7Report(
-            "Forge",
-            file("platform/forge/26.2/run-realserver/acceptance-report.txt")
-                .takeIf(File::isFile)
-                ?: file("platform/forge/26.2/run-acceptance-server/acceptance-report.txt"),
-            runId,
-        )
-    }
 }
 
 tasks.register("runP3R7Gate") {

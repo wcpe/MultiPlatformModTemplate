@@ -1,0 +1,46 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ComplexCondition:PaperHostService.kt$PaperHostService$!copied || sizeAfter != sizeBefore || target.length() != sizeBefore || !isLoadablePluginJar(target)</ID>
+    <ID>CyclomaticComplexMethod:PaperHostService.kt$PaperHostService$private fun startPaper()</ID>
+    <ID>LongMethod:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$private fun configureHostWiring(target: Project, ext: MpmtRealServerAcceptanceExtension)</ID>
+    <ID>LongMethod:PaperHostService.kt$PaperHostService$private fun startPaper()</ID>
+    <ID>LongParameterList:PlatformLane.kt$PlatformLane$( val id: String, val displayName: String, val serverKind: ServerKind, val clientKind: ClientKind, /** composite includeBuild 名；null = 根多模块或自有 launcher 车道 */ val includedBuildName: String?, /** 平台/模块内门禁任务名 */ val verifyTaskName: String, val defaultReportHint: String, /** 可选：默认矩阵（R5/R6）；空=P1 */ val defaultMatrix: String = "", /** * 根工程内任务路径（仅 includedBuildName==null 时用）。 * 例：`:platform:bukkit:1.20.1:runRealServerAcceptance` */ val rootProjectTaskPath: String? = null, )</ID>
+    <ID>LoopWithTooManyJumpStatements:PaperHostService.kt$PaperHostService$while</ID>
+    <ID>MagicNumber:FillV3Downloads.kt$FillV3Downloads$200</ID>
+    <ID>MagicNumber:FillV3Downloads.kt$FillV3Downloads$299</ID>
+    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$17</ID>
+    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$24</ID>
+    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$250</ID>
+    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$25599</ID>
+    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$64</ID>
+    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$8</ID>
+    <ID>MagicNumber:P3R7ReportValidator.kt$P3R7ReportValidator.ParsedReport$10</ID>
+    <ID>MagicNumber:P3R7ReportValidator.kt$P3R7ReportValidator.ParsedReport$3</ID>
+    <ID>MagicNumber:P3R7ReportValidator.kt$P3R7ReportValidator.ParsedReport$5</ID>
+    <ID>MagicNumber:P3R7ReportValidator.kt$P3R7ReportValidator.ParsedReport$7</ID>
+    <ID>MagicNumber:P3R7ReportValidator.kt$P3R7ReportValidator.ParsedReport$9</ID>
+    <ID>MagicNumber:PaperHostService.kt$PaperHostService$1000</ID>
+    <ID>MagicNumber:PaperHostService.kt$PaperHostService$1024</ID>
+    <ID>MagicNumber:PaperHostService.kt$PaperHostService$1_000</ID>
+    <ID>MagicNumber:PaperHostService.kt$PaperHostService$30</ID>
+    <ID>MagicNumber:PaperHostService.kt$PaperHostService$60_000L</ID>
+    <ID>MagicNumber:PaperHostService.kt$PaperHostService$80</ID>
+    <ID>MaxLineLength:P3R7BuildContractTest.kt$P3R7BuildContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/MpmtRealServerAcceptanceExtension.kt"</ID>
+    <ID>MaxLineLength:P3R7BuildContractTest.kt$P3R7BuildContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/MpmtRealServerAcceptancePlugin.kt"</ID>
+    <ID>MaxLineLength:P3R7BuildContractTest.kt$P3R7BuildContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/P3R7ReportGatePlugin.kt"</ID>
+    <ID>MaxLineLength:P3R7BuildContractTest.kt$P3R7BuildContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/PaperHostService.kt"</ID>
+    <ID>MaxLineLength:P3R7ReportValidator.kt$P3R7ReportValidator.ParsedReport$line.startsWith("START_EPOCH_MS\t") -&gt; startEpochMs = unique("START_EPOCH_MS", startEpochMs, fields(line, 2)[1].toLong())</ID>
+    <ID>MaxLineLength:PaperHostService.kt$PaperHostService$val metadataUrl = "${FillV3Downloads.ENDPOINT}projects/paper/versions/${frozen.mcVersion}/builds/${frozen.build}"</ID>
+    <ID>ThrowsCount:AcceptanceReportGate.kt$AcceptanceReportGate$fun verify(reportFile: File)</ID>
+    <ID>ThrowsCount:P3R7ReportGatePlugin.kt$P3R7ReportGatePlugin$private fun verify(project: Project)</ID>
+    <ID>ThrowsCount:PaperHostService.kt$PaperHostService$private fun resolveFrozenPaperJar(cacheDir: File, frozen: FrozenPaperArtifact): File</ID>
+    <ID>TooGenericExceptionCaught:PaperHostService.kt$PaperHostService$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:PaperHostService.kt$PaperHostService$t: Throwable</ID>
+    <ID>TooManyFunctions:PaperHostService.kt$PaperHostService : BuildServiceAutoCloseable</ID>
+    <ID>UseCheckOrError:FillV3Downloads.kt$FillV3Downloads$throw IllegalStateException("下载响应状态异常：${conn.responseCode}")</ID>
+    <ID>UseCheckOrError:FillV3Downloads.kt$FillV3Downloads$throw IllegalStateException("未从 Fill v3 构建响应解析到 id 字段。")</ID>
+    <ID>UseCheckOrError:FillV3Downloads.kt$FillV3Downloads$throw IllegalStateException("未从 Fill v3 构建响应解析到下载键 \"$key\" 的 url。")</ID>
+  </CurrentIssues>
+</SmellBaseline>

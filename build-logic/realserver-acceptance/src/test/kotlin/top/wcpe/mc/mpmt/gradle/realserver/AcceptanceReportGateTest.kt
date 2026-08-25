@@ -8,7 +8,6 @@ import org.junit.jupiter.api.io.TempDir
 import java.io.File
 
 class AcceptanceReportGateTest {
-
     @TempDir
     lateinit var dir: File
 

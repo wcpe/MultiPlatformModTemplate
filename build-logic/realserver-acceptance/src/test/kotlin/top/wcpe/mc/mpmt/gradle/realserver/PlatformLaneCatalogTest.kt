@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class PlatformLaneCatalogTest {
-
     @Test
     fun `覆盖全部服务端宿主含 Folia 与 CatServer`() {
         val ids = PlatformLaneCatalog.all().map { it.id }.toSet()

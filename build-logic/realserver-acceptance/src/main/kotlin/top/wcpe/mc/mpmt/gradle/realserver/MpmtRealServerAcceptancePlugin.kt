@@ -18,7 +18,6 @@ import java.util.concurrent.TimeUnit
  * 客户端接线用 `tasks.matching{}.configureEach` 并延后到 [Project.afterEvaluate]。
  */
 class MpmtRealServerAcceptancePlugin : Plugin<Project> {
-
     override fun apply(target: Project) {
         val ext =
             target.extensions.create(
@@ -69,7 +68,7 @@ class MpmtRealServerAcceptancePlugin : Plugin<Project> {
                 group = "verification"
                 description =
                     "本平台 realserver 门禁：校验权威报告 RESULT PASS" +
-                        "（先由本平台服 + 自有 gametest 客户端进服写出报告）"
+                    "（先由本平台服 + 自有 gametest 客户端进服写出报告）"
                 dependsOn("verifyMpmtAcceptanceReport")
             }
         }
@@ -161,6 +160,9 @@ class MpmtRealServerAcceptancePlugin : Plugin<Project> {
                 parameters.port.set(port)
                 parameters.javaExecutable.set(javaExec)
                 parameters.paperVersion.set(ext.paperVersion)
+                parameters.paperBuild.set(ext.paperBuild)
+                parameters.paperJarSizeBytes.set(ext.paperJarSizeBytes)
+                parameters.paperJarSha256.set(ext.paperJarSha256)
                 parameters.readyTimeoutMinutes.set(readyTimeout)
                 parameters.globalTimeoutMinutes.set(globalTimeout)
                 parameters.acceptanceEnabled.set(true)

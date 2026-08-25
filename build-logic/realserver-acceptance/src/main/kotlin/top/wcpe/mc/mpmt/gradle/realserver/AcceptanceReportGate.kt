@@ -14,7 +14,6 @@ import java.io.File
  * 不做 sh 编排；仅供 Gradle 任务调用。
  */
 object AcceptanceReportGate {
-
     fun verify(reportFile: File) {
         if (!reportFile.isFile) {
             throw GradleException(

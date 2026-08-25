@@ -20,6 +20,9 @@ group = "top.wcpe.mc.mpmt"
 version = rootProject.file("VERSION").readText().trim()
 
 val minecraftVersion = "26.2"
+val paperRuntimeBuild = 71
+val paperRuntimeSizeBytes = 61_744_713L
+val paperRuntimeSha256 = "36fee4f3a7020eb2e2d6f8d70d849beaf0f024d86f09302b9ccf2d96f266127e"
 val apiCoordinate = "io.papermc.paper:paper-api:26.2.build.72-beta"
 val apiSha256 = "ff4dd8b88beb95e990a900f587da3644d44345ce2bc6e8a11b851f6dfb98742b"
 val compilerJavaVersion = 25 // 读 paper-api major 69
@@ -383,6 +386,9 @@ mpmtRealServerAcceptance {
     matrix.set(acceptanceMatrix)
     autoStartPaperHost.set(autoHost)
     paperVersion.set(minecraftVersion)
+    paperBuild.set(paperRuntimeBuild)
+    paperJarSizeBytes.set(paperRuntimeSizeBytes)
+    paperJarSha256.set(paperRuntimeSha256)
     paperJavaVersion.set(compilerJavaVersion)
     paperPort.set(
         providers.gradleProperty("mpmt.realserver.port").map { it.toInt() }.orElse(25599),
