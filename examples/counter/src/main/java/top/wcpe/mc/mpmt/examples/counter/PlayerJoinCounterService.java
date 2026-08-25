@@ -1,5 +1,7 @@
 package top.wcpe.mc.mpmt.examples.counter;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -45,6 +47,7 @@ public final class PlayerJoinCounterService {
     private final SchedulerPort scheduler;
     private final LongSupplier nowMillis;
     private final Map<UUID, AutoCloseable> reminders = new ConcurrentHashMap<>();
+    private final Map<UUID, PendingJoinQueue> pendingJoins = new ConcurrentHashMap<>();
 
     public PlayerJoinCounterService(
             PersistencePort persistence, MessagePort message, SchedulerPort scheduler, LongSupplier nowMillis) {
@@ -66,7 +69,7 @@ public final class PlayerJoinCounterService {
      */
     void onPlayerJoined(PlayerRef player) {
         startReminder(player);
-        scheduler.runAsync(() -> persistJoinAndNotify(player));
+        enqueueJoinPersistence(player);
     }
 
     /** 玩家离开：关闭所持有的周期提示句柄。 */
@@ -81,6 +84,54 @@ public final class PlayerJoinCounterService {
         }
         int next = incrementJoinCount(player);
         sendJoinCount(player, next);
+    }
+
+    private void enqueueJoinPersistence(PlayerRef player) {
+        UUID uuid = player.getUuid();
+        QueueSubmission submission = new QueueSubmission();
+        pendingJoins.compute(
+                uuid,
+                (ignored, current) -> {
+                    PendingJoinQueue queue = current == null ? new PendingJoinQueue() : current;
+                    submission.queue = queue;
+                    submission.shouldSchedule = queue.enqueue(player);
+                    return queue;
+                });
+        if (submission.shouldSchedule) {
+            scheduler.runAsync(() -> persistQueuedJoins(uuid, submission.queue));
+        }
+    }
+
+    private void persistQueuedJoins(UUID uuid, PendingJoinQueue queue) {
+        try {
+            PlayerRef queued;
+            while ((queued = queue.poll()) != null) {
+                persistJoinAndNotify(queued);
+            }
+        } finally {
+            scheduleQueuedJoinIfNeeded(uuid, queue);
+        }
+    }
+
+    private void scheduleQueuedJoinIfNeeded(UUID uuid, PendingJoinQueue queue) {
+        QueueSubmission submission = new QueueSubmission();
+        pendingJoins.compute(
+                uuid,
+                (ignored, current) -> {
+                    if (!queue.equals(current)) {
+                        return current;
+                    }
+                    if (!queue.hasPending()) {
+                        queue.stop();
+                        return null;
+                    }
+                    submission.queue = queue;
+                    submission.shouldSchedule = true;
+                    return queue;
+                });
+        if (submission.shouldSchedule) {
+            scheduler.runAsync(() -> persistQueuedJoins(uuid, submission.queue));
+        }
     }
 
     private int incrementJoinCount(PlayerRef player) {
@@ -121,6 +172,39 @@ public final class PlayerJoinCounterService {
         } catch (Exception ex) {
             LOGGER.log(Level.WARNING, "关闭 Counter 周期提示句柄失败", ex);
         }
+    }
+
+    /** 单个玩家的异步持久化队列；锁仅保护队列状态，不包裹持久化 I/O。 */
+    private static final class PendingJoinQueue {
+        private final Deque<PlayerRef> players = new ArrayDeque<>();
+        private boolean running;
+
+        synchronized boolean enqueue(PlayerRef player) {
+            players.addLast(player);
+            if (running) {
+                return false;
+            }
+            running = true;
+            return true;
+        }
+
+        synchronized PlayerRef poll() {
+            return players.pollFirst();
+        }
+
+        synchronized boolean hasPending() {
+            return !players.isEmpty();
+        }
+
+        synchronized void stop() {
+            running = false;
+        }
+    }
+
+    /** 记录本次队列变更是否需要投递新的异步消费者。 */
+    private static final class QueueSubmission {
+        private PendingJoinQueue queue;
+        private boolean shouldSchedule;
     }
 
     /** 解析计数；非法值按 0 处理，避免脏数据阻断主流程。 */

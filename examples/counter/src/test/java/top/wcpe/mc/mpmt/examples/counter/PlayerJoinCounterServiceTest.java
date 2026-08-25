@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.LongSupplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -99,6 +102,26 @@ class PlayerJoinCounterServiceTest {
                                 PlayerJoinCounterService.FIRST_JOIN_KEY_PREFIX + p.getUuid())
                         .get());
         assertEquals(2, scheduler.closeCount);
+    }
+
+    @Test
+    @DisplayName("同一玩家并发加入：持久化读写不会丢失次数")
+    void 同一玩家并发加入不丢失次数() throws InterruptedException {
+        ConcurrentJoinPersistence persistence = new ConcurrentJoinPersistence();
+        ConcurrentScheduler scheduler = new ConcurrentScheduler(1);
+        PlayerRef p = player();
+        PlayerJoinCounterService svc = service(persistence, new FakeMessage(), scheduler);
+
+        svc.onPlayerJoined(p);
+        svc.onPlayerJoined(p);
+        assertTrue(scheduler.awaitTasks());
+
+        assertEquals(
+                "2",
+                persistence.read(
+                                PlayerJoinCounterService.NAMESPACE,
+                                PlayerJoinCounterService.JOIN_COUNT_KEY_PREFIX + p.getUuid())
+                        .get());
     }
 
     @Test
@@ -282,6 +305,83 @@ class PlayerJoinCounterServiceTest {
             timerPeriod = periodTicks;
             timerTask = task;
             return () -> closeCount++;
+        }
+    }
+
+    /** 受控并发持久化：让两个任务读取相同的计数后再继续写入。 */
+    private static final class ConcurrentJoinPersistence implements PersistencePort {
+        private final Map<String, String> store = new ConcurrentHashMap<>();
+        private final CountDownLatch joinCountReads = new CountDownLatch(2);
+
+        @Override
+        public Optional<String> read(String namespace, String key) {
+            String namespacedKey = namespace + "/" + key;
+            String value = store.get(namespacedKey);
+            if (key.startsWith(PlayerJoinCounterService.JOIN_COUNT_KEY_PREFIX)) {
+                joinCountReads.countDown();
+                waitForPeerRead(joinCountReads);
+            }
+            return Optional.ofNullable(value);
+        }
+
+        @Override
+        public void write(String namespace, String key, String value) {
+            store.put(namespace + "/" + key, value);
+        }
+
+    }
+
+    /** 受控异步调度：每个一次性任务独立执行，供并发读写回归测试使用。 */
+    private static final class ConcurrentScheduler implements SchedulerPort {
+        private final CountDownLatch completed;
+
+        ConcurrentScheduler(int taskCount) {
+            completed = new CountDownLatch(taskCount);
+        }
+
+        @Override
+        public void runForEntity(EntityRef entity, Runnable task) {
+            task.run();
+        }
+
+        @Override
+        public void runForLocation(WorldRef world, int x, int z, Runnable task) {
+            task.run();
+        }
+
+        @Override
+        public void runGlobal(Runnable task) {
+            task.run();
+        }
+
+        @Override
+        public void runAsync(Runnable task) {
+            Thread worker = new Thread(() -> {
+                try {
+                    task.run();
+                } finally {
+                    completed.countDown();
+                }
+            });
+            worker.start();
+        }
+
+        @Override
+        public AutoCloseable runTimer(long delayTicks, long periodTicks, Runnable task) {
+            return () -> { };
+        }
+
+        boolean awaitTasks() throws InterruptedException {
+            return completed.await(5, TimeUnit.SECONDS);
+        }
+    }
+
+    private static void waitForPeerRead(CountDownLatch latch) {
+        try {
+            latch.await(200, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("并发测试被中断", ex);
         }
     }
 }
