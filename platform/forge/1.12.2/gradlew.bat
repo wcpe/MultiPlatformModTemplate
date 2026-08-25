@@ -9,5 +9,5 @@ if not exist "%JAVA_EXE%" (
   echo 错误：JAVA_HOME 无效：%JAVA_HOME% 1>&2
   exit /b 1
 )
-"%JAVA_EXE%" -Xms64m -Xmx128m -Dorg.gradle.appname=gradlew -classpath "%~dp0gradle\wrapper\gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain -p "%~dp0" %*
+"%JAVA_EXE%" -Xms64m -Xmx128m -Dorg.gradle.appname=gradlew -classpath "%~dp0gradle\wrapper\gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain -p "%~dp0." %*
 exit /b %ERRORLEVEL%

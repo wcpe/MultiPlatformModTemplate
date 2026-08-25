@@ -73,7 +73,7 @@ runs:
       working-directory: platform/forge/1.12.2
       env:
         JAVA_HOME: ${{ steps.java8.outputs.path }}
-      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain packageArtifacts
+      run: ./gradlew --no-daemon --max-workers=1 --console=plain prepareClientCompanionArtifacts
 
     - name: 构建 Forge 1.21.1 制品
       shell: bash
