@@ -56,6 +56,12 @@ runs:
         JAVA_HOME: ${{ steps.java21.outputs.path }}
       run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain publishToMavenLocal
 
+    - name: 准备 Forge 1.12.2 共享输入
+      shell: bash
+      env:
+        JAVA_HOME: ${{ steps.java25.outputs.path }}
+      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain :core:domain:jar :core:runtime:jar :core:client:jar :core:protocol:jar :modules:acceptance:jar
+
     - name: 安装 Forge 1.20.1 的 Gradle 8
       uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d
       with:

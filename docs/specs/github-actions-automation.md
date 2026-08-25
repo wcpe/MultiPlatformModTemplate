@@ -48,10 +48,11 @@
 `ci.yml` 的单一质量 job 串行准备独立车道，保证所有发布制品都来自同一 commit：
 
 1. 构建并发布固定的 mc-testkit 到 Maven Local。
-2. 分别切换到对应 Java 运行时，使用固定 Gradle 8.14.5 构建 Forge 1.20.1，并执行 Forge 1.12.2、Forge 1.21.1、Forge 26.2 和 NeoForge 1.20.2 的自有 wrapper；NeoForge 先由根任务准备受控输入。
-3. 使用 Java 25 执行根 `:buildAll`，让根只消费上述已生成的制品和报告。
-4. 构建 E2E harness，执行 bot 的锁文件安装、lint 与格式只读检查。
-5. 无论成功失败都上传诊断；仅默认分支成功运行保存完整发布制品。
+2. 使用根 Gradle 生成 Forge 1.12.2 所需的 Java 8 共享 JAR；该步骤只生成受控输入，不启动任何独立 wrapper。
+3. 分别切换到对应 Java 运行时，使用固定 Gradle 8.14.5 构建 Forge 1.20.1，并执行 Forge 1.12.2、Forge 1.21.1、Forge 26.2 和 NeoForge 1.20.2 的自有 wrapper；NeoForge 先由根任务准备受控输入。
+4. 使用 Java 25 执行根 `:buildAll`，让根只消费上述已生成的制品和报告。
+5. 构建 E2E harness，执行 bot 的锁文件安装、lint 与格式只读检查。
+6. 无论成功失败都上传诊断；仅默认分支成功运行保存完整发布制品。
 
 采用并发组取消被同一 PR/分支后续提交淘汰的旧运行，不取消 `main`、`dev` 与手动运行。
 
