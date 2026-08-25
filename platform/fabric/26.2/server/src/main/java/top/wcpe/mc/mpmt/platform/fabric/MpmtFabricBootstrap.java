@@ -13,6 +13,7 @@ import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.core.server.BanService;
 import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
+import top.wcpe.mc.mpmt.platform.fabric.capability.FabricCapabilityBootstrap;
 import top.wcpe.mc.mpmt.platform.fabric.command.FabricMachineCodeCommands;
 import top.wcpe.mc.mpmt.platform.fabric.net.FabricConnectionHandle;
 import top.wcpe.mc.mpmt.platform.fabric.net.FabricServerTransport;
@@ -90,6 +91,7 @@ public final class MpmtFabricBootstrap implements ModInitializer {
     private void onServerStopped(MinecraftServer server) {
         MpmtRuntime currentRuntime = runtime;
         if (currentRuntime != null) {
+            FabricCapabilityBootstrap.clearRuntime(currentRuntime);
             // 关闭 Fabric 调度端口（多服 tick 路由注册表 + 异步池），避免停服后仍挂活动实例
             closeSchedulerPort(currentRuntime);
             if (currentRuntime.phase() == MpmtRuntime.Phase.ENABLED) {

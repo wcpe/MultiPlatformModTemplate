@@ -1,9 +1,12 @@
 package top.wcpe.mc.mpmt.platform.fabric.capability;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import top.wcpe.mc.mpmt.core.domain.event.DomainEvent;
 import top.wcpe.mc.mpmt.core.domain.event.EventBusPort;
 import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
 import top.wcpe.mc.mpmt.core.domain.port.DataDirectoryPort;
@@ -22,6 +25,9 @@ import top.wcpe.mc.mpmt.domain.capability.PlayerLeftEvent;
  * Fabric 平台能力装配：在服务端运行时启用前注册能力端口，并把玩家事件桥接到唯一的运行时 EventBus。
  */
 public final class FabricCapabilityBootstrap {
+
+    private static final AtomicBoolean CONNECTION_LISTENERS_REGISTERED = new AtomicBoolean();
+    private static final AtomicReference<ActiveRuntime> ACTIVE_RUNTIME = new AtomicReference<>();
 
     private FabricCapabilityBootstrap() {
         // 工具类不实例化
@@ -53,13 +59,50 @@ public final class FabricCapabilityBootstrap {
                 new PlatformCapabilityExample(persistence, message, scheduler, System::currentTimeMillis);
         example.register(eventBus);
 
+        registerConnectionListeners();
+        activateRuntime(runtime);
+    }
+
+    static void activateRuntime(MpmtRuntime runtime) {
+        ACTIVE_RUNTIME.set(new ActiveRuntime(runtime, runtime.eventBus()));
+    }
+
+    public static void clearRuntime(MpmtRuntime runtime) {
+        ActiveRuntime active = ACTIVE_RUNTIME.get();
+        if (active != null && active.runtime().equals(runtime)) {
+            ACTIVE_RUNTIME.compareAndSet(active, null);
+        }
+    }
+
+    static void publishJoined(PlayerRef player) {
+        publish(new PlayerJoinedEvent(player));
+    }
+
+    static void publishLeft(PlayerRef player) {
+        publish(new PlayerLeftEvent(player));
+    }
+
+    private static void registerConnectionListeners() {
+        if (!CONNECTION_LISTENERS_REGISTERED.compareAndSet(false, true)) {
+            return;
+        }
         ServerPlayConnectionEvents.JOIN.register(
-                (handler, sender, srv) -> eventBus.publish(new PlayerJoinedEvent(toRef(handler.player))));
+                (handler, sender, srv) -> publishJoined(toRef(handler.player)));
         ServerPlayConnectionEvents.DISCONNECT.register(
-                (handler, srv) -> eventBus.publish(new PlayerLeftEvent(toRef(handler.player))));
+                (handler, srv) -> publishLeft(toRef(handler.player)));
+    }
+
+    private static void publish(DomainEvent event) {
+        ActiveRuntime active = ACTIVE_RUNTIME.get();
+        if (active != null) {
+            active.eventBus().publish(event);
+        }
     }
 
     private static PlayerRef toRef(ServerPlayer player) {
         return new PlayerRef(player.getUUID(), player.getName().getString());
+    }
+
+    private record ActiveRuntime(MpmtRuntime runtime, EventBusPort eventBus) {
     }
 }

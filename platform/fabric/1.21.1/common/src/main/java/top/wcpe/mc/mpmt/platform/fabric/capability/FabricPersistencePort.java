@@ -3,6 +3,7 @@ package top.wcpe.mc.mpmt.platform.fabric.capability;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -50,6 +51,7 @@ public final class FabricPersistencePort implements PersistencePort {
                 properties.load(reader);
             } catch (IOException e) {
                 LOGGER.warn("读持久化文件失败：{}", file, e);
+                throw new UncheckedIOException("读持久化文件失败：" + file, e);
             }
         }
         return properties;
@@ -58,7 +60,6 @@ public final class FabricPersistencePort implements PersistencePort {
     private void store(String namespace, Properties properties) {
         Path file = file(namespace);
         try {
-            // file.getParent() 在文件名无父路径时可能为 null，加空值卫语句避免 NPE
             Path parent = file.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
@@ -68,6 +69,7 @@ public final class FabricPersistencePort implements PersistencePort {
             }
         } catch (IOException e) {
             LOGGER.warn("写持久化文件失败：{}", file, e);
+            throw new UncheckedIOException("写持久化文件失败：" + file, e);
         }
     }
 

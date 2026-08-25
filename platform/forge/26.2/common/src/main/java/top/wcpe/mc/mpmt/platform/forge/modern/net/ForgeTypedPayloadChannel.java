@@ -61,6 +61,7 @@ public final class ForgeTypedPayloadChannel {
         return new ForgeTypedPayload(type, data);
     }
 
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private void receive(ForgeTypedPayload payload, CustomPayloadEvent.Context context) {
         context.setPacketHandled(true);
         if (context.isServerSide()) {

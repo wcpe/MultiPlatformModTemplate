@@ -3,6 +3,7 @@ package top.wcpe.mc.mpmt.platform.sponge.capability;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,6 +52,7 @@ public final class SpongePersistencePort implements PersistencePort {
                 properties.load(reader);
             } catch (IOException e) {
                 LOGGER.warn("读持久化文件失败：{}", file, e);
+                throw new UncheckedIOException("读持久化文件失败：" + file, e);
             }
         }
         return properties;
@@ -68,6 +70,7 @@ public final class SpongePersistencePort implements PersistencePort {
             }
         } catch (IOException e) {
             LOGGER.warn("写持久化文件失败：{}", file, e);
+            throw new UncheckedIOException("写持久化文件失败：" + file, e);
         }
     }
 

@@ -57,7 +57,7 @@ public final class ForgeAcceptanceControlChannel {
     }
 
     public void onDisconnected(ServerPlayer player) {
-        if (clientPlayer == player) {
+        if (player.equals(clientPlayer)) {
             clientPlayer = null;
             client.failAllPending("客户端断开");
         }

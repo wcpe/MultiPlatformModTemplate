@@ -16,6 +16,7 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.core.server.BanService;
 import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
@@ -128,14 +129,28 @@ public final class MpmtNeoForgeMod {
     @SubscribeEvent
     public void onServerStopped(ServerStoppedEvent event) {
         MpmtRuntime current = runtime;
-        if (current != null && current.phase() == MpmtRuntime.Phase.ENABLED) {
-            current.disable();
+        if (current != null) {
+            closeSchedulerPort(current);
+            if (current.phase() == MpmtRuntime.Phase.ENABLED) {
+                current.disable();
+            }
         }
         transport.clearConnections();
         runtime = null;
         services = null;
         ACTIVE_SERVICES.set(null);
         PlatformProvider.deactivate();
+    }
+
+    private static void closeSchedulerPort(MpmtRuntime currentRuntime) {
+        try {
+            SchedulerPort scheduler = currentRuntime.ports().get(SchedulerPort.class);
+            if (scheduler instanceof AutoCloseable) {
+                ((AutoCloseable) scheduler).close();
+            }
+        } catch (Exception error) {
+            LOGGER.warn("关闭 NeoForge 调度端口失败：{}", error.toString());
+        }
     }
 
     /** 验收驱动经活跃产品传输发送跨端字节，不暴露可变传输实例。 */

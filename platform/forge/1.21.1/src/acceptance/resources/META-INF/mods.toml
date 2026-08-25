@@ -27,6 +27,6 @@ side="BOTH"
 [[dependencies.mpmt_acceptance]]
 modId="mpmt"
 mandatory=true
-versionRange="[0.1.0,0.2.0)"
+versionRange="[${version},)"
 ordering="AFTER"
 side="BOTH"

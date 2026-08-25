@@ -1,6 +1,8 @@
 package top.wcpe.mc.mpmt.platform.fabric.capability;
 
 import java.lang.reflect.Method;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
@@ -10,6 +12,7 @@ import net.minecraft.client.gui.components.toasts.ToastManager;
 import net.minecraft.network.chat.Component;
 import top.wcpe.mc.mpmt.protocol.PacketDispatcher;
 import top.wcpe.mc.mpmt.protocol.PacketIds;
+import top.wcpe.mc.mpmt.protocol.packet.HudKind;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 
 /**
@@ -22,6 +25,8 @@ import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 public final class FabricHudRenderer {
 
     private static volatile ServerHudMessagePacket lastRendered;
+    private static final ConcurrentMap<HudKind, ServerHudMessagePacket> LAST_RENDERED_BY_KIND =
+            new ConcurrentHashMap<>();
 
     private FabricHudRenderer() {
         // 工具类不实例化
@@ -32,9 +37,15 @@ public final class FabricHudRenderer {
         return lastRendered;
     }
 
+    /** 最近一次收到并处理的指定类型 HUD（验收用，可能为空）。 */
+    public static ServerHudMessagePacket lastRendered(HudKind kind) {
+        return LAST_RENDERED_BY_KIND.get(kind);
+    }
+
     /** 断线时清空 HUD 快照，避免旧会话状态泄漏到下一 play 连接。 */
     public static void clear() {
         lastRendered = null;
+        LAST_RENDERED_BY_KIND.clear();
     }
 
     /** 在客户端收发管线上注册 HUD 收包处理器。 */
@@ -44,6 +55,7 @@ public final class FabricHudRenderer {
                 (connection, packet) -> {
                     ServerHudMessagePacket hud = (ServerHudMessagePacket) packet;
                     lastRendered = hud;
+                    LAST_RENDERED_BY_KIND.put(hud.getKind(), hud);
                     Minecraft.getInstance().execute(() -> render(hud));
                 });
     }

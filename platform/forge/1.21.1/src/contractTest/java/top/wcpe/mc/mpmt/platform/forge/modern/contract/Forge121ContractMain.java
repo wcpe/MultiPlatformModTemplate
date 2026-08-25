@@ -66,6 +66,14 @@ public final class Forge121ContractMain {
         require(build.contains("options.release = 21"), "Java 编译目标必须为 21");
         require(build.contains("productSharedModules"), "产品必须本地消费共享产品核心");
         require(build.contains("sharedJars.each(verifySharedJar)"), "配置期必须校验共享 JAR");
+        require(build.contains("sharedModuleArchives"),
+                "共享 JAR 必须显式映射 Gradle 产物名");
+        require(build.contains("${archive}-${repositoryVersion}.jar"),
+                "共享 JAR 版本必须跟随仓库 VERSION");
+        require(!build.contains("-0.1.0.jar"), "共享 JAR 路径不得固定为 0.1.0");
+        String acceptanceToml = read(projectDir.resolve("src/acceptance/resources/META-INF/mods.toml"));
+        require(acceptanceToml.contains("versionRange=\"[${version},)\""),
+                "验收 mod 对产品的版本约束必须跟随构建版本");
         require(build.contains("独立车道不会 includeBuild 根工程"),
                 "共享 JAR 校验文案须声明不依赖根 launcher 复合构建");
         require(build.contains("runAcceptanceServer")

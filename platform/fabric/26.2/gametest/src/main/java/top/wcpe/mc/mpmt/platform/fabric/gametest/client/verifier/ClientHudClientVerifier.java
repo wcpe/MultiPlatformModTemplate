@@ -25,13 +25,12 @@ public final class ClientHudClientVerifier implements ClientVerifier {
         if (!"verify-hud".equals(step.stepId())) {
             return VerifyOutcome.error("未知步骤：" + step.stepId());
         }
-        ServerHudMessagePacket hud = FabricHudRenderer.lastRendered();
+        ServerHudMessagePacket hud = FabricHudRenderer.lastRendered(HudKind.ACTIONBAR);
         if (hud == null) {
             return null;
         }
-        if (hud.getKind() != HudKind.ACTIONBAR
-                || !ClientHudServerScenario.HUD_TEXT.equals(hud.getText())) {
-            return VerifyOutcome.fail("HUD 不符：kind=" + hud.getKind() + " text=" + hud.getText());
+        if (!ClientHudServerScenario.HUD_TEXT.equals(hud.getText())) {
+            return null;
         }
         return VerifyOutcome.ok("{\"hud\":\"" + hud.getText() + "\"}", "产品 HUD 通过");
     }

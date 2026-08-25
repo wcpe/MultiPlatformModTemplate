@@ -28,10 +28,7 @@ import top.wcpe.mc.mpmt.acceptance.report.JavaRuntimeInfo;
 import top.wcpe.mc.mpmt.core.client.ClientNetworkFeature;
 import top.wcpe.mc.mpmt.platform.forge.modern.client.ForgeClientEvents;
 import top.wcpe.mc.mpmt.platform.forge.modern.client.ForgeHudSnapshot;
-import top.wcpe.mc.mpmt.protocol.PacketIds;
 import top.wcpe.mc.mpmt.protocol.packet.HudKind;
-import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
-import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
 
 /**
  * Forge 客户端验收伴侣：程序化连服兜底 + 控制通道步骤断言。
@@ -40,6 +37,7 @@ import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
  * 故在任意非世界屏幕上发起一次自连（与 1.20.1 Forge 伴侣一致）。
  */
 @Mod.EventBusSubscriber(modid = MpmtForge262AcceptanceMod.MOD_ID, value = Dist.CLIENT)
+@SuppressWarnings("PMD.NonThreadSafeSingleton")
 public final class ForgeAcceptanceClientCompanion {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("mpmt-acceptance");
@@ -58,6 +56,7 @@ public final class ForgeAcceptanceClientCompanion {
     private static RunStepPacket active;
     private static int ticksInStep;
     private static int ticksSinceMenu;
+    private static boolean clientReadySent;
     private static boolean pingSent;
     private static volatile boolean pongReceived;
 
@@ -70,8 +69,8 @@ public final class ForgeAcceptanceClientCompanion {
         connection = event.getConnection();
         MpmtForge262AcceptanceMod.control().registerClientReceiver(
                 ForgeAcceptanceClientCompanion::receive);
-        sendClientReady();
-        LOGGER.info("验收客户端伴侣已连接控制通道：平台=Forge");
+        clientReadySent = false;
+        LOGGER.info("验收客户端伴侣已连接，等待产品会话就绪：平台=Forge");
     }
 
     @SubscribeEvent
@@ -85,6 +84,9 @@ public final class ForgeAcceptanceClientCompanion {
         tryAutoConnect(minecraft);
         if (minecraft.player == null || connection == null) {
             return;
+        }
+        if (!clientReadySent) {
+            clientReadySent = sendClientReady();
         }
         if (minecraft.mouseHandler.isMouseGrabbed()) {
             minecraft.mouseHandler.releaseMouse();
@@ -308,7 +310,7 @@ public final class ForgeAcceptanceClientCompanion {
         }
     }
 
-    private static void sendClientReady() {
+    private static boolean sendClientReady() {
         try {
             JavaRuntimeInfo javaInfo = AcceptanceReportV2Factory.currentJava(
                     System.getProperty("mpmt.acceptance.javaExecutable"));
@@ -316,8 +318,11 @@ public final class ForgeAcceptanceClientCompanion {
                     AcceptanceControlCodec.PROTOCOL_VERSION,
                     javaInfo.getMajor(),
                     javaInfo.getExecutable()));
+            LOGGER.info("验收客户端伴侣已上报控制就绪：平台=Forge");
+            return true;
         } catch (RuntimeException e) {
             LOGGER.error("无法上报客户端 Java 运行身份：{}", e.getMessage());
+            return false;
         }
     }
 
@@ -334,6 +339,7 @@ public final class ForgeAcceptanceClientCompanion {
         INBOUND.clear();
         active = null;
         ticksInStep = 0;
+        clientReadySent = false;
         pingSent = false;
         pongReceived = false;
     }

@@ -10,6 +10,7 @@ import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
 import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
@@ -64,6 +65,7 @@ public final class MpmtForge262Mod {
     }
 
     /** 服务端已启动：在接收玩家前完成端口、封禁服务与网络特性的装配。 */
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private void onServerStarted(ServerStartedEvent event) {
         MinecraftServer server = event.getServer();
         MpmtRuntime runtime = new MpmtRuntime();
@@ -77,6 +79,7 @@ public final class MpmtForge262Mod {
     }
 
     /** 玩家进入 PLAY 阶段时登记唯一物理连接，启动服务端握手流程。 */
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             ForgeServerServices services = ACTIVE_SERVICES.get();
@@ -86,6 +89,7 @@ public final class MpmtForge262Mod {
         }
     }
 
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             ForgeServerServices services = ACTIVE_SERVICES.get();
@@ -96,13 +100,28 @@ public final class MpmtForge262Mod {
         }
     }
 
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private void onServerStopped(ServerStoppedEvent event) {
         MpmtRuntime current = activeRuntime;
-        if (current != null && current.phase() == MpmtRuntime.Phase.ENABLED) {
-            current.disable();
+        if (current != null) {
+            closeSchedulerPort(current);
+            if (current.phase() == MpmtRuntime.Phase.ENABLED) {
+                current.disable();
+            }
         }
         transport.clearConnections();
         activeRuntime = null;
         ACTIVE_SERVICES.set(null);
+    }
+
+    private static void closeSchedulerPort(MpmtRuntime currentRuntime) {
+        try {
+            SchedulerPort scheduler = currentRuntime.ports().get(SchedulerPort.class);
+            if (scheduler instanceof AutoCloseable) {
+                ((AutoCloseable) scheduler).close();
+            }
+        } catch (Exception error) {
+            LOGGER.warn("关闭 Forge 调度端口失败：{}", error.toString());
+        }
     }
 }

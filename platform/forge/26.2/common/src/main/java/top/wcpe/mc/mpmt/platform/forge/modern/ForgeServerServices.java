@@ -14,15 +14,10 @@ import top.wcpe.mc.mpmt.core.server.SessionRegistry;
 /** Forge 26.2 服务端闭环持有者：统一复用唯一的封禁表、会话表、网络特性与封禁服务。 */
 public final class ForgeServerServices {
 
-    private final SessionRegistry sessionRegistry;
     private final ServerNetworkFeature networkFeature;
     private final BanService banService;
 
-    private ForgeServerServices(
-            SessionRegistry sessionRegistry,
-            ServerNetworkFeature networkFeature,
-            BanService banService) {
-        this.sessionRegistry = sessionRegistry;
+    private ForgeServerServices(ServerNetworkFeature networkFeature, BanService banService) {
         this.networkFeature = networkFeature;
         this.banService = banService;
     }
@@ -43,7 +38,7 @@ public final class ForgeServerServices {
                         bans, () -> UUID.randomUUID().toString(), sessions, service::state);
         runtime.features().register(network);
         service.initialize();
-        return new ForgeServerServices(sessions, network, service);
+        return new ForgeServerServices(network, service);
     }
 
     public ServerNetworkFeature networkFeature() {

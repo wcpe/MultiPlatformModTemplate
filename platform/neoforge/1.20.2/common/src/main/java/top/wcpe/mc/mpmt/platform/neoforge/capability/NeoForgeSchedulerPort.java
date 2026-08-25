@@ -22,11 +22,12 @@ import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
  * 与 Fabric 非 Folia 路径一致。NeoForge 20.2 周期 tick 仍用 Forge 系 {@link TickEvent}（拆分的
  * {@code ServerTickEvent.Pre/Post} 属 20.4+），经 {@link NeoForge#EVENT_BUS} 订阅。
  */
-public final class NeoForgeSchedulerPort implements SchedulerPort {
+public final class NeoForgeSchedulerPort implements SchedulerPort, AutoCloseable {
 
     private final MinecraftServer server;
     private final ExecutorService asyncPool;
     private final List<Timer> timers = new CopyOnWriteArrayList<>();
+    private volatile boolean closed;
 
     public NeoForgeSchedulerPort(MinecraftServer server) {
         this.server = Objects.requireNonNull(server, "server 不能为空");
@@ -37,35 +38,50 @@ public final class NeoForgeSchedulerPort implements SchedulerPort {
                             thread.setDaemon(true);
                             return thread;
                         });
-        // 单一 tick 钩子驱动全部周期任务（订阅游戏事件总线）
         NeoForge.EVENT_BUS.register(this);
     }
 
     @Override
     public void runForEntity(EntityRef entity, Runnable task) {
+        ensureOpen();
         server.execute(task);
     }
 
     @Override
     public void runForLocation(WorldRef world, int x, int z, Runnable task) {
+        ensureOpen();
         server.execute(task);
     }
 
     @Override
     public void runGlobal(Runnable task) {
+        ensureOpen();
         server.execute(task);
     }
 
     @Override
     public void runAsync(Runnable task) {
+        ensureOpen();
         asyncPool.execute(task);
     }
 
     @Override
-    public AutoCloseable runTimer(long delayTicks, long periodTicks, Runnable task) {
+    public synchronized AutoCloseable runTimer(long delayTicks, long periodTicks, Runnable task) {
+        ensureOpen();
         Timer timer = new Timer(delayTicks, periodTicks, task);
         timers.add(timer);
         return () -> timers.remove(timer);
+    }
+
+    @Override
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        NeoForge.EVENT_BUS.unregister(this);
+        timers.clear();
+        asyncPool.shutdownNow();
     }
 
     /** 服务端 tick 末驱动全部周期任务（仅 {@code END} 阶段，避免一 tick 触发两次）。 */
@@ -74,8 +90,21 @@ public final class NeoForgeSchedulerPort implements SchedulerPort {
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
+        tickTimers();
+    }
+
+    private synchronized void tickTimers() {
+        if (closed) {
+            return;
+        }
         for (Timer timer : timers) {
             timer.tick();
+        }
+    }
+
+    private void ensureOpen() {
+        if (closed) {
+            throw new IllegalStateException("NeoForge 调度器已关闭");
         }
     }
 

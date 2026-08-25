@@ -62,6 +62,7 @@ public final class ForgeClientHud {
                     hud.getSubtitle().isEmpty() ? null : Component.literal(hud.getSubtitle()));
             // 26.2 拆分 addMessage：服务端下发的系统消息走 addServerSystemMessage
             case CHAT -> gameHud.getChat().addServerSystemMessage(text);
+            default -> throw new IllegalArgumentException("不支持的 HUD 类型：" + hud.getKind());
         }
     }
 

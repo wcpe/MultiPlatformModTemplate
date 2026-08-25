@@ -14,11 +14,12 @@ import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
 import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
 
 /** Forge 调度端口：实体、位置和全局任务统一调度到服务端线程，周期任务由服务端 tick 驱动。 */
-public final class ForgeSchedulerPort implements SchedulerPort {
+public final class ForgeSchedulerPort implements SchedulerPort, AutoCloseable {
 
     private final MinecraftServer server;
     private final ExecutorService asyncPool;
     private final List<Timer> timers = new CopyOnWriteArrayList<>();
+    private volatile boolean closed;
 
     public ForgeSchedulerPort(MinecraftServer server) {
         this.server = Objects.requireNonNull(server, "server 不能为空");
@@ -34,29 +35,45 @@ public final class ForgeSchedulerPort implements SchedulerPort {
 
     @Override
     public void runForEntity(EntityRef entity, Runnable task) {
+        ensureOpen();
         server.execute(task);
     }
 
     @Override
     public void runForLocation(WorldRef world, int x, int z, Runnable task) {
+        ensureOpen();
         server.execute(task);
     }
 
     @Override
     public void runGlobal(Runnable task) {
+        ensureOpen();
         server.execute(task);
     }
 
     @Override
     public void runAsync(Runnable task) {
+        ensureOpen();
         asyncPool.execute(task);
     }
 
     @Override
-    public AutoCloseable runTimer(long delayTicks, long periodTicks, Runnable task) {
+    public synchronized AutoCloseable runTimer(long delayTicks, long periodTicks, Runnable task) {
+        ensureOpen();
         Timer timer = new Timer(delayTicks, periodTicks, task);
         timers.add(timer);
         return () -> timers.remove(timer);
+    }
+
+    @Override
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        MinecraftForge.EVENT_BUS.unregister(this);
+        timers.clear();
+        asyncPool.shutdownNow();
     }
 
     /** 服务端 tick 末驱动全部周期任务。 */
@@ -65,8 +82,21 @@ public final class ForgeSchedulerPort implements SchedulerPort {
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
+        tickTimers();
+    }
+
+    private synchronized void tickTimers() {
+        if (closed) {
+            return;
+        }
         for (Timer timer : timers) {
             timer.tick();
+        }
+    }
+
+    private void ensureOpen() {
+        if (closed) {
+            throw new IllegalStateException("Forge 调度器已关闭");
         }
     }
 
