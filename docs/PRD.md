@@ -70,8 +70,9 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | FR-29 | 平台无关配置加载模块 `core-config`（共享 L1）：YAML / JSON 等配置文件加载为类型化模型 | P1 | 已交付@v0.1.0 |
 | FR-30 | 客户端/服务端共享目录与资源路径模块 `core-paths` + `DataDirectoryPort`：预设标准位置，调用方引用、不自算路径 | P1 | 已交付@v0.1.0 |
 | FR-31 | 自有 EventBus（L0 内核）：平台无关发布/订阅 + 域间事件转发，支撑功能域解耦与拆分；平台事件经适配器桥接入总线 | P1 | 已交付@v0.1.0 |
+| FR-32 | 远端交付治理：GitHub Actions 为模板提供全车道构建、手动 Release、依赖审查、CodeQL 与依赖更新；CI 仅作构建质量门，不替代 realserver/R7 真服验收 | P4 | 开发中 |
 
-> 状态取值：计划 / 开发中 / 已交付@vX.Y.Z。优先级：P1(MVP) / P2 / P3。
+> 状态取值：计划 / 开发中 / 已交付@vX.Y.Z。优先级：P1(MVP) / P2 / P3 / P4（治理演进）。
 > 标 `已交付` 有门：仅当该 FR 的 §6 / spec 验收标准全部满足、对应测试 + 实机验收通过后，由 `sdd-release-version` 发版时统一标 `已交付@vX.Y.Z`——开发/修复过程中不得自行预标。
 
 ## 5. 非功能需求（NFR）
@@ -105,6 +106,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 > 第一期**实施顺序**（评审）：先 **Paper + Fabric + Forge** 跑通"一份 L0 逻辑 + 一次往返 + 握手"作骨架证明（FR-11 两证），再铺 Folia/Sponge/NeoForge 与完整可靠性 / 三组示例——"全平台跑通"是 P1 收尾目标、非 MVP 必过门。NeoForge 锚点取 1.20.2（无 1.20.1）。客户端侧**渲染必在 L3/L4、各平台各版本各写**，"写一次"主要在协议 / 状态 / 输入意图层（core-client 较薄），不夸大客户端复用。
 - **第二期**：**沿版本轴铺开**——1.21.1 / 1.12.2 验证 L4 跨版本；CatServer 实跑（需 1.12.2）。对应 FR-12；状态以 §4 为准（**已交付@v0.2.0**）。交付门（R1–R6 合规矩阵 v2 + `:runVersionMatrixGate` + 用户第二期实机确认）已齐；详见 [p2-version-matrix §11.1](specs/p2-version-matrix.md)。
 - **第三期**：**规模化与对外**——最新版本（26.2）、脚手架模板化发布、玩法开发者上手文档与示例。对应 FR-16/FR-17/FR-18；基线为 `v0.2.0`，现处开发中。严格 R7 门、发布元信息、Counter 上手路径及公开 GitHub Template 已就绪；当前候选提交已以冻结 Paper build 71 通过同轮 `p3-r7-1787686232087` 的 `:runP3R7Gate`，并已在干净克隆复现换名和 Counter 纯 JVM 测试（本机预热缓存）。依 ADR-0023，R7 已完成 FR-16 最终自动化验收；之后仅待 `v0.3.0` 对外 Release。详见 [`specs/p3-platform-scaling-and-onboarding.md`](specs/p3-platform-scaling-and-onboarding.md)。
+- **第四期（治理）**：**可复现交付**——为公开模板补齐 GitHub Actions 的构建、发布、安全与依赖维护入口。对应 FR-32；CI 绿灯是远端构建质量证据，不能替代 ADR-0014 / ADR-0023 规定的本机真服证据。详见 [`specs/github-actions-automation.md`](specs/github-actions-automation.md)。
 
 > 分期是少数粗粒度阶段，不随 FR 增长而改。某期是否完成看 §4 表里该期 FR 状态是否都 `已交付`。
 

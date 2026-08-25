@@ -21,7 +21,6 @@
 # Fabric / Forge / Sponge（-p 用物理路径）
 ./gradlew -p platform/fabric/1.20.1 --no-daemon remapJar
 ./gradlew -p platform/fabric/1.21.1 --no-daemon remapJar
-./gradlew -p platform/forge/1.20.1 --no-daemon reobfShadowJar
 ./gradlew -p platform/sponge/1.20.1 --no-daemon shadowJar
 
 # 聚合可发布 jar → build/dist/{bukkit,fabric,forge,neoforge,sponge}/
@@ -53,6 +52,7 @@ Forge 跨代（自有 launcher，目录在 `platform/forge/`，禁止从根嵌�
 
 | MC | 目录 | JDK / Gradle |
 |---|---|---|
+| 1.20.1 | `platform/forge/1.20.1/` | Java 17 + Gradle 8.14.5（先将该版本置于 `PATH`，运行 `gradle --no-daemon reobfShadowJar`） |
 | 1.21.1 | `platform/forge/1.21.1/` | Java 21 + 8.12.1 |
 | 1.12.2 | `platform/forge/1.12.2/` | Java 8 + 5.6.4（**client-only**） |
 | 26.2 | `platform/forge/26.2/` | Java 25 + 9.6.1 + ForgeGradle 7.0.31 |
@@ -161,3 +161,11 @@ Forge 1.12.2：**禁止** Forge 服务端 mod；真服走 CatServer R5：
 ```
 
 见 [`../tools/README.md`](../tools/README.md)。纯 kts，无需 python。
+
+## 5. GitHub Actions
+
+`ci.yml` 会在 pull request、`main`/`dev` 推送和手动触发时，在 Ubuntu Hosted Runner 固定构建 `mc-testkit` `v0.5.1` 到 Maven Local；Forge 1.20.1 使用固定 Gradle 8.14.5，其余独立 Forge/NeoForge 车道按 Java 8 / 17 / 21 / 25 使用自有 wrapper，最后执行根 `:buildAll`。成功的默认分支运行保存 `build/dist`，任意结果均保存测试与静态分析诊断。
+
+`release.yml` 只可由维护者手动触发，并且输入必须是已经推送、与 `VERSION` 一致的 `vX.Y.Z` 附注 tag。它会冷构建 13 个产品 jar 后创建 GitHub Release；不会创建 tag、不会发布 Maven 制品。需要强制人工审批时，在仓库设置中创建 `release` Environment 并添加保护规则。
+
+CI 只验证可复现构建与静态质量，不能运行或替代 `:runP3R7Gate`、`runRealServerAcceptance` 等本机真服门。P3 R7 的权威仍是 ADR-0023 所定义的同轮 Gradle 报告。

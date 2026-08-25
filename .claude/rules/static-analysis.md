@@ -1,6 +1,6 @@
 # 代码风格与静态检查（防风格 / 质量漂移）
 
-> 统一格式化与静态检查工具——风格一致、低级问题挡在合并前。若启用 CI，将其设为合并门禁。
+> 统一格式化与静态检查工具——风格一致、低级问题挡在合并前。GitHub Actions 已将其作为远端构建门。
 
 ## 1. 本项目工具链
 
@@ -26,7 +26,7 @@
 ## 2. 要求
 
 - **本地（当前底线，强制）**：提交前自行跑静态检查（`./gradlew check` 含 Checkstyle/PMD/SpotBugs/JaCoCo/ktlint/detekt/ArchUnit；各 includeBuild 平台 `./gradlew -p platform-X check`），违规即失败、不把问题留给后续。注：全工具一次 `check` 在低内存机器可能 OOM，可分工具 / 分模块跑。
-- **CI 门禁（可选 / 计划）**：当前仓库尚未配置 CI。若启用 CI，把上述检查 + 测试设为合并门禁（与 `testing-and-quality.md` 同级），未过不允许合并；并在 CI 配 `NVD_API_KEY` 后纳入 OWASP Dependency-Check。
+- **CI 门禁（强制）**：`.github/workflows/ci.yml` 在 pull request、`main`/`dev` 推送与手动触发时，以固定 mc-testkit Maven Local 回退、独立 Java/Gradle 车道和 `:buildAll` 执行上述检查与测试；远端未绿不得合并。CI 不运行或替代 realserver/R7 真服门。OWASP Dependency-Check 仍因需要 `NVD_API_KEY` 未接入。
 - 工具与规则版本固定（写进配置 / 构建），避免不同机器结果不一致。
 
 ## 3. 与现有规则的关系

@@ -87,7 +87,7 @@
 - **`hotfix/*`**：从出问题的发布 tag 切分支紧急修，出补丁版后**回流 main**（`sdd-hotfix` 技能）。
 - **回滚**优先 `git revert`，不重写已 push 历史（`sdd-rollback-change` 技能）。
 
-> CI 为**可选 / 计划项**：当前仓库尚未配置 CI。若启用 CI，约定 main 每次推送出**快照**（`latest` 预发布，见 `sdd-publish-snapshot`），tag 推送出正式 Release，并将测试 + 静态检查设为合并门禁（见 `static-analysis.md`）。未启用前，这些门禁由本地执行与 PR 自检保证。
+> CI 已由 FR-32 / ADR-0024 接入：`ci.yml` 覆盖 pull request 与 `main`/`dev` 推送的完整构建质量门；`release.yml` 不监听 tag push，仅由维护者在 tag 推送后手动触发正式 GitHub Release。真服与 R7 的权威仍由本机 Gradle 门保持，不能以 CI 绿替代。合并前须同时满足本地验证和远端 CI。
 
 版本号唯一来源是根 `VERSION` 文件，构建把它注入各平台产物（Bukkit 插件 jar / Fabric mod / Forge mod / NeoForge mod），恒一致。
 

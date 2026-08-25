@@ -7,6 +7,7 @@
 - [P2 版本矩阵与工具链隔离](p2-version-matrix.md)（已交付@v0.2.0，FR-12/FR-25）
 - [第三期 · 平台规模化与对外上手](p3-platform-scaling-and-onboarding.md)（开发中，FR-16/FR-17/FR-18；基线 `v0.2.0`）
 - [FR-16 · MC 26.2 版本适配（冻结）](fr-26_2-adapter.md)（T1–T5 已完成：仅 Paper/Fabric/Forge，Folia 无 26.2；三车道同轮 R7 与根门已通过，ADR-0023 定义为最终自动化验收）
+- [FR-32 · GitHub Actions 交付治理](github-actions-automation.md)（开发中，远端构建质量门、手动 Release 与安全治理；不替代真服验收）
 
 ## 何时写
 

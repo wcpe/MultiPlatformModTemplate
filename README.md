@@ -4,7 +4,7 @@
 
 ## 状态
 
-当前正式版 **v0.2.0**：第一期 MVP 与第二期多版本矩阵（FR-12，1.21.1 / 1.12.2）已交付。第三期（FR-16 26.2 / FR-17 模板发布 / FR-18 上手文档）仍在开发：仓库已启用为公开 GitHub Template；当前候选提交已以冻结 Paper build 71 生成 Paper、Fabric、Forge 三车道同轮 R7 报告，并通过 `:runP3R7Gate`（`p3-r7-1787686232087`）。该严格门依 [ADR-0023](docs/adr/0023-p3-r7-automated-release-authority.md) 是 FR-16 的最终自动化验收。当前候选提交的干净克隆已复现换名和 Counter 纯 JVM 测试（使用本机预热缓存）；尚无 `v0.3.0` 或 GitHub Release。
+当前正式版 **v0.2.0**：第一期 MVP 与第二期多版本矩阵（FR-12，1.21.1 / 1.12.2）已交付。第三期（FR-16 26.2 / FR-17 模板发布 / FR-18 上手文档）仍在开发：仓库已启用为公开 GitHub Template；当前候选提交已以冻结 Paper build 71 生成 Paper、Fabric、Forge 三车道同轮 R7 报告，并通过 `:runP3R7Gate`（`p3-r7-1787686232087`）。该严格门依 [ADR-0023](docs/adr/0023-p3-r7-automated-release-authority.md) 是 FR-16 的最终自动化验收。第四期治理需求（FR-32）正在补齐 GitHub Actions 的远端构建、手动 Release、安全与依赖维护；CI 绿灯不替代本机 R7。当前候选提交的干净克隆已复现换名和 Counter 纯 JVM 测试（使用本机预热缓存）；尚无 `v0.3.0` 或 GitHub Release。
 
 **从模板起步**：本仓库已启用 GitHub Template；在 GitHub 选择 `Use this template` 创建新仓库后，见 [`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`](docs/HOWTO-CLONE-AND-WRITE-PLAY.md)（含 Counter 示例域）。版本节奏见 [`docs/VERSIONING.md`](docs/VERSIONING.md)。
 
@@ -58,6 +58,8 @@ L0/L1 不含任何平台 / 版本代码；跨平台、跨版本的差异全部�
 P1/P2 已交付，P3 以 [`docs/PRD.md`](docs/PRD.md) 的 FR 状态为准。根 wrapper 为 Gradle **9.6.1**；L0–L2 编译为 Java 8 字节码，26.2 三车道须准备 Java 25。
 
 > 当前上游 `mc-testkit` plugin marker 不可用时，根构建仅会从本机 Maven 缓存回退解析该插件及实现模块；首次配置失败时，先按 [`docs/OPERATIONS.md`](docs/OPERATIONS.md) 准备对应本地制品。该临时前提不等于冷缓存或新机器验证已通过。
+
+GitHub Actions 的 `ci.yml` 会固定从公开源码构建 `mc-testkit v0.5.1` 到 Runner Maven Local，再运行完整独立车道构建。`release.yml` 仅接受维护者对已推送 tag 的手动触发；使用与边界见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md) 和 [ADR-0024](docs/adr/0024-github-actions-delivery-governance.md)。
 
 **物理布局（不拍平到仓库根）**：
 

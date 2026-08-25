@@ -27,6 +27,7 @@
 | [0021](0021-p2-version-matrix-toolchain-isolation.md) | P2 有效版本矩阵、工具链隔离与严格验收入口（本仓 ADR-0021；勿与 AllinCore-New ADR-0020 混淆） | 已接受 |
 | [0022](0022-unobfuscated-minecraft-naming-policy.md) | Minecraft 26.1+ 使用无混淆原始命名，并按加载器采用非映射构建链路（取代 0016） | 已接受 |
 | [0023](0023-p3-r7-automated-release-authority.md) | P3 R7 严格自动化验收作为 FR-16 的最终发布权威（细化 0014） | 已接受 |
+| [0024](0024-github-actions-delivery-governance.md) | GitHub Actions 远端质量门与真服验收分离 | 已接受 |
 
 > 模板：状态 / 背景 / 决策 / 理由 / 后果 / 备选方案，见 [`_template.md`](_template.md)。
 

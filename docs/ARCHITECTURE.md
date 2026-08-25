@@ -242,6 +242,7 @@ P2 采用非笛卡尔积版本矩阵、按版本隔离的 Forge 工具链、L4 �
 - **构建工具**：Gradle **9.6.1** 复合构建（Kotlin DSL）；L0–L2 与 Bukkit 家族（`platform-bukkit`）为根构建常规模块，Fabric/Forge/Sponge 经 `includeBuild` 隔离各自专属插件（Loom/ForgeGradle/SpongeGradle）。NeoForge 1.20.2 使用 Gradle 8.14.5 自有 wrapper 与根预构建受控内部 JAR，根 Gradle 9 只校验已生成产物 / 报告；第三方依赖统一 relocate、core 打进各产物的方式见 [ADR-0012](adr/0012-packaging-and-dependency-isolation.md)。Minecraft 26.1+ 使用无混淆原始命名和加载器构建链路，见 [ADR-0022](adr/0022-unobfuscated-minecraft-naming-policy.md)（已取代 ADR-0016；旧版本继续按其规则）。详见 [ADR-0007](adr/0007-composite-build-loader-isolation.md)（取代 [ADR-0005](adr/0005-build-toolchain.md)）。
   - **当前落地**（进度以 PRD §4 FR 状态为权威）：根 Gradle wrapper 已升至 **9.6.1**；L0–L2 仍是 Java 8 的平台无关核心，P1 与 P2（FR-12）分别已在 v0.1.0、v0.2.0 交付。P3 的 26.2 仅有 Bukkit、Fabric、Forge 三条在制车道：Bukkit 为根子工程，Fabric 为独立 includeBuild，Forge 使用 Java 25 / Gradle 9.6.1 / ForgeGradle 7.0.31 的自有 wrapper。26.1+ 的无混淆命名策略由 ADR-0022 裁决；R7 只覆盖三个公共场景，三车道当前同轮报告已由根 P3 门聚合通过，且 ADR-0023 将该严格门定为 FR-16 的最终自动化验收；FR-17 的远端发布尚未执行，故三项仍保持开发中。
 - **P3 当前边界**：26.2 仅有 `platform/bukkit/26.2`（根子工程）、`platform/fabric/26.2`（独立 includeBuild）和 `platform/forge/26.2`（自有 wrapper）三条有效车道；三者均在开发中。R7 只要求 `product-handshake`、`product-roundtrip` 与 `client-hud` 三个公共场景；同轮 R7 报告经严格门验证是 FR-16 交付前置条件，且依 ADR-0023 已满足。P2 R1–R6 不覆盖 26.2。
+- **远端交付治理**：GitHub Actions（FR-32）在 Hosted Runner 固定 mc-testkit 本地 Maven 回退、显式 Java 8/17/21/25 与独立 Gradle 车道后执行 `:buildAll`，并提供手动 Release、依赖审查和 CodeQL。它属于交付治理层，不加入产品依赖图；CI 构建结果不能替代 ADR-0014 / ADR-0023 的本机 realserver/R7 证据，详见 ADR-0024。
 - **运行拓扑**：服务端进程（Paper/Folia/Sponge/Fabric-server/Forge-server）+ 客户端进程（Fabric/Forge/NeoForge 客户端），二者经协议通信；亦支持单机（客户端内置服务端）。
 - 部署 / 运行细节见 [`OPERATIONS.md`](OPERATIONS.md)。
 
@@ -267,6 +268,8 @@ P2 采用非笛卡尔积版本矩阵、按版本隔离的 Forge 工具链、L4 �
 - [ADR-0020] Sponge 第一期开箱运行基线固定为 RC1365 与 Java 17；固定时间戳 SpongeAPI 制品，未来新连接状态 API 独立适配。
 - [ADR-0021] P2 有效版本矩阵、工具链隔离与严格验收入口；P2 明确不包含 26.2。
 - [ADR-0022] Minecraft 26.1+ 无混淆命名与加载器构建策略，取代 ADR-0016。
+- [ADR-0023] P3 R7 严格自动化验收作为 FR-16 的最终发布权威，仅限其真实进程 Gradle 证据。
+- [ADR-0024] GitHub Actions 远端质量门与真服验收分离。
 
 **当前不做（明确边界）**：
 - 不含产品级玩法，仅 `smoke` 冒烟特性验证架构（交付形态 = 脚手架 / 模板，克隆复用而非发布为依赖库）。

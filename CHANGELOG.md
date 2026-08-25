@@ -7,6 +7,7 @@
 ## 未发布版本
 
 ### 新增
+- **GitHub Actions 交付治理（FR-32 / ADR-0024）**：新增固定 mc-testkit Maven Local 回退的全车道 CI、手动 GitHub Release、依赖审查、CodeQL 与 Dependabot；远端 CI 只验证可复现构建，不替代本机 R7 真服验收。
 - **26.2 三车道在制实现（FR-16）**：新增 Paper/Bukkit `platform/bukkit/26.2`、Fabric `platform/fabric/26.2`、Forge `platform/forge/26.2` 的物理车道、`v26_2` L4 适配和产品 / 验收入口；Folia、NeoForge、Sponge 不建 26.2 格。
 - **R7 三平台验收目录（FR-16）**：`MatrixScenarioCatalog` 为 R7 固定 `product-handshake`、`product-roundtrip`、`client-hud` 三个 required 场景；根 P3 门聚合 Paper、Fabric、Forge 26.2 的构建与当前报告。
 - **上手指南与 Counter 示例域（FR-18）**：`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`；`examples/counter` 是纯 L0 非产品玩法，玩家加入时异步记录首次加入与计数、按实体归属发送消息，离开时释放周期句柄，并有纯 JVM 测试。
