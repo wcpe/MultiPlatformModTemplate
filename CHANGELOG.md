@@ -7,10 +7,10 @@
 ## 未发布版本
 
 ### 新增
-- **26.2 三车道在制实现（FR-16 进行中）**：新增 Paper/Bukkit `platform/bukkit/26.2`、Fabric `platform/fabric/26.2`、Forge `platform/forge/26.2` 的物理车道、`v26_2` L4 适配和产品 / 验收入口；Folia、NeoForge、Sponge 不建 26.2 格。
-- **R7 三平台验收目录（FR-16 进行中）**：`MatrixScenarioCatalog` 为 R7 固定 `product-handshake`、`product-roundtrip`、`client-hud` 三个 required 场景；根 P3 门聚合 Paper、Fabric、Forge 26.2 的构建与当前报告。
-- **上手指南与 Counter 示例域（FR-18 进行中）**：`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`；`examples/counter` 是纯 L0 非产品玩法，玩家加入时异步记录首次加入与计数、按实体归属发送消息，离开时释放周期句柄，并有纯 JVM 测试。
-- **版本节奏、公开 GitHub Template 与发布说明（FR-17 进行中）**：`docs/VERSIONING.md`；`.github/RELEASE_TEMPLATE.md`；README 顶部强化「克隆本模板」入口；GitHub 仓库已启用为公开 Template。
+- **26.2 三车道在制实现（FR-16）**：新增 Paper/Bukkit `platform/bukkit/26.2`、Fabric `platform/fabric/26.2`、Forge `platform/forge/26.2` 的物理车道、`v26_2` L4 适配和产品 / 验收入口；Folia、NeoForge、Sponge 不建 26.2 格。
+- **R7 三平台验收目录（FR-16）**：`MatrixScenarioCatalog` 为 R7 固定 `product-handshake`、`product-roundtrip`、`client-hud` 三个 required 场景；根 P3 门聚合 Paper、Fabric、Forge 26.2 的构建与当前报告。
+- **上手指南与 Counter 示例域（FR-18）**：`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`；`examples/counter` 是纯 L0 非产品玩法，玩家加入时异步记录首次加入与计数、按实体归属发送消息，离开时释放周期句柄，并有纯 JVM 测试。
+- **版本节奏、公开 GitHub Template 与发布说明（FR-17）**：`docs/VERSIONING.md`；`.github/RELEASE_TEMPLATE.md`；README 顶部强化「克隆本模板」入口；GitHub 仓库已启用为公开 Template。
 
 ### 变更
 - **根构建工具链**：wrapper 升至 Gradle **9.6.1**，为 Java 25 与 26.2 车道提供受支持的构建运行时；Forge 26.2 仍使用其自有 wrapper，根不得嵌套调用。
@@ -22,9 +22,13 @@
 - **Bukkit 26.2 打包兼容性**：Shadow 升至 8.3.11，兼容根 Gradle 9 的 ASM 链路，避免重定位 `FoliaSchedulerPort` 时失败。
 - **Paper 26.2 R7 宿主编排**：宿主服务按目标工程隔离，传递 Java 25、R7 轮次与服务端 / 客户端制品元数据；`ensurePaperRealServerHost` 可等待本轮权威报告，避免与 Fabric 26.2 客户端伴侣出现制品或轮次漂移。
 - **R7 报告编排与聚合**：Fabric 运行进程以后注入的矩阵属性覆盖 Loom 默认值，并为 Java 25 冷启动保留起服窗口；根 P3 门按实际制表符格式解析报告，严格拒绝跨轮、重复场景或伪造的通过结果。
+- **Forge 26.2 真实服验收**：真实服入口复用 Forge `runServer`，清理运行目录中的旧版 MPMT 制品并关闭本地认证；客户端验收保留最近一次动作栏消息，避免后续聊天覆盖 HUD 断言。
+- **Gradle 9 全量构建**：聚合任务只依赖实际存在的 `build` 任务；旧版 Bukkit/Fabric/Sponge Shadow 更新至 8.3.11；Sponge 不再重复打入生成的插件描述符。
+- **Java 25 静态分析**：Bukkit 26.2 固定 SpotBugs 4.9.8，能够解析 Paper API 的 classfile major 69。
+- **跨版本质量门禁**：欢迎包断言按协议发送顺序读取，补齐 Bukkit 1.12 调度适配器测试并清理 Fabric GameTest 无用导入。
 
 ### 交付状态
-- 上述均是 `v0.2.0` 之后的在制变更，FR-16/FR-17/FR-18 均保持**开发中**：Paper、Fabric、Forge 26.2 的当前同轮 R7 `RESULT PASS` 报告与根聚合门均已通过，公开 GitHub Template 已启用；仍缺用户第三期实机确认、`v0.3.0` 对外 Release 与 FR-18 的干净工作区复现。不得据此创建 `v0.3.0` 或标记已交付。
+- Paper、Fabric、Forge 26.2 的同轮 R7 `RESULT PASS` 报告与根聚合门均已通过；公开 GitHub Template 已启用。FR-16 仍缺用户第三期实机最终确认，FR-17 尚无远端 `v0.3.0` tag / GitHub Release，FR-18 尚未从当前候选提交完成完整干净克隆复现；三项均保持开发中。
 
 ## [0.2.0] - 2026-07-26
 
