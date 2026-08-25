@@ -115,4 +115,29 @@ class MpmtRuntimeTest {
         // 启用失败后仍停留在 NEW（未标记 ENABLED）
         assertEquals(MpmtRuntime.Phase.NEW, runtime.phase());
     }
+
+    @Test
+    @DisplayName("后续特性启用失败时，已启用特性按逆序回滚")
+    void 启用失败回滚已启用特性() {
+        List<String> log = new ArrayList<>();
+        MpmtRuntime runtime = new MpmtRuntime();
+        runtime.features().register(new RecordingFeature("a", log));
+        runtime.features().register(new Feature() {
+            @Override
+            public String name() {
+                return "boom";
+            }
+
+            @Override
+            public void onEnable(RuntimeContext context) {
+                log.add("enable:boom");
+                throw new IllegalStateException("故意启用失败");
+            }
+        });
+
+        assertThrows(IllegalStateException.class, runtime::enable);
+
+        assertEquals(Arrays.asList("enable:a", "enable:boom", "disable:a"), log);
+        assertEquals(MpmtRuntime.Phase.NEW, runtime.phase());
+    }
 }

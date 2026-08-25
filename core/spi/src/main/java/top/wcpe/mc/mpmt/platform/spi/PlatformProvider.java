@@ -1,6 +1,8 @@
 package top.wcpe.mc.mpmt.platform.spi;
 
 import java.util.Objects;
+import java.util.Properties;
+import java.util.UUID;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 
 /**
@@ -22,14 +24,18 @@ public final class PlatformProvider {
      */
     static final String ACTIVE_PLATFORM_PROPERTY = "top.wcpe.mc.mpmt.active-platform";
 
+    private static final String ACTIVE_PLATFORM_OWNER_PROPERTY = "top.wcpe.mc.mpmt.active-platform-owner";
+
     private static volatile PlatformProvider instance;
 
     private final String platformId;
     private final FeatureGate featureGate;
+    private final String processOwnerId;
 
-    private PlatformProvider(String platformId, FeatureGate featureGate) {
+    private PlatformProvider(String platformId, FeatureGate featureGate, String processOwnerId) {
         this.platformId = platformId;
         this.featureGate = featureGate;
+        this.processOwnerId = processOwnerId;
     }
 
     /** 使用空启动上下文装配；仅适用于不需要平台原生对象的测试平台。 */
@@ -53,22 +59,20 @@ public final class PlatformProvider {
         if (instance != null) {
             throw new PlatformAssemblyException("平台已装配，禁止重复 boot（当前平台：" + instance.platformId + "）");
         }
-        // 进程级跨类加载器把关（ADR-0008 / FR-25）：已有我方活跃绑定（如融合服上 Forge mod 入口先激活）即拒绝
-        String activeInProcess = System.getProperty(ACTIVE_PLATFORM_PROPERTY);
-        if (activeInProcess != null) {
-            throw new PlatformAssemblyException(
-                    "进程内已有我方活跃平台绑定（"
-                            + activeInProcess
-                            + "），禁止多入口同时激活——融合服上只装一个我方入口、绑定 Bukkit 家族为唯一活跃平台（ADR-0008）");
+        String processOwnerId = UUID.randomUUID().toString();
+        reserveProcessBinding(processOwnerId);
+        try {
+            PlatformBootstrap bootstrap = PlatformAssembler.discover(classLoader);
+            bootstrap.assemble(context, runtime);
+            String id = requireAssembled(bootstrap.platformId(), "平台 id 不能为空");
+            FeatureGate gate = requireAssembled(bootstrap.featureGate(), "平台 FeatureGate 不能为空");
+            commitProcessBinding(id, processOwnerId);
+            instance = new PlatformProvider(id, gate, processOwnerId);
+            return instance;
+        } catch (RuntimeException | Error exception) {
+            releaseProcessBinding(processOwnerId);
+            throw exception;
         }
-        PlatformBootstrap bootstrap = PlatformAssembler.discover(classLoader);
-        bootstrap.assemble(context, runtime);
-        String id = requireAssembled(bootstrap.platformId(), "平台 id 不能为空");
-        FeatureGate gate = requireAssembled(bootstrap.featureGate(), "平台 FeatureGate 不能为空");
-        // 装配成功后才置进程级标记（失败不留痕、可重试）
-        System.setProperty(ACTIVE_PLATFORM_PROPERTY, id);
-        instance = new PlatformProvider(id, gate);
-        return instance;
     }
 
     private static <T> T requireAssembled(T value, String message) {
@@ -107,13 +111,56 @@ public final class PlatformProvider {
      * 使同 JVM 内重新启用（如 Bukkit {@code /reload}）能再次 boot、不被进程级标记误拦。
      */
     public static synchronized void deactivate() {
+        PlatformProvider current = instance;
+        if (current == null) {
+            return;
+        }
         instance = null;
-        System.clearProperty(ACTIVE_PLATFORM_PROPERTY);
+        releaseProcessBinding(current.processOwnerId);
     }
 
     /** 仅供测试重置静态 Holder（含进程级标记）；生产代码禁止调用。 */
     static void resetForTesting() {
         instance = null;
-        System.clearProperty(ACTIVE_PLATFORM_PROPERTY);
+        Properties properties = System.getProperties();
+        synchronized (properties) {
+            properties.remove(ACTIVE_PLATFORM_PROPERTY);
+            properties.remove(ACTIVE_PLATFORM_OWNER_PROPERTY);
+        }
+    }
+
+    private static void reserveProcessBinding(String processOwnerId) {
+        Properties properties = System.getProperties();
+        synchronized (properties) {
+            String activeInProcess = properties.getProperty(ACTIVE_PLATFORM_PROPERTY);
+            if (activeInProcess != null || properties.getProperty(ACTIVE_PLATFORM_OWNER_PROPERTY) != null) {
+                throw new PlatformAssemblyException(
+                        "进程内已有我方活跃平台绑定（"
+                                + (activeInProcess == null ? "正在装配" : activeInProcess)
+                                + "），禁止多入口同时激活——融合服上只装一个我方入口、绑定 Bukkit 家族为唯一活跃平台（ADR-0008）");
+            }
+            properties.setProperty(ACTIVE_PLATFORM_OWNER_PROPERTY, processOwnerId);
+        }
+    }
+
+    private static void commitProcessBinding(String platformId, String processOwnerId) {
+        Properties properties = System.getProperties();
+        synchronized (properties) {
+            if (!processOwnerId.equals(properties.getProperty(ACTIVE_PLATFORM_OWNER_PROPERTY))) {
+                throw new PlatformAssemblyException("进程级平台装配保留已失效，禁止继续绑定");
+            }
+            properties.setProperty(ACTIVE_PLATFORM_PROPERTY, platformId);
+        }
+    }
+
+    private static void releaseProcessBinding(String processOwnerId) {
+        Properties properties = System.getProperties();
+        synchronized (properties) {
+            if (!processOwnerId.equals(properties.getProperty(ACTIVE_PLATFORM_OWNER_PROPERTY))) {
+                return;
+            }
+            properties.remove(ACTIVE_PLATFORM_PROPERTY);
+            properties.remove(ACTIVE_PLATFORM_OWNER_PROPERTY);
+        }
     }
 }

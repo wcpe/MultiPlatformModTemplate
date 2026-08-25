@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -26,6 +27,8 @@ public final class Reassembler {
     private static final int DEFAULT_MAX_TOTAL = 8192;
     private static final int DEFAULT_MAX_FRAGMENT_PAYLOAD_BYTES = 1024 * 1024;
     private static final int DEFAULT_MAX_BUFFERED_BYTES = 8 * 1024 * 1024;
+    static final int MAX_PENDING_GROUPS = 128;
+    static final int MAX_COMPLETED_GROUPS = 1024;
 
     /** 分组超时处理器。 */
     @FunctionalInterface
@@ -42,7 +45,7 @@ public final class Reassembler {
     private final TimeoutHandler timeoutHandler;
     private final Map<GroupKey, Entry> entries = new HashMap<>();
     private final Map<GroupKey, Integer> timeoutCounts = new HashMap<>();
-    private final Map<GroupKey, Long> completedUntil = new HashMap<>();
+    private final Map<GroupKey, Long> completedUntil = new LinkedHashMap<>();
     private int bufferedBytes;
 
     public Reassembler(
@@ -140,6 +143,11 @@ public final class Reassembler {
         return bufferedBytes;
     }
 
+    /** 当前完成去重标记数（测试可见）。 */
+    synchronized int completedCount() {
+        return completedUntil.size();
+    }
+
     private Entry entryFor(GroupKey key, FragmentPacket fragment, long now) {
         Entry entry = entries.get(key);
         if (entry != null && !entry.matches(fragment)) {
@@ -147,6 +155,10 @@ public final class Reassembler {
             return null;
         }
         if (entry == null) {
+            if (entries.size() >= MAX_PENDING_GROUPS) {
+                reject(key, "待重组分组数超过限制");
+                return null;
+            }
             entry = new Entry(fragment.getTotal(), fragment.getCrc32(), now);
             entries.put(key, entry);
         }
@@ -181,6 +193,7 @@ public final class Reassembler {
             return Optional.empty();
         }
         completedUntil.put(key, deadline(now, completedTtlMillis));
+        trimCompleted();
         return Optional.of(full);
     }
 
@@ -208,6 +221,14 @@ public final class Reassembler {
 
     private void purgeCompleted(long now) {
         completedUntil.entrySet().removeIf(entry -> now >= entry.getValue());
+    }
+
+    private void trimCompleted() {
+        Iterator<Map.Entry<GroupKey, Long>> iterator = completedUntil.entrySet().iterator();
+        while (completedUntil.size() > MAX_COMPLETED_GROUPS && iterator.hasNext()) {
+            iterator.next();
+            iterator.remove();
+        }
     }
 
     private void removeEntriesFor(ConnectionHandle connection) {

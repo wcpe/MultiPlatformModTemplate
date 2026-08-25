@@ -1,5 +1,6 @@
 package top.wcpe.mc.mpmt.core.runtime;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import top.wcpe.mc.mpmt.core.domain.event.EventBusPort;
@@ -73,10 +74,28 @@ public final class MpmtRuntime implements RuntimeContext {
         if (phase != Phase.NEW) {
             throw new IllegalStateException("运行时不可重复启用，当前阶段：" + phase);
         }
-        for (Feature feature : featureRegistry.features()) {
-            feature.onEnable(this);
+        List<Feature> enabled = new ArrayList<>();
+        try {
+            for (Feature feature : featureRegistry.features()) {
+                feature.onEnable(this);
+                enabled.add(feature);
+            }
+            phase = Phase.ENABLED;
+        } catch (RuntimeException | Error failure) {
+            rollbackEnabledFeatures(enabled, failure);
+            throw failure;
         }
-        phase = Phase.ENABLED;
+    }
+
+    /** 启动失败时按反序释放已成功启用的特性，避免重试前遗留资源。 */
+    private void rollbackEnabledFeatures(List<Feature> enabled, Throwable failure) {
+        for (int i = enabled.size() - 1; i >= 0; i--) {
+            try {
+                enabled.get(i).onDisable(this);
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+        }
     }
 
     /**

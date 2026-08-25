@@ -1,5 +1,7 @@
 package top.wcpe.mc.mpmt.platform.spi.fake;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.platform.spi.Capability;
 import top.wcpe.mc.mpmt.platform.spi.FeatureGate;
@@ -13,6 +15,9 @@ import top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap;
  */
 public final class FakePlatformBootstrap implements PlatformBootstrap {
 
+    private static volatile CountDownLatch assemblyCalls;
+    private static volatile CountDownLatch assemblyRelease;
+
     public FakePlatformBootstrap() {
         // ServiceLoader 需要公开无参构造
     }
@@ -20,6 +25,44 @@ public final class FakePlatformBootstrap implements PlatformBootstrap {
     @Override
     public String platformId() {
         return "fake";
+    }
+
+    public static void blockAssemblyUntilReleased() {
+        assemblyCalls = new CountDownLatch(1);
+        assemblyRelease = new CountDownLatch(1);
+    }
+
+    public static boolean awaitAssemblyCall(long timeout, TimeUnit unit) throws InterruptedException {
+        CountDownLatch calls = assemblyCalls;
+        return calls != null && calls.await(timeout, unit);
+    }
+
+    public static void releaseAssemblyCalls() {
+        CountDownLatch release = assemblyRelease;
+        if (release != null) {
+            release.countDown();
+        }
+    }
+
+    public static void resetAssemblyBlock() {
+        releaseAssemblyCalls();
+        assemblyCalls = null;
+        assemblyRelease = null;
+    }
+
+    private static void awaitAssemblyRelease() {
+        CountDownLatch calls = assemblyCalls;
+        CountDownLatch release = assemblyRelease;
+        if (calls == null || release == null) {
+            return;
+        }
+        calls.countDown();
+        try {
+            release.await();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("测试平台标识等待被中断", exception);
+        }
     }
 
     @Override
@@ -30,6 +73,7 @@ public final class FakePlatformBootstrap implements PlatformBootstrap {
 
     @Override
     public void assemble(PlatformAssemblyContext context, MpmtRuntime runtime) {
+        awaitAssemblyRelease();
         String portId = context.find(String.class).orElse("fake-port");
         runtime.ports().register(FakePort.class, () -> portId);
     }

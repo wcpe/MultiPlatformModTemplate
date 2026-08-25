@@ -166,6 +166,35 @@ class ReliabilityTest {
     }
 
     @Test
+    @DisplayName("零字节未完成分片：仍受分组资源上限限制")
+    void 零字节未完成分片受分组资源上限限制() {
+        AtomicLong clock = new AtomicLong(0L);
+        Reassembler reassembler = limitedReassembler(clock, 2, 4, 6);
+        ConnectionHandle connection = new ConnectionHandle() { };
+
+        for (int seqId = 1; seqId <= Reassembler.MAX_PENDING_GROUPS + 1; seqId++) {
+            reassembler.accept(connection, new FragmentPacket(seqId, 0, 2, 1, data(0)));
+        }
+
+        assertEquals(Reassembler.MAX_PENDING_GROUPS, reassembler.pendingCount(), "零字节分片不得绕过待重组分组上限");
+        assertEquals(0, reassembler.bufferedBytes(), "零字节分片不应虚增载荷缓冲计数");
+    }
+
+    @Test
+    @DisplayName("零字节完成分片：去重标记数受上限限制")
+    void 零字节完成分片受去重标记上限限制() {
+        AtomicLong clock = new AtomicLong(0L);
+        Reassembler reassembler = limitedReassembler(clock, 1, 4, 6);
+        byte[] payload = data(0);
+
+        for (int seqId = 1; seqId <= Reassembler.MAX_COMPLETED_GROUPS + 1; seqId++) {
+            reassembler.accept(new FragmentPacket(seqId, 0, 1, Fragmenter.crc32(payload), payload));
+        }
+
+        assertEquals(Reassembler.MAX_COMPLETED_GROUPS, reassembler.completedCount(), "零字节完成分片不得无限保留去重标记");
+    }
+
+    @Test
     @DisplayName("完成组短期去重，去重期限后允许复用序列号")
     void 完成组短期去重() {
         AtomicLong clock = new AtomicLong(0L);
