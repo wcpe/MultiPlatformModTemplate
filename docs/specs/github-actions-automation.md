@@ -50,7 +50,7 @@
 1. 构建并发布固定的 mc-testkit 到 Maven Local。
 2. 使用根 Gradle 生成 Forge 1.12.2 所需的 Java 8 共享 JAR；该步骤只生成受控输入，不启动任何独立 wrapper。每个根 Gradle 调用均将 Loom 映射缓存显式指向当前 checkout 的绝对路径，避免 Hosted Runner 在多个 included build 间误用相对缓存目录。
 3. 分别切换到对应 Java 运行时，使用固定 Gradle 8.14.5 构建 Forge 1.20.1，并执行 Forge 1.12.2、Forge 1.21.1、Forge 26.2 和 NeoForge 1.20.2 的自有 wrapper；NeoForge 先由根任务准备受控输入。
-4. 使用 Java 25 执行根 `:buildAll`，让根只消费上述已生成的制品和报告。
+4. 使用 Java 21 运行根 `:buildAll`；Java 25 保留给 Forge 26.2 自有 wrapper，根仅消费 NeoForge 已生成的制品和报告。
 5. 构建 E2E harness，执行 bot 的锁文件安装、lint 与格式只读检查。
 6. 无论成功失败都上传诊断；仅默认分支成功运行保存完整发布制品。
 
