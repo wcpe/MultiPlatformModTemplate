@@ -1,0 +1,55 @@
+name: 持续集成
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
+
+jobs:
+  quality:
+    name: 全量构建与模板校验
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: 构建全部发布车道
+        uses: ./.github/actions/build-release-artifacts
+        with:
+          validate-template: "true"
+
+      - name: 上传构建诊断
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: ci-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            **/build/reports/**
+            **/build/test-results/**
+            **/build/acceptance/**
+            **/hs_err_pid*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: 上传默认分支发布制品
+        if: success() && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: release-artifacts-${{ github.sha }}
+          path: build/dist/**
+          if-no-files-found: error
+          retention-days: 30

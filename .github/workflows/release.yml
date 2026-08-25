@@ -1,0 +1,87 @@
+name: 发布 GitHub Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 已推送的附注版本标签，例如 v0.3.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: 构建并创建 Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: release
+    steps:
+      - name: 检出指定标签
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: 校验发布标签
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "发布标签必须为 vX.Y.Z：$RELEASE_TAG" >&2
+            exit 1
+          fi
+          version="$(tr -d '\r\n' < VERSION)"
+          if [[ "v$version" != "$RELEASE_TAG" ]]; then
+            echo "VERSION 与发布标签不一致：VERSION=$version，tag=$RELEASE_TAG" >&2
+            exit 1
+          fi
+          if [[ "$(git cat-file -t "$RELEASE_TAG")" != "tag" ]]; then
+            echo "发布标签必须是附注 tag：$RELEASE_TAG" >&2
+            exit 1
+          fi
+          git rev-parse --verify "$RELEASE_TAG^{commit}" >/dev/null
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "GitHub Release 已存在：$RELEASE_TAG" >&2
+            exit 1
+          fi
+
+      - name: 构建全部发布车道
+        uses: ./.github/actions/build-release-artifacts
+        with:
+          validate-template: "true"
+
+      - name: 上传发布诊断
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: release-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            **/build/reports/**
+            **/build/test-results/**
+            **/build/acceptance/**
+            **/hs_err_pid*.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: 创建 GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          shopt -s nullglob
+          assets=(build/dist/*/*.jar)
+          if [[ "${#assets[@]}" -ne 13 ]]; then
+            echo "发布制品数量不正确：${#assets[@]}" >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --title "$RELEASE_TAG" --generate-notes --verify-tag

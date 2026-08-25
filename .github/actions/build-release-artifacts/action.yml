@@ -1,0 +1,134 @@
+name: 构建全部发布车道
+description: 准备本地 mc-testkit 并按独立工具链构建全部发布制品
+
+inputs:
+  validate-template:
+    description: 是否校验 E2E 模板
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: 安装 Java 8
+      id: java8
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+      with:
+        distribution: temurin
+        java-version: "8"
+
+    - name: 安装 Java 17
+      id: java17
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+      with:
+        distribution: temurin
+        java-version: "17"
+
+    - name: 安装 Java 21
+      id: java21
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+      with:
+        distribution: temurin
+        java-version: "21"
+
+    - name: 安装 Java 25
+      id: java25
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+      with:
+        distribution: temurin
+        java-version: "25"
+
+    - name: 配置 Gradle 缓存
+      uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d
+
+    - name: 检出固定 mc-testkit
+      uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: wcpe/mc-testkit
+        ref: b5452ab454f1e2fe52535625c284db9fb07fc312
+        path: .ci/mc-testkit
+        persist-credentials: false
+
+    - name: 发布 mc-testkit 到 Maven Local
+      shell: bash
+      working-directory: .ci/mc-testkit
+      env:
+        JAVA_HOME: ${{ steps.java25.outputs.path }}
+      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain publishToMavenLocal
+
+    - name: 安装 Forge 1.20.1 的 Gradle 8
+      uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d
+      with:
+        gradle-version: "8.14.5"
+
+    - name: 构建 Forge 1.20.1 制品
+      shell: bash
+      working-directory: platform/forge/1.20.1
+      env:
+        JAVA_HOME: ${{ steps.java17.outputs.path }}
+      run: gradle --no-daemon --max-workers=1 --no-watch-fs --console=plain reobfShadowJar
+
+    - name: 构建 Forge 1.12.2 制品
+      shell: bash
+      working-directory: platform/forge/1.12.2
+      env:
+        JAVA_HOME: ${{ steps.java8.outputs.path }}
+      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain packageArtifacts
+
+    - name: 构建 Forge 1.21.1 制品
+      shell: bash
+      working-directory: platform/forge/1.21.1
+      env:
+        JAVA_HOME: ${{ steps.java21.outputs.path }}
+      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain packageArtifacts
+
+    - name: 构建 Forge 26.2 制品
+      shell: bash
+      working-directory: platform/forge/26.2
+      env:
+        JAVA_HOME: ${{ steps.java25.outputs.path }}
+      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain packageArtifacts
+
+    - name: 准备 NeoForge 受控输入
+      shell: bash
+      env:
+        JAVA_HOME: ${{ steps.java25.outputs.path }}
+      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain :prepareNeoForge1202Inputs
+
+    - name: 构建 NeoForge 1.20.2 制品
+      shell: bash
+      working-directory: platform/neoforge/1.20.2
+      env:
+        JAVA_HOME: ${{ steps.java17.outputs.path }}
+      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain packageArtifacts
+
+    - name: 执行根全量构建
+      shell: bash
+      env:
+        JAVA_HOME: ${{ steps.java25.outputs.path }}
+      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain :buildAll
+
+    - name: 安装 Node 22
+      if: inputs.validate-template == 'true'
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      with:
+        node-version: "22"
+        cache: npm
+        cache-dependency-path: e2e/bot/package-lock.json
+
+    - name: 构建 E2E harness
+      if: inputs.validate-template == 'true'
+      shell: bash
+      working-directory: e2e/harness
+      env:
+        JAVA_HOME: ${{ steps.java21.outputs.path }}
+      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain build
+
+    - name: 校验 E2E bot 模板
+      if: inputs.validate-template == 'true'
+      shell: bash
+      working-directory: e2e/bot
+      run: |
+        npm ci
+        npm run lint
+        npx prettier --check .
