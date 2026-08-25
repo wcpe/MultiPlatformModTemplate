@@ -13,22 +13,28 @@
 - **版本节奏、公开 GitHub Template 与发布说明（FR-17）**：`docs/VERSIONING.md`；`.github/RELEASE_TEMPLATE.md`；README 顶部强化「克隆本模板」入口；GitHub 仓库已启用为公开 Template。
 
 ### 变更
+- **P3 R7 放行权威（ADR-0023）**：对 FR-16，冻结 Paper build 71 下 Paper、Fabric、Forge 三车道同轮的 `:runP3R7Gate` 成为最终自动化验收；不再额外要求人工实机确认。此例外仅限 26.2 R7，不改变其他版本或阶段的实机确认规则。
 - **根构建工具链**：wrapper 升至 Gradle **9.6.1**，为 Java 25 与 26.2 车道提供受支持的构建运行时；Forge 26.2 仍使用其自有 wrapper，根不得嵌套调用。
 - **NeoForge 1.20.2 工具链隔离**：改为自有 Gradle **8.14.5** 车道，消费根预构建的受控内部 JAR；根 Gradle 9 不再加载或嵌套执行该车道，只严格检查其已生成的产品 / 验收产物及当前权威报告。
 - **26.1+ 命名策略**：新增 ADR-0022 并取代 ADR-0016；Fabric 26.2 使用上游无混淆命名链路，不声明 Mojmap、Yarn 或 intermediary remap，ForgeGradle 内部转换不等同于依赖 Mojang mappings。
 
 ### 修复
+- **运行时与平台生命周期**：运行时特性启用失败会逆序回滚；平台提供者以进程级所有权令牌防止跨类加载器双重启动；Fabric 连接事件全局只注册一次且停服时清除旧运行时路由；各平台持久化失败不再被静默吞掉。
+- **可靠性与示例并发**：重组器限制零字节未完成分组与完成去重缓存，防止空载荷元数据耗尽；Counter 按玩家串行异步持久化，避免同一玩家并发加入丢失计数。
 - **mc-testkit 本地回退**：上游 plugin marker 暂不可用时，根插件解析限域优先使用本机 Maven 仓库中的 `top.wcpe.mc-testkit` marker 与 `top.wcpe.mc` 实现模块；不改变插件版本，也不将整座本地仓库暴露给构建。
 - **Bukkit 26.2 打包兼容性**：Shadow 升至 8.3.11，兼容根 Gradle 9 的 ASM 链路，避免重定位 `FoliaSchedulerPort` 时失败。
 - **Paper 26.2 R7 宿主编排**：宿主服务按目标工程隔离，传递 Java 25、R7 轮次与服务端 / 客户端制品元数据；`ensurePaperRealServerHost` 可等待本轮权威报告，避免与 Fabric 26.2 客户端伴侣出现制品或轮次漂移。
 - **R7 报告编排与聚合**：Fabric 运行进程以后注入的矩阵属性覆盖 Loom 默认值，并为 Java 25 冷启动保留起服窗口；根 P3 门按实际制表符格式解析报告，严格拒绝跨轮、重复场景或伪造的通过结果。
+- **R7 当前证据校验**：根严格门改由 build-logic 插件执行，校验报告起始时间、唯一 Java / RESULT 记录、五个实际制品哈希、场景与 TOTAL，避免根 Kotlin DSL 直接依赖插件实现类。
+- **Paper 26.2 运行时冻结**：P3 自动宿主只接受 Fill API 的 build 71 受信任 HTTPS 下载；缓存和下载后均核验 `paper-26.2-71.jar` 的大小与 SHA-256，不影响没有冻结声明的旧版本宿主。
+- **发布与上手路径**：`:collectReleaseArtifacts` 对完整 13 制品矩阵缺一即失败且不覆盖已有 `dist`；mc-testkit 指南改为当前 Bukkit 1.20.1 工程和产品 jar 路径。
 - **Forge 26.2 真实服验收**：真实服入口复用 Forge `runServer`，清理运行目录中的旧版 MPMT 制品并关闭本地认证；客户端验收保留最近一次动作栏消息，避免后续聊天覆盖 HUD 断言。
 - **Gradle 9 全量构建**：聚合任务只依赖实际存在的 `build` 任务；旧版 Bukkit/Fabric/Sponge Shadow 更新至 8.3.11；Sponge 不再重复打入生成的插件描述符。
 - **Java 25 静态分析**：Bukkit 26.2 固定 SpotBugs 4.9.8，能够解析 Paper API 的 classfile major 69。
 - **跨版本质量门禁**：欢迎包断言按协议发送顺序读取，补齐 Bukkit 1.12 调度适配器测试并清理 Fabric GameTest 无用导入。
 
 ### 交付状态
-- Paper、Fabric、Forge 26.2 的同轮 R7 `RESULT PASS` 报告与根聚合门均已通过；公开 GitHub Template 已启用。当前候选提交已在本机预热缓存的干净克隆中复现换名与 Counter 纯 JVM 测试。FR-16 仍缺用户第三期实机最终确认，FR-17 尚无远端 `v0.3.0` tag / GitHub Release；三项均保持开发中。
+- 当前候选提交以冻结制品重建的 Paper、Fabric、Forge 26.2 同轮 `p3-r7-1787686232087` 已通过 `:runP3R7Gate`，并依 ADR-0023 完成 FR-16 的最终自动化验收。FR-17 尚无远端 `v0.3.0` tag / GitHub Release；三项在该发布完成前均保持开发中。
 
 ## [0.2.0] - 2026-07-26
 

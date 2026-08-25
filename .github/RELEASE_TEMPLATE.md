@@ -15,11 +15,14 @@
 | Bukkit/Paper/Folia 1.20.1 | `mpmt-bukkit-1.20.1-X.Y.Z.jar` |
 | Bukkit/Paper 1.21.1 | `mpmt-bukkit-1.21.1-X.Y.Z.jar` |
 | Bukkit/CatServer 1.12.2 | `mpmt-bukkit-1.12.2-X.Y.Z.jar` |
+| Bukkit/Paper 26.2 | `mpmt-bukkit-26.2-X.Y.Z.jar` |
 | Fabric 1.20.1 | `mpmt-fabric-1.20.1-X.Y.Z.jar` |
 | Fabric 1.21.1 | `mpmt-fabric-1.21.1-X.Y.Z.jar` |
+| Fabric 26.2 | `mpmt-fabric-26.2-X.Y.Z.jar` |
 | Forge 1.20.1 | `mpmt-forge-1.20.1-X.Y.Z.jar` |
 | Forge 1.21.1 | `mpmt-forge-1.21.1-X.Y.Z.jar` |
 | Forge 1.12.2（客户端伴侣） | `mpmt-forge-1.12.2-X.Y.Z.jar` |
+| Forge 26.2 | `mpmt-forge-26.2-X.Y.Z.jar` |
 | NeoForge 1.20.2 | `mpmt-neoforge-1.20.2-X.Y.Z.jar` |
 | Sponge 1.20.1 | `mpmt-sponge-1.20.1-X.Y.Z.jar` |
 
@@ -27,6 +30,7 @@
 
 - [ ] 核心单测：`:core:domain:test` / `:core:protocol:test` / `:modules:acceptance:test` 全绿
 - [ ] 版本矩阵门：`:runVersionMatrixGate` BUILD SUCCESSFUL（P2 核心车道）
+- [ ] P3 R7 门：`:runP3R7Gate` 使用本轮 `RUN_ID`、开始毫秒和实际 Forge 服务端 JAR，通过严格当前报告校验
 - [ ] realserver 合规报告 + 用户实机确认：见 `CHANGELOG.md` 本版本段
 
 ## 升级注意

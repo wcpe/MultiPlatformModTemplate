@@ -7,7 +7,7 @@
 第三期主题是"沿平台与版本轴继续铺 + 对外可用"。当前状态：
 
 - P2（FR-12）已交付 `@v0.2.0`：1.21.1 / 1.12.2 跨版本工具链隔离、CatServer 实跑、R1–R6 合规矩阵、用户第二期实机确认通过。
-- 26.2 三车道、`v26_2` 与 R7 目录已完成本地实现与验证；Paper 26.2（由 Fabric 26.2 客户端伴侣联通）、Fabric 26.2 与 Forge 26.2 均已有同一轮当前本地 R7 权威报告，且根 `:runP3R7Gate` 已通过。用户第三期实机最终确认尚未取得，故 FR-16 仍未交付。
+- 26.2 三车道、`v26_2`、R7 目录与严格报告门已完成本地实现；当前候选提交已以冻结 Paper build 71 生成 Paper、Fabric、Forge 同轮 `p3-r7-1787686232087` 报告并通过根 `:runP3R7Gate`。依 ADR-0023，此证据已完成 FR-16 的最终自动化验收；FR 状态仍待随 P3 发布统一流转。
 - `docs/VERSIONING.md`、`.github/RELEASE_TEMPLATE.md`、README 的克隆入口及 Counter 上手指南 / 纯 L0 示例已进入仓库；仓库已实际启用为公开 GitHub Template。当前候选提交已在干净克隆复现换名与 Counter 纯 JVM 测试（本机预热缓存），但尚无 `v0.3.0` 或 GitHub Release。
 
 本规格冻结第三期"做什么、不做、谁先谁后、算什么齐"，**不写实现**；实现按规格走 `sdd-develop-feature` / `sdd-release-version`。
@@ -54,8 +54,8 @@
 
 - 入口为三个物理车道：Bukkit `platform/bukkit/26.2`（根子工程）、Fabric `platform/fabric/26.2`（独立 Loom includeBuild）与 Forge `platform/forge/26.2`（独立 ForgeGradle、自有 wrapper）。Folia、NeoForge、Sponge 不建 26.2 格。
 - 三个平台按 L4 抽象挂接 `v26_2`，运行期探测 MC 版本选中该实现；26.1+ 的无混淆命名规则见 ADR-0022，而非已被取代的 ADR-0016。
-- `MatrixScenarioCatalog` 已定义 R7 的三个 required 场景：`product-handshake`、`product-roundtrip`、`client-hud`。根 `:runP3R7Build` 与 `:runP3R7RealServerAcceptance` 分别检查三车道产物与同一轮报告，`:runP3R7Gate` 聚合两者；报告门同时校验 `MATRIX R7`、`RUN_ID`、制品哈希、required 场景与最终结果。三车道的本地 R7 报告已通过该聚合门，但不替代用户确认。
-- 验收：每条 26.2 realserver lane 产生当前 R7 的 `RESULT PASS`，再由用户作第三期实机最终确认（参 P2 PRD §7 / §11.1 等价约定）。
+- `MatrixScenarioCatalog` 已定义 R7 的三个 required 场景：`product-handshake`、`product-roundtrip`、`client-hud`。根 `:runP3R7Build` 与 `:runP3R7RealServerAcceptance` 分别检查三车道产物与同一轮报告，`:runP3R7Gate` 聚合两者；报告门同时校验 `MATRIX R7`、`RUN_ID`、制品哈希、required 场景与最终结果。当前候选提交已通过冻结 Paper build 71 的同轮 `p3-r7-1787686232087`；依 ADR-0023，该严格门是 FR-16 的最终自动化验收。
+- 验收：每条 26.2 realserver lane 产生当前 R7 的 `RESULT PASS`，同轮严格报告门通过即完成 FR-16 的最终自动化验收（ADR-0023）。
 
 ### 4.2 FR-17 · 脚手架发布与版本化
 
@@ -74,8 +74,8 @@
 - [x] T1 · 落 `docs/specs/fr-26_2-adapter.md`，冻结 26.2 工具链 / 制品 / 受控制品哈希（2026-07-26 确认 Paper/Fabric/Forge 均存在；Folia 无 26.2）
 - [x] T2 · platform-bukkit 26.2 + Fabric 26.2 + Forge 26.2 三车道独立工程（当前根 P3 构建门与 Forge 自有 wrapper 打包均已通过；Folia 不建）
 - [x] T3 · `version-api` + `v26_2` 实现（Bukkit / Fabric / Forge）；运行期探测装配与当前构建 / 纯 JVM 验证已通过
-- [x] T4 · R7 矩阵轨 + realserver v2 报告契约（三车道同轮报告均含公共三场景 required，根 `:runP3R7Gate` 已通过）
-- [ ] T5 · 用户第三期实机最终确认（26.2 真实 Paper + Fabric/Forge 服实测）
+- [x] T4 · R7 矩阵轨 + realserver v2 报告契约（公共三场景、严格当前报告校验与冻结 Paper build 71 三车道同轮 `p3-r7-1787686232087` 已通过）
+- [x] T5 · ADR-0023 的 R7 最终自动化验收（26.2 真实 Paper、Fabric、Forge 三车道）
 - [ ] T6 · 模板元信息与远端发布（仓库内 `docs/VERSIONING.md` + `.github/RELEASE_TEMPLATE.md` + README 入口及公开 GitHub Template 已就绪；`v0.3.0` / GitHub Release 尚未创建）
 - [x] T7 · 上手指南 `docs/HOWTO-CLONE-AND-WRITE-PLAY.md` + `examples/counter` 示例域与接入范本（以 `79bf3c9` 创建的干净克隆已通过换名 dry-run、写盘与 `:core:domain:compileJava :examples:counter:compileJava :examples:counter:test`；使用本机预热缓存）
 - [x] T8 · 文档同步：PRD FR-16/17/18 状态、ARCHITECTURE §6 / §2.5、ADR 索引与 CHANGELOG 已对账本轮变更；不修改 API，因为没有公共契约变化
@@ -84,8 +84,8 @@
 
 - **FR-16**
   - `:runRealServerAcceptance` 含 26.2 车道且 `RESULT PASS`（R7）；归档报告存在 `MATRIX R7 / RUN_ID / 制品哈希 / required 三场景恰好一次 PASS`。
-  - 本地自动化证据已齐：`runP3R7Gate` 在同一 `RUN_ID` 下验证 Paper、Fabric、Forge 三车道报告通过。
-  - 用户第三期实机最终确认通过（明文），否则不标 `已交付@vX.Y.Z`。
+  - 在同一 `RUN_ID` 下，使用冻结 Paper build 71 生成 Paper、Fabric、Forge 三车道当前报告，并由 `runP3R7Gate` 验证通过。
+  - 同轮 R7 报告通过 `:runP3R7Gate` 的严格验证（ADR-0023）；随后才可随发布标 `已交付@vX.Y.Z`。
 - **FR-17**
   - 仓库元信息齐：README 顶部"从模板起步"段 + `docs/VERSIONING.md` + `.github/RELEASE_TEMPLATE.md`；外部用户无须看仓库根 README + CHANGELOG + docs/INDEX 三处才能拼出发布流程。
   - 不引入新 CI / 云端流水线。
@@ -98,6 +98,6 @@
 ## 7. 风险 / 待定
 
 - Forge 26.2 的 Java 25 / Gradle 9.6.1 / ForgeGradle 7.0.31 已冻结；根门只检查其自有 wrapper 生成的制品与报告，不能嵌套启动该 wrapper。
-- R7 的三车道同轮本地报告已齐；仍须用户第三期实机最终确认。不得以聚合门、P2 R1–R6 归档、单元测试或构建产物替代该确认。
+- R7 历史报告已因冻结制品与严格报告门更新而失效；仅当前候选提交的同轮报告经 `:runP3R7Gate` 通过才满足 ADR-0023。不得以 P2 R1–R6 归档、单元测试、构建产物或未经过严格门的报告替代该证据。
 - 上手示例已定为 Counter：玩家加入时异步记录首次加入与计数，消息按实体归属调度，玩家离开时释放周期句柄。
 - `renameScaffold` 已存在，本规格不修改它的参数；如示例需要 `mpmt.scaffold.rewriteChannels=true`，文档里写明建议在产品化时再开。

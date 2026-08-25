@@ -1,10 +1,10 @@
 # 功能规格：FR-16 · MC 26.2 版本适配（冻结）
 
-> 状态：开发中（T1–T4 本地验证完成：三车道同轮 R7 与根门已通过；T5 用户实机确认待完成）　·　关联 PRD：FR-16　·　父规格：[p3-platform-scaling-and-onboarding](p3-platform-scaling-and-onboarding.md)　·　架构：[ADR-0003](../adr/0003-multi-version-adapter.md) / [ADR-0021](../adr/0021-p2-version-matrix-toolchain-isolation.md) / [ADR-0022](../adr/0022-unobfuscated-minecraft-naming-policy.md)
+> 状态：开发中（T1–T5 已完成；待随 P3 `v0.3.0` 统一发布）　·　关联 PRD：FR-16　·　父规格：[p3-platform-scaling-and-onboarding](p3-platform-scaling-and-onboarding.md)　·　架构：[ADR-0003](../adr/0003-multi-version-adapter.md) / [ADR-0021](../adr/0021-p2-version-matrix-toolchain-isolation.md) / [ADR-0022](../adr/0022-unobfuscated-minecraft-naming-policy.md) / [ADR-0023](../adr/0023-p3-r7-automated-release-authority.md)
 
 ## 1. 背景与目标
 
-第三期 FR-16 要把 L4 锚点从 1.21.1 前推到 **MC 26.2**（新版号方案，无 `1.` 前缀，模块名 `v26_2`）。本文件是 **26.2 工具链 / 受控制品 / 有效格子** 的冻结真源；T2–T4 的实现与本地验证必须按本表，T5 仍须用户实机确认，禁止跟随 latest。
+第三期 FR-16 要把 L4 锚点从 1.21.1 前推到 **MC 26.2**（新版号方案，无 `1.` 前缀，模块名 `v26_2`）。本文件是 **26.2 工具链 / 受控制品 / 有效格子** 的冻结真源；T2–T4 的实现与本地验证必须按本表，T5 由 ADR-0023 定义的 R7 严格自动化门完成，禁止跟随 latest。
 
 ### 1.1 T1 结论（存在性，核对日 2026-07-26）
 
@@ -52,6 +52,7 @@
 - **Paper 26.2 官方 `java.minimum = 25`**。本机真服 / CI 必须提供 JDK 25+（建议 `MPMT_JAVA25_HOME`）；不得用 21 跑 Paper 26.2 宿主。
 - 根 Gradle wrapper 固定为 **9.6.1**；根只直接编排 Bukkit 与 Fabric 26.2。L0–L2 仍 **`--release 8`**（ADR-0004），不因 P3 改变；仅 26.2 平台车道抬高工具链。
 - Forge 26.2 固定使用 **JDK 25 + Gradle 9.6.1 + ForgeGradle 7.0.31**，Forge 坐标固定为 **`26.2-65.0.9`**；必须使用 `platform/forge/26.2/gradlew` 自有 wrapper，禁止根构建嵌套调用。
+- P3 Paper 自动宿主只请求冻结 build 71 的 Fill API 元数据与受信任 HTTPS 下载地址；缓存命中及下载完成后均核对表中大小和 SHA-256。此冻结不扩张到未声明冻结值的历史 Paper 宿主。
 
 ## 4. 构建车道（T2 实现时遵守）
 
@@ -67,8 +68,8 @@ L4：`version-api` + `v26_2` 实现；运行期探测 MC 版本选 `v26_2`。
 
 - R7 合规 `SERVER-GAMETEST-REPORT v2`：含 `MATRIX R7` / `RUN_ID` / 制品哈希；公共三场景恰好一次 PASS；末行 `RESULT PASS`。
 - Paper / Fabric / Forge 三格必须各有一份**属于当前运行**的可复核 R7 报告；`:runP3R7Gate` 只聚合该证据，不会生成或补造报告。
-- 当前本地自动化证据已齐：三车道的同轮 R7 报告均为 `RESULT PASS`，根 `:runP3R7Gate` 已通过；这不替代 T5 用户实机确认。
-- 用户第三期实机最终确认通过后，才可由 `sdd-release-version` 将 FR-16 标 `已交付@v…`。
+- 旧的本地 `RESULT PASS` 只可作为历史尝试；冻结 Paper build 71、完整五制品哈希、同一 `RUN_ID` / 开始毫秒与严格解析门已在当前候选提交的 `p3-r7-1787686232087` 三车道报告中验证通过。该证据满足 ADR-0023 定义的 T5 最终自动化验收。
+- 同轮 R7 严格门通过后，`sdd-release-version` 可随第三期统一发布将 FR-16 标 `已交付@v…`。
 - P2 的 `:runVersionMatrixGate` 与 R1–R6 报告不含 26.2，不能作为本条验收证据。
 - **不得**因 Folia/NeoForge/Sponge 无 26.2 而宣称全平台宇宙通过。
 
@@ -77,9 +78,9 @@ L4：`version-api` + `v26_2` 实现；运行期探测 MC 版本选 `v26_2`。
 - [x] T1 · 存在性确认 + 本冻结规格（本文件）
 - [x] T2 · 三车道独立工程（仅 Paper/Fabric/Forge；当前根 P3 构建门与 Forge 自有 wrapper 打包已通过）
 - [x] T3 · `version-api` + `v26_2` + 纯 JVM 单测（当前实现与验证已通过）
-- [x] T4 · R7 矩阵轨与报告契约（三车道同轮报告均含公共 required 场景，根 `:runP3R7Gate` 已通过）
-- [ ] T5 · 用户第三期实机确认
-- [x] 文档同步：PRD FR-16、ARCHITECTURE、CHANGELOG 已对账；无需新增 ADR
+- [x] T4 · R7 矩阵轨与严格当前报告（冻结 Paper build 71 后，三车道同轮 `p3-r7-1787686232087` 已通过根 `:runP3R7Gate`）
+- [x] T5 · ADR-0023 的 R7 最终自动化验收（冻结 Paper build 71 的三车道同轮严格门）
+- [x] 文档同步：PRD FR-16、ARCHITECTURE、CHANGELOG 与 ADR-0023 已对账
 
 ## 7. 风险 / 待定
 

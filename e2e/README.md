@@ -13,13 +13,13 @@
 
 ```bash
 # 1) 产品插件
-./gradlew :platform-bukkit:server-1.20.1:shadowJar
+./gradlew :platform:bukkit:1.20.1:shadowJar
 
 # 2) 桩（独立工程）
 ./gradlew -p e2e/harness jar
 
 # 3) 导出路径（Git Bash / 本机绝对路径均可）
-export MC_TESTKIT_E2E_PLUGIN_UNDER_TEST_JAR="$PWD/platform-bukkit/build/libs/mpmt-platform-bukkit-<version>.jar"
+export MC_TESTKIT_E2E_PLUGIN_UNDER_TEST_JAR="$PWD/platform/bukkit/1.20.1/build/libs/mpmt-bukkit-1.20.1-<version>.jar"
 # 以 build/libs 实际产物名为准；或指向 shadow 输出
 export HARNESS_JAR="$PWD/e2e/harness/build/libs/mc-testkit-e2e-harness-1.0.0-SNAPSHOT.jar"
 

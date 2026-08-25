@@ -99,17 +99,19 @@ P3 / 26.2 R7 三车道：
 ./gradlew :runP3R7RealServerAcceptance \
   -P mpmt.acceptance.matrix=R7 \
   -P mpmt.acceptance.runId=<同一轮-run-id> \
-  -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
+  -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒> \
+  -P mpmt.acceptance.forge.serverRuntime=<本轮实际-Forge-服务端-JAR-绝对路径>
 ./gradlew :runP3R7Gate \
   -P mpmt.acceptance.matrix=R7 \
   -P mpmt.acceptance.runId=<同一轮-run-id> \
-  -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
+  -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒> \
+  -P mpmt.acceptance.forge.serverRuntime=<本轮实际-Forge-服务端-JAR-绝对路径>
 
 # Forge 真服的独立操作说明（在 platform/forge/26.2 下执行）
 ./platform/forge/26.2/gradlew --no-daemon printRealServerAcceptanceRecipe
 ```
 
-R7 必须为 Paper、Fabric、Forge 三车道各提供一份属于**同一轮**的 `SERVER-GAMETEST-REPORT v2`，含 `MATRIX R7`、`RUN_ID`、制品哈希、`product-handshake` / `product-roundtrip` / `client-hud` 各一次 PASS 与末行 `RESULT PASS`。以上 Gradle 门只验证报告，不替代用户第三期实机确认。
+R7 必须为 Paper、Fabric、Forge 三车道各提供一份属于**同一轮**的 `SERVER-GAMETEST-REPORT v2`，含 `MATRIX R7`、`RUN_ID`、本轮开始毫秒、五个制品 role 的实际 SHA-256、`product-handshake` / `product-roundtrip` / `client-hud` 各一次 PASS、匹配的 `TOTAL` 与唯一末行 `RESULT PASS`。根门会拒绝旧报告、重复记录、额外失败/错误场景与制品漂移；依 ADR-0023，P3 / FR-16 的该严格门即为最终自动化验收。
 
 Paper 26.2 宿主 + Fabric 26.2 客户端伴侣（R7）：
 
@@ -130,7 +132,7 @@ Paper 26.2 宿主 + Fabric 26.2 客户端伴侣（R7）：
   -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
 ```
 
-该组合会由 Paper 车道产出当前 R7 报告；Fabric 与 Forge 各自的服务端车道仍须另行产出相同轮次的报告，才能运行根聚合门。
+P3 Paper 自动宿主只下载 `https://fill-data.papermc.io` 的冻结 build 71，缓存与新下载均核对 `paper-26.2-71.jar` 的 61,744,713 字节和 SHA-256 `36fee4f3a7020eb2e2d6f8d70d849beaf0f024d86f09302b9ccf2d96f266127e`；不跟随 `latest`。其他历史 Bukkit 自动宿主未声明冻结值时保持既有下载行为。该组合会由 Paper 车道产出当前 R7 报告；Fabric 与 Forge 各自的服务端车道仍须另行产出相同轮次的报告，才能运行根聚合门。
 
 Forge 1.21.1 专用服（独立 launcher）：
 

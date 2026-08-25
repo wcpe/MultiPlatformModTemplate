@@ -39,7 +39,7 @@
 # 输出：build/dist/{bukkit,fabric,forge,neoforge,sponge}/
 ```
 
-Forge 1.12.2 / 1.21.1 / 26.2 须用各自目录自有 wrapper 先构建，产物才会被捞入 dist（见 [`OPERATIONS.md`](OPERATIONS.md)）。26.2 聚合前还须完成 Paper/Fabric 的 Java 25 构建；聚合到 `dist` 不等于 R7 真服验收通过。
+`collectReleaseArtifacts` 是严格聚合：仅当下列 **13** 个正式产品 jar 全部存在时才会重建 `dist`；任一缺失即失败，并保留已有 `dist`。矩阵为 Bukkit 1.12.2 / 1.20.1 / 1.21.1 / 26.2、Fabric 1.20.1 / 1.21.1 / 26.2、Forge 1.12.2 / 1.20.1 / 1.21.1 / 26.2、NeoForge 1.20.2、Sponge 1.20.1。Forge 1.12.2 / 1.21.1 / 26.2 与 NeoForge 1.20.2 须先用各自目录自有 wrapper 构建（见 [`OPERATIONS.md`](OPERATIONS.md)）；26.2 聚合前还须完成 Paper/Fabric 的 Java 25 构建。聚合到 `dist` 不等于 R7 真服验收通过。
 
 ## 5. 路线图
 
@@ -47,6 +47,6 @@ Forge 1.12.2 / 1.21.1 / 26.2 须用各自目录自有 wrapper 先构建，产物
 |---|---|---|
 | 第一期（MVP） | 分层骨架 + 全平台基础网络 + 异构桥接 | 已交付 @v0.1.0 |
 | 第二期 | 1.21.1 / 1.12.2 多版本矩阵（FR-12） | 已交付 @v0.2.0 |
-| 第三期 | 26.2 + 模板发布 + 上手文档（FR-16/17/18） | 开发中：三车道同轮 R7 与根门已通过，公开 GitHub Template 已启用；仍待用户实机确认、干净克隆复现与 `v0.3.0` 对外 Release |
+| 第三期 | 26.2 + 模板发布 + 上手文档（FR-16/17/18） | 开发中：当前候选提交的冻结 Paper build 71 三车道 R7 已通过严格报告门（`p3-r7-1787686232087`），并依 ADR-0023 完成 FR-16 自动化验收；仍待 `v0.3.0` 对外 Release |
 
 详见 [`PRD.md`](PRD.md) §4 / §7。

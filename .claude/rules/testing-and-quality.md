@@ -15,8 +15,9 @@
 - **单元**：L0 纯玩法逻辑 / 协议编解码 / 领域状态机 —— 不连任何平台，最快最多，必须可穷举。
 - **集成**：被测组件 + 假平台（test double）或单一真实平台模块，跑端口装配与特性注册等关键流程。**GameTest 仅 mod 加载器（Fabric/Forge/NeoForge）有；Bukkit 家族 / Sponge 用 MockBukkit / 测试设施 + 真实服手测**（FR-23）。
 - **实机（E2E）/ GameTest**：mod 加载器用 **GameTest** 两套——**模拟服**（单人/集成 headless，`runGameTest`，in-process 回环自动跑）+ **realserver**（真实专用服，**服务端驱动、客户端验证**：等待程序化客户端进入 → 触发场景 → 客户端 + 服务端双重断言 → 客户端回报、服务端聚合单一权威报告，任一端失败即失败，镜像 AllinCore-New ADR-0020、见 ADR-0014），**均为 MVP 验收门**（见 PRD §6 / FR-23）；Bukkit 家族/Sponge（无 GameTest）在真实 Paper 等上脚本化 / 手测达同等覆盖。realserver 维度须用户实机确认。
+- **P3 FR-16 例外**：realserver 的用户确认是默认规则；仅 P3 / FR-16 依 ADR-0023，以冻结 Paper build 71 的 Paper、Fabric、Forge 三车道同轮 R7 严格门通过作为最终自动化放行。
 - **编排入口（硬约束）**：真服 / 版本矩阵门禁**只能**经 Gradle 任务（`runRealServerAcceptance` / `runVersionMatrixGate`、build-logic 约定插件、可选 **mc-testkit** `e2e*`）。**禁止**新增或维护以 `scripts/*.sh` / `.ps1` / `.bat` 为用户入口的验收编排；**禁止**在任务内嵌套 `gradlew` 子进程。
-- **何时跑**：单元 / 集成随每次改动；实机在发版前与每次平台 / 版本扩展时至少跑一遍并由用户确认。
+- **何时跑**：单元 / 集成随每次改动；实机在发版前与每次平台 / 版本扩展时至少跑一遍并由用户确认。P3 FR-16 依 ADR-0023 由同轮三车道 R7 严格门作最终自动化放行，其他范围不受此例外影响。
 
 ## 2. 必测的高风险区
 逐项穷举验证以下本项目最易错、错了代价最高的部分：
