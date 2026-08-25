@@ -66,10 +66,19 @@ class ForgeClientSessionTest {
         assertEquals(HudKind.ACTIONBAR, snapshot.kind());
         assertEquals("验收HUD", snapshot.text());
 
+        transport.receive(codec.encode(new ServerHudMessagePacket(
+                HudKind.CHAT, "后续聊天", "", 0L)));
+        assertEquals(HudKind.CHAT, session.hudSnapshot().kind());
+        ForgeHudSnapshot actionBar = session.actionBarSnapshot();
+        assertNotNull(actionBar);
+        assertEquals(HudKind.ACTIONBAR, actionBar.kind());
+        assertEquals("验收HUD", actionBar.text());
+
         session.disconnect();
 
         assertNull(session.networkFeature());
         assertNull(session.hudSnapshot());
+        assertNull(session.actionBarSnapshot());
         assertFalse(transport.sent.isEmpty());
     }
 

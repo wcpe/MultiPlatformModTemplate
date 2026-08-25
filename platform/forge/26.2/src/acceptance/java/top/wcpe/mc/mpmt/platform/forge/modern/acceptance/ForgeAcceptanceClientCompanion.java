@@ -109,15 +109,18 @@ public final class ForgeAcceptanceClientCompanion {
         if (outcome == null) {
             // HUD 超时附带末次快照，便于区分「未收到」与「一直是演示包」
             if (active != null && "client-hud".equals(active.getScenarioId())) {
-                ForgeHudSnapshot snap = ForgeClientEvents.session().hudSnapshot();
+                ForgeHudSnapshot snapshot = ForgeClientEvents.session().actionBarSnapshot();
                 outcome =
                         Outcome.fail(
                                 "客户端 HUD 步骤超时 "
                                         + timeoutTicks
-                                        + " tick 末次="
-                                        + (snap == null
+                                        + " tick 最近动作栏="
+                                        + (snapshot == null
                                                 ? "null"
-                                                : ("kind=" + snap.kind() + " text=" + snap.text())));
+                                                : ("kind="
+                                                        + snapshot.kind()
+                                                        + " text="
+                                                        + snapshot.text())));
             } else {
                 outcome = Outcome.fail("客户端步骤超时 " + timeoutTicks + " tick");
             }
@@ -282,9 +285,9 @@ public final class ForgeAcceptanceClientCompanion {
         if (!"verify-hud".equals(active.getStepId())) {
             return Outcome.error("未知 HUD 步骤：" + active.getStepId());
         }
-        // 握手成功后产品会先下发 TITLE/ACTIONBAR/TOAST/CHAT 演示包，快照可能暂非验收 ACTIONBAR。
+        // 握手成功后产品会先下发 TITLE/ACTIONBAR/TOAST/CHAT 演示包，动作栏快照可能暂非验收内容。
         // 未匹配时返回 null 继续轮询至步骤超时，避免被演示 CHAT 误判为永久失败。
-        ForgeHudSnapshot snapshot = ForgeClientEvents.session().hudSnapshot();
+        ForgeHudSnapshot snapshot = ForgeClientEvents.session().actionBarSnapshot();
         if (snapshot == null) {
             return null;
         }

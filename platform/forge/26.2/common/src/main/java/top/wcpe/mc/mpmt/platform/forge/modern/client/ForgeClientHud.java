@@ -6,20 +6,26 @@ import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.network.chat.Component;
 import top.wcpe.mc.mpmt.protocol.PacketDispatcher;
 import top.wcpe.mc.mpmt.protocol.PacketIds;
+import top.wcpe.mc.mpmt.protocol.packet.HudKind;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 
 /** Forge 26.2 客户端 HUD，实现动作栏、标题、聊天与最小提示。 */
 public final class ForgeClientHud {
 
     private volatile ForgeHudSnapshot snapshot;
+    private volatile ForgeHudSnapshot actionBarSnapshot;
 
     public void register(PacketDispatcher dispatcher) {
         dispatcher.on(
                 PacketIds.SERVER_HUD_MESSAGE,
                 (connection, packet) -> {
                     ServerHudMessagePacket hud = (ServerHudMessagePacket) packet;
-                    snapshot = new ForgeHudSnapshot(
+                    ForgeHudSnapshot next = new ForgeHudSnapshot(
                             hud.getKind(), hud.getText(), hud.getSubtitle(), hud.getDurationMillis());
+                    snapshot = next;
+                    if (hud.getKind() == HudKind.ACTIONBAR) {
+                        actionBarSnapshot = next;
+                    }
                     Minecraft minecraft = Minecraft.getInstance();
                     if (minecraft != null) {
                         minecraft.execute(() -> render(hud));
@@ -31,8 +37,14 @@ public final class ForgeClientHud {
         return snapshot;
     }
 
+    /** 返回当前会话最近一次动作栏消息，供跨类型 HUD 验收稳定读取。 */
+    public ForgeHudSnapshot actionBarSnapshot() {
+        return actionBarSnapshot;
+    }
+
     public void clear() {
         snapshot = null;
+        actionBarSnapshot = null;
     }
 
     private static void render(ServerHudMessagePacket hud) {

@@ -95,4 +95,8 @@ public final class ForgeClientSession {
     public ForgeHudSnapshot hudSnapshot() {
         return hud.snapshot();
     }
+
+    public ForgeHudSnapshot actionBarSnapshot() {
+        return hud.actionBarSnapshot();
+    }
 }

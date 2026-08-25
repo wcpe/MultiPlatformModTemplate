@@ -86,6 +86,18 @@ public final class Forge262ContractMain {
                 "缺少要求的验收运行入口");
         require(build.contains("mpmt.acceptance.artifact.server-runtime"),
                 "真实服务端运行文件必须由调用方显式传入");
+        require(build.contains("def realServerHostRequested"),
+                "真实服务端入口必须显式识别主机任务");
+        require(build.contains("tasks.register('runRealServerAcceptanceHost')")
+                        && build.contains("dependsOn tasks.named('runServer')"),
+                "真实服务端入口必须复用 Forge runServer 启动链路");
+        require(build.contains("def acceptanceServerRunDirectory")
+                        && build.contains("realServerHostRequested ? 'run-realserver' : 'run-acceptance-server'")
+                        && build.contains("workingDir = layout.projectDirectory.dir(acceptanceServerRunDirectory)")
+                        && build.contains("project.file(\"${acceptanceServerRunDirectory}/acceptance-report.txt\").absolutePath"),
+                "真实服务端入口必须写入独立运行目录的报告");
+        require(!build.contains("tasks.register('runRealServerAcceptanceHost', Exec)"),
+                "真实服务端入口不得直接以原版 server.jar 启动");
         require(wrapper.contains("gradle-9.6.1-bin.zip"), "wrapper 版本必须为 9.6.1");
         // 收纳后 wrapper 使用 validateDistributionUrl=true；不再硬编码历史 distributionSha256Sum
         require(wrapper.contains("validateDistributionUrl=true")
@@ -136,9 +148,16 @@ public final class Forge262ContractMain {
                 "额外 runtime classpath 目录不会被 26.2 开发态 locator 识别为 mod");
         require(build.contains("def installDevAcceptanceMod")
                         && build.contains("from acceptanceJar")
-                        && build.contains("into new File(runDir, 'mods')"),
+                        && build.contains("into modsDir"),
                 "必须提供将独立验收 JAR 安装到运行目录的最小适配");
-        require(build.contains("installDevAcceptanceMod(project.file('run-acceptance-server'))")
+        require(build.contains("include 'mpmt-*.jar'") && build.contains("!candidate.delete()"),
+                "验收运行目录必须清理旧版 MPMT JAR，避免重复加载");
+        require(build.contains("def prepareAcceptanceServerProperties")
+                        && build.contains("'online-mode': 'false'")
+                        && build.contains("'enforce-secure-profile': 'false'")
+                        && build.contains("prepareAcceptanceServerProperties(runDir)"),
+                "真实服务端验收必须关闭线上认证，允许本地 Dev 客户端连接");
+        require(build.contains("installDevAcceptanceMod(runDir)")
                         && build.contains("installDevAcceptanceMod(project.file('run-acceptance-client'))"),
                 "runServer/runClient 均须安装验收伴侣 JAR");
         require(!properties.contains("net.minecraftforge.gradle.merge-source-sets"),

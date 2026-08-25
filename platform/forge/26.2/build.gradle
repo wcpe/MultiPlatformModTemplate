@@ -271,15 +271,22 @@ def acceptanceJar = tasks.register('acceptanceJar', Jar) {
     }
 }
 
+def realServerHostRequested = gradle.startParameter.taskNames.any {
+    it.endsWith('runRealServerAcceptanceHost')
+}
+def acceptanceServerRunDirectory =
+        realServerHostRequested ? 'run-realserver' : 'run-acceptance-server'
+
 minecraft {
     runs {
         // Forge 26.2 的 launcher metadata 不消费 FG7 生成的 source_roots，因此 mods/source
         // 不会进入实际启动参数。独立验收 JAR 在启动前安装到各自 mods 目录。
         register('server') {
-            workingDir = layout.projectDirectory.dir('run-acceptance-server')
+            workingDir = layout.projectDirectory.dir(acceptanceServerRunDirectory)
             systemProperty 'forge.logging.console.level', 'info'
             systemProperty 'mpmt.acceptance', 'true'
-            systemProperty 'mpmt.acceptance.report', project.file('run-acceptance-server/acceptance-report.txt').absolutePath
+            systemProperty 'mpmt.acceptance.report',
+                    project.file("${acceptanceServerRunDirectory}/acceptance-report.txt").absolutePath
             // 允许 -Pmpmt.acceptance.deadlineMs 覆盖；默认 600s 覆盖慢机冷启动
             systemProperty 'mpmt.acceptance.deadlineMs', (project.findProperty('mpmt.acceptance.deadlineMs') ?: '600000')
             args '--nogui'
@@ -487,10 +494,46 @@ def configureReportProperties = { task ->
 }
 
 def installDevAcceptanceMod = { File runDir ->
+    File modsDir = new File(runDir, 'mods')
+    fileTree(modsDir) {
+        include 'mpmt-*.jar'
+    }.files.each { File candidate ->
+        if (!candidate.delete()) {
+            throw new GradleException("无法删除旧版 MPMT 验收 JAR：${candidate}")
+        }
+    }
     copy {
         from acceptanceJar.flatMap { it.archiveFile }
-        into new File(runDir, 'mods')
+        into modsDir
     }
+}
+
+def prepareAcceptanceServerProperties = { File runDir ->
+    File propertiesFile = new File(runDir, 'server.properties')
+    Map<String, String> offlineProperties = [
+            'online-mode': 'false',
+            'enforce-secure-profile': 'false'
+    ]
+    List<String> lines = propertiesFile.isFile()
+            ? propertiesFile.readLines('UTF-8')
+            : []
+    Set<String> updatedKeys = [] as Set
+    List<String> updatedLines = lines.collect { String line ->
+        int separator = line.indexOf('=')
+        String key = separator > 0 ? line.substring(0, separator) : ''
+        if (offlineProperties.containsKey(key)) {
+            updatedKeys.add(key)
+            return "${key}=${offlineProperties.get(key)}"
+        }
+        return line
+    }
+    offlineProperties.each { String key, String value ->
+        if (!updatedKeys.contains(key)) {
+            updatedLines.add("${key}=${value}")
+        }
+    }
+    runDir.mkdirs()
+    propertiesFile.setText(updatedLines.join(System.lineSeparator()) + System.lineSeparator(), 'UTF-8')
 }
 
 tasks.matching { it.name == 'runServer' }.configureEach {
@@ -499,7 +542,12 @@ tasks.matching { it.name == 'runServer' }.configureEach {
     if (it instanceof JavaExec) {
         it.javaLauncher = java25Launcher
         it.doFirst {
-            installDevAcceptanceMod(project.file('run-acceptance-server'))
+            File runDir = project.file(acceptanceServerRunDirectory)
+            if (realServerHostRequested) {
+                new File(runDir, 'eula.txt').setText('eula=true\n', 'UTF-8')
+            }
+            prepareAcceptanceServerProperties(runDir)
+            installDevAcceptanceMod(runDir)
             configureReportProperties(it)
             File mainDir = sourceSets.main.java.destinationDirectory.get().asFile
             File acceptanceDir = sourceSets.acceptance.java.destinationDirectory.get().asFile
@@ -571,48 +619,11 @@ tasks.register('verifyAcceptanceReport') {
     }
 }
 
-/** 仅起真实专用服（须 -Pmpmt.acceptance.artifact.server-runtime=…）；客户端请另开终端 runClient。 */
-def runRealServerAcceptanceHost = tasks.register('runRealServerAcceptanceHost', Exec) {
+/** 仅起真实 Forge 专用服（须 -Pmpmt.acceptance.artifact.server-runtime=…）；客户端请另开终端 runClient。 */
+tasks.register('runRealServerAcceptanceHost') {
     group = 'verification'
-    description = '启动 Forge 26.2 真实专用服（不含客户端伴侣；不含报告门）'
-    dependsOn packageArtifacts
-    workingDir project.file('run-realserver')
-    doFirst {
-        File serverRuntime = file(requiredRunProperty('mpmt.acceptance.artifact.server-runtime'))
-        if (!serverRuntime.isFile()) {
-            throw new GradleException("server-runtime 必须是调用方显式提供的实际文件：${serverRuntime}")
-        }
-        File product = tasks.named('jar', Jar).get().archiveFile.get().asFile
-        File acceptance = acceptanceJar.get().archiveFile.get().asFile
-        File runDir = project.file('run-realserver')
-        File modsDir = new File(runDir, 'mods')
-        modsDir.mkdirs()
-        new File(runDir, 'eula.txt').setText('eula=true\n', 'UTF-8')
-        copy {
-            from product, acceptance
-            into modsDir
-        }
-        workingDir runDir
-        File report = new File(runDir, 'acceptance-report.txt')
-        executable java25Launcher.get().executablePath.asFile
-        args(
-            '-Dmpmt.acceptance=true',
-            "-Dmpmt.acceptance.report=${report.absolutePath}",
-            '-Dmpmt.acceptance.deadlineMs=300000',
-            "-Dmpmt.acceptance.runId=${requiredRunProperty('mpmt.acceptance.runId')}",
-            "-Dmpmt.acceptance.matrix=${requiredRunProperty('mpmt.acceptance.matrix')}",
-            "-Dmpmt.acceptance.startEpochMs=${requiredRunProperty('mpmt.acceptance.startEpochMs')}",
-            "-Dmpmt.acceptance.javaExecutable=${java25Launcher.get().executablePath.asFile.absolutePath}",
-            "-Dmpmt.acceptance.artifact.server-runtime=${serverRuntime.absolutePath}",
-            "-Dmpmt.acceptance.artifact.server-product=${product.absolutePath}",
-            "-Dmpmt.acceptance.artifact.server-acceptance=${acceptance.absolutePath}",
-            "-Dmpmt.acceptance.artifact.client-product=${(project.findProperty('mpmt.acceptance.artifact.client-product') ?: product.absolutePath)}",
-            "-Dmpmt.acceptance.artifact.client-acceptance=${(project.findProperty('mpmt.acceptance.artifact.client-acceptance') ?: acceptance.absolutePath)}",
-            '-jar',
-            serverRuntime.absolutePath,
-            'nogui'
-        )
-    }
+    description = '通过 Forge runServer 启动真实专用服（不含客户端伴侣；不含报告门）'
+    dependsOn tasks.named('runServer')
 }
 
 /** 报告门：须先完成「服 + 客户端伴侣」并落 RESULT PASS 报告。 */
