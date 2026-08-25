@@ -52,7 +52,7 @@ Forge 跨代（自有 launcher，目录在 `platform/forge/`，禁止从根嵌�
 
 | MC | 目录 | JDK / Gradle |
 |---|---|---|
-| 1.20.1 | `platform/forge/1.20.1/` | Java 17 + Gradle 8.14.5（先将该版本置于 `PATH`，运行 `gradle --no-daemon reobfShadowJar`） |
+| 1.20.1 | `platform/forge/1.20.1/` | Gradle 运行于 Java 21、编译工具链为 Java 17 + Gradle 8.14.5（先将该版本置于 `PATH`，运行 `gradle --no-daemon reobfShadowJar`） |
 | 1.21.1 | `platform/forge/1.21.1/` | Java 21 + 8.12.1 |
 | 1.12.2 | `platform/forge/1.12.2/` | Java 8 + 5.6.4（**client-only**） |
 | 26.2 | `platform/forge/26.2/` | Java 25 + 9.6.1 + ForgeGradle 7.0.31 |

@@ -65,7 +65,7 @@ runs:
       shell: bash
       working-directory: platform/forge/1.20.1
       env:
-        JAVA_HOME: ${{ steps.java17.outputs.path }}
+        JAVA_HOME: ${{ steps.java21.outputs.path }}
       run: gradle --no-daemon --max-workers=1 --no-watch-fs --console=plain reobfShadowJar
 
     - name: 构建 Forge 1.12.2 制品
