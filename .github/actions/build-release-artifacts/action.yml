@@ -53,7 +53,7 @@ runs:
       shell: bash
       working-directory: .ci/mc-testkit
       env:
-        JAVA_HOME: ${{ steps.java25.outputs.path }}
+        JAVA_HOME: ${{ steps.java21.outputs.path }}
       run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain publishToMavenLocal
 
     - name: 安装 Forge 1.20.1 的 Gradle 8
