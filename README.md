@@ -4,7 +4,7 @@
 
 ## 状态
 
-当前正式版 **v0.2.0**：第一期 MVP 与第二期多版本矩阵（FR-12，1.21.1 / 1.12.2）已交付。第三期（FR-16 26.2 / FR-17 模板发布 / FR-18 上手文档）仍在开发：Paper、Fabric、Forge 26.2 的同轮 R7 权威报告与根 `:runP3R7Gate` 已通过，仓库已启用为公开 GitHub Template；但尚无 `v0.3.0` 或 GitHub Release，且仍缺用户第三期实机确认及 FR-18 的干净克隆复现。
+当前正式版 **v0.2.0**：第一期 MVP 与第二期多版本矩阵（FR-12，1.21.1 / 1.12.2）已交付。第三期（FR-16 26.2 / FR-17 模板发布 / FR-18 上手文档）仍在开发：Paper、Fabric、Forge 26.2 的同轮 R7 权威报告与根 `:runP3R7Gate` 已通过，仓库已启用为公开 GitHub Template；当前候选提交的干净克隆已复现换名和 Counter 纯 JVM 测试（使用本机预热缓存）。但尚无 `v0.3.0` 或 GitHub Release，且仍缺用户第三期实机确认。
 
 **从模板起步**：本仓库已启用 GitHub Template；在 GitHub 选择 `Use this template` 创建新仓库后，见 [`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`](docs/HOWTO-CLONE-AND-WRITE-PLAY.md)（含 Counter 示例域）。版本节奏见 [`docs/VERSIONING.md`](docs/VERSIONING.md)。
 
@@ -91,7 +91,7 @@ modules/       smoke acceptance
 ./platform/forge/26.2/gradlew --no-daemon packageArtifacts
 ```
 
-26.2 的三个命令只构建车道；Paper、Fabric、Forge 的同轮 R7 报告与 `./gradlew :runP3R7Gate` 已在本地通过。该证据不等于 P3 交付：仍须用户第三期实机确认、FR-18 干净克隆复现与 `v0.3.0` 对外 Release。产物放入对应服务端 `plugins/` 或双端 `mods/`；运维见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)。
+26.2 的三个命令只构建车道；Paper、Fabric、Forge 的同轮 R7 报告与 `./gradlew :runP3R7Gate` 已在本地通过。当前候选提交已在干净克隆中复现脚手架换名与 Counter 纯 JVM 测试（使用本机预热缓存），但这不替代使用者将自己的玩法接入 L3 后的真服验证。P3 正式交付仍须用户第三期实机确认与 `v0.3.0` 对外 Release。产物放入对应服务端 `plugins/` 或双端 `mods/`；运维见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)。
 
 ### 克隆后换名（脚手架）
 

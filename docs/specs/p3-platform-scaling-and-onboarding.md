@@ -8,7 +8,7 @@
 
 - P2（FR-12）已交付 `@v0.2.0`：1.21.1 / 1.12.2 跨版本工具链隔离、CatServer 实跑、R1–R6 合规矩阵、用户第二期实机确认通过。
 - 26.2 三车道、`v26_2` 与 R7 目录已完成本地实现与验证；Paper 26.2（由 Fabric 26.2 客户端伴侣联通）、Fabric 26.2 与 Forge 26.2 均已有同一轮当前本地 R7 权威报告，且根 `:runP3R7Gate` 已通过。用户第三期实机最终确认尚未取得，故 FR-16 仍未交付。
-- `docs/VERSIONING.md`、`.github/RELEASE_TEMPLATE.md`、README 的克隆入口及 Counter 上手指南 / 纯 L0 示例已进入仓库；仓库已实际启用为公开 GitHub Template，但尚无 `v0.3.0` 或 GitHub Release。
+- `docs/VERSIONING.md`、`.github/RELEASE_TEMPLATE.md`、README 的克隆入口及 Counter 上手指南 / 纯 L0 示例已进入仓库；仓库已实际启用为公开 GitHub Template。当前候选提交已在干净克隆复现换名与 Counter 纯 JVM 测试（本机预热缓存），但尚无 `v0.3.0` 或 GitHub Release。
 
 本规格冻结第三期"做什么、不做、谁先谁后、算什么齐"，**不写实现**；实现按规格走 `sdd-develop-feature` / `sdd-release-version`。
 
@@ -65,8 +65,8 @@
 
 ### 4.3 FR-18 · 上手文档与示例
 
-- 新增 `docs/HOWTO-CLONE-AND-WRITE-PLAY.md`：克隆 → `renameScaffold`（dry-run → 写盘）→ 在 L0 写一个最小玩法域（Counter：玩家加入时异步持久化首次加入与计数、按实体归属发消息、离开释放周期句柄；非产品玩法）→ 在每个目标平台 `shadowJar`/loader build → 在真实 Paper/Fabric/Forge 服跑通。
-- 新增 `examples/counter`（域包 + 最小装配）：参考 ADR-0015 域组织，不预建其它空域骨架；可被 `renameScaffold` 视为可选复制项。
+- 新增 `docs/HOWTO-CLONE-AND-WRITE-PLAY.md`：克隆 → `renameScaffold`（dry-run → 写盘）→ 在 L0 写一个最小玩法域（Counter：玩家加入时异步持久化首次加入与计数、按实体归属发消息、离开释放周期句柄；非产品玩法）→ 编译并运行纯 JVM 测试。指南同时说明使用者如何借用既有 L3 范本，把自己的产品域接入目标平台并在真实 Paper/Fabric/Forge 服验证。
+- 新增 `examples/counter`（域包 + 接入范本）：参考 ADR-0015 域组织，不预建其它空域骨架；可被 `renameScaffold` 视为可选复制项。
 - 文档走 `docs/specs/_template` 五段式：背景 / 范围 / 设计 / 任务拆分 / 验收；与 P2 `p2-version-matrix.md` 同结构。
 
 ## 5. 任务拆分（确认后执行）
@@ -77,7 +77,7 @@
 - [x] T4 · R7 矩阵轨 + realserver v2 报告契约（三车道同轮报告均含公共三场景 required，根 `:runP3R7Gate` 已通过）
 - [ ] T5 · 用户第三期实机最终确认（26.2 真实 Paper + Fabric/Forge 服实测）
 - [ ] T6 · 模板元信息与远端发布（仓库内 `docs/VERSIONING.md` + `.github/RELEASE_TEMPLATE.md` + README 入口及公开 GitHub Template 已就绪；`v0.3.0` / GitHub Release 尚未创建）
-- [ ] T7 · 上手指南 `docs/HOWTO-CLONE-AND-WRITE-PLAY.md` + `examples/counter` 示例域与最小装配（源码和生命周期测试已进入仓库；待干净工作区复验）
+- [x] T7 · 上手指南 `docs/HOWTO-CLONE-AND-WRITE-PLAY.md` + `examples/counter` 示例域与接入范本（以 `79bf3c9` 创建的干净克隆已通过换名 dry-run、写盘与 `:core:domain:compileJava :examples:counter:compileJava :examples:counter:test`；使用本机预热缓存）
 - [x] T8 · 文档同步：PRD FR-16/17/18 状态、ARCHITECTURE §6 / §2.5、ADR 索引与 CHANGELOG 已对账本轮变更；不修改 API，因为没有公共契约变化
 
 ## 6. 验收标准
@@ -91,8 +91,8 @@
   - 不引入新 CI / 云端流水线。
   - 公开 GitHub Template 已实际启用；目标版本的 `v0.3.0` / GitHub Release 仍须在验收完成后实际创建，本地 tag / 文档存在不替代该远端操作。
 - **FR-18**
-  - `docs/HOWTO-CLONE-AND-WRITE-PLAY.md` 在干净工作区能照做完：克隆 → renameScaffold → 实现 Counter → 三平台 `shadowJar` / loader build → 真服联通。
-  - `examples/counter` 走纯 JVM 单测（不依赖任何 L3 平台代码）；真服实跑为示例维度、可选。
+  - `docs/HOWTO-CLONE-AND-WRITE-PLAY.md` 在干净工作区能照做完：克隆 → renameScaffold → 参照 Counter 编写 L0 玩法域 → 编译并通过纯 JVM 测试。该路径已在本机预热缓存下的干净克隆复现，不能宣称为冷缓存或新机器验证。
+  - `examples/counter` 走纯 JVM 单测（不依赖任何 L3 平台代码）；其不预置跨平台 L3 装配。使用者把自己的产品域接入既有 L3 范本后，再自行构建目标平台产物并完成真服验证。
 - **每项 FR 单独通过前不得互相预标交付**。第三期发版在三项全部已交付后由 `sdd-release-version` 统一落 `v0.3.0`、tag，**不预标、不 push**。
 
 ## 7. 风险 / 待定

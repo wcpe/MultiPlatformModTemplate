@@ -28,7 +28,7 @@
 - **跨版本质量门禁**：欢迎包断言按协议发送顺序读取，补齐 Bukkit 1.12 调度适配器测试并清理 Fabric GameTest 无用导入。
 
 ### 交付状态
-- Paper、Fabric、Forge 26.2 的同轮 R7 `RESULT PASS` 报告与根聚合门均已通过；公开 GitHub Template 已启用。FR-16 仍缺用户第三期实机最终确认，FR-17 尚无远端 `v0.3.0` tag / GitHub Release，FR-18 尚未从当前候选提交完成完整干净克隆复现；三项均保持开发中。
+- Paper、Fabric、Forge 26.2 的同轮 R7 `RESULT PASS` 报告与根聚合门均已通过；公开 GitHub Template 已启用。当前候选提交已在本机预热缓存的干净克隆中复现换名与 Counter 纯 JVM 测试。FR-16 仍缺用户第三期实机最终确认，FR-17 尚无远端 `v0.3.0` tag / GitHub Release；三项均保持开发中。
 
 ## [0.2.0] - 2026-07-26
 
