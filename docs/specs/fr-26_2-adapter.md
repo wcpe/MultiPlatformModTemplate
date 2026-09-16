@@ -38,7 +38,7 @@
 |---|---|---|---|
 | Minecraft 26.2 | 正式版 `26.2`（stable） | 游戏本体由 loader 解析 | Fabric Meta `versions/game` |
 | Paper 26.2 | build **71**；`paper-26.2-71.jar`；61,744,713 字节 | `36fee4f3a7020eb2e2d6f8d70d849beaf0f024d86f09302b9ccf2d96f266127e` | Paper Fill API v3：`projects/paper/versions/26.2/builds/71`；通道 **BETA** |
-| Paper API（编译期） | `io.papermc.paper:paper-api:26.2.build.72-beta`；`platform/bukkit/26.2/libs/paper-api-26.2.build.72-beta.jar`；2,883,617 字节 | `ff4dd8b88beb95e990a900f587da3644d44345ce2bc6e8a11b851f6dfb98742b` | Bukkit 26.2 构建脚本的受控本地 compileOnly 输入；不打入产品 jar |
+| Paper API（编译期） | `io.papermc.paper:paper-api:26.2.build.72-beta`（经 Paper Maven 解析）；2,883,617 字节 | `ff4dd8b88beb95e990a900f587da3644d44345ce2bc6e8a11b851f6dfb98742b`（`apiVerification` 配置解析后核验） | Bukkit 26.2 构建脚本的 compileOnly 输入；不打入产品 jar |
 | Fabric Loader | `0.19.3` | 依赖坐标锁定 | Fabric Meta `versions/loader/26.2` |
 | Fabric 命名 / 重映射 | **不适用** | Minecraft 26.1+ 使用上游原始命名，不声明 mappings，不以 intermediary/remap 生成最终制品 | [ADR-0022](../adr/0022-unobfuscated-minecraft-naming-policy.md) |
 | Fabric API | `0.155.2+26.2` | 依赖坐标锁定（Maven / Modrinth `fabric-api-0.155.2+26.2.jar`） | Fabric Maven metadata + Modrinth project `P7dR8mSH` |
@@ -50,7 +50,7 @@
 ### 3.1 关键运行约束
 
 - **Paper 26.2 官方 `java.minimum = 25`**。本机真服 / CI 必须提供 JDK 25+（建议 `MPMT_JAVA25_HOME`）；不得用 21 跑 Paper 26.2 宿主。
-- 根 Gradle wrapper 固定为 **9.6.1**；全部平台车道为根构建子模块（ADR-0026），根直接编排 Bukkit / Fabric / Forge 26.2。L0–L2 仍 **`--release 8`**（ADR-0004），不因 P3 改变；仅 26.2 平台车道抬高工具链。
+- 根 Gradle wrapper 固定为 **9.6.1**；全部平台车道为根构建子模块（ADR-0026），根直接编排 Bukkit / Fabric / Forge 26.2。L0–L2 仍 **`--release 8`**（ADR-0004），不因 P3 改变；仅 26.2 平台车道抬高工具链，**产物字节码目标同为 Java 25**——paper-api 26.2 的 Gradle 元数据声明 `org.gradle.jvm.version=25`，产物目标低于 25 时依赖解析会被直接拒绝。
 - Forge 26.2 固定 **JDK 25 + Gradle 9.6.1 + `top.wcpe.loom-no-remap` 1.17.1**（ADR-0025），Forge 坐标固定为 **`26.2-65.0.9`**；车道为根构建子模块，构建与验收命令均在仓库根执行（`./gradlew :platform:forge:forge-26.2:…`）。
 - P3 Paper 自动宿主只请求冻结 build 71 的 Fill API 元数据与受信任 HTTPS 下载地址；缓存命中及下载完成后均核对表中大小和 SHA-256。此冻结不扩张到未声明冻结值的历史 Paper 宿主。
 

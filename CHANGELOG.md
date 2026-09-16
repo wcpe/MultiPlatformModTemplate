@@ -28,7 +28,7 @@
 - **26.1+ 命名策略**：新增 ADR-0022 并取代 ADR-0016；26.2 使用上游无混淆命名链路，不声明 Mojmap、Yarn 或 intermediary remap（其构建链路表述随后由 ADR-0025/0026 更新为 WCPE Loom）。
 
 ### 修复
-- **干净克隆缺冻结 paper-api**：`platform/bukkit/26.2` 依赖的 `libs/paper-api-26.2.build.72-beta.jar` 被 `.gitignore` 的 `*.jar` 排除且 CI 无下载步骤，任何 fresh checkout 都报"缺少冻结 paper-api"而无法构建；现新增 `downloadApiSnapshot`——文件缺失时从 Paper Maven 取回并核 SHA-256，离线则跳过并给出手工指引，`verifyApiSnapshotFreeze` 仍逐字节校验冻结哈希。
+- **干净克隆缺冻结 paper-api**：`platform/bukkit/26.2` 依赖的 `libs/paper-api-26.2.build.72-beta.jar` 被 `.gitignore` 的 `*.jar` 排除且 CI 无下载步骤，任何 fresh checkout 都报"缺少冻结 paper-api"而无法构建；该项随 26.2 车道改回普通依赖解析一并消除（见"变更"），不再需要本地冻结 jar 或补下载步骤。
 - **换名写坏 SpotBugs 排除规则**：`config/spotbugs/exclude.xml` 里 `~top\.wcpe\.mc\.mpmt\.protocol\.packet` 是**正则转义**写法，文本替换只命中 id 词规则，把它拼成了 `top\.wcpe\.mc\.mygame\.protocol\.packet`（旧前缀 + 新 id），`protocol.packet` 的 EI 豁免失效，换名后 `:core:protocol:spotbugsMain` 因既有误报而失败；现先把转义形式整段替换，再走普通替换。
 - **换名破坏 wire golden 基线**：`init.sh` 会把 `core/protocol`、`forge 1.21.1/26.2` 三份 `src/test/resources/golden/wire-v1.json` 里的 `mpmt` 元数据一并替换，而同一向量里的 Base64 载荷是历史字节快照，二者不再自洽——换名后 `WireV1GoldenTest` 报"array lengths differ, expected: <12> but was: <14>"；现把字节基线目录排除出文本替换。
 - **换名漏搬 Kotlin 源码包目录**：`init.sh` 原先只搬迁 `java/top/wcpe/mc/mpmt`，漏掉 `build-logic` 的 `kotlin/` 源码树，导致包声明已改而目录未动、换名后该 includeBuild 编译失败；现按源码根段（`java` / `kotlin`）统一判定与搬迁。
