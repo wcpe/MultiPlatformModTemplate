@@ -21,6 +21,10 @@ gradlePlugin {
             id = "build-conventions.platform"
             implementationClass = "buildconventions.PlatformLanePlugin"
         }
+        register("fabricLane") {
+            id = "build-conventions.fabric"
+            implementationClass = "buildconventions.FabricLanePlugin"
+        }
     }
 }
 

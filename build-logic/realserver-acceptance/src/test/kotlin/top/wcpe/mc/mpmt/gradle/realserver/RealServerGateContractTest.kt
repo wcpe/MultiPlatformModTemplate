@@ -68,8 +68,16 @@ class RealServerGateContractTest {
         assertFalse(rootBuild.contains("prepareFabric262Inputs"))
         assertTrue(rootBuild.contains("dependsOn(\":platform:fabric:fabric-26.2:build\")"))
         assertFalse(build.contains("tasks.named<RemapJarTask>(\"remapJar\")"))
-        assertTrue(build.contains("val configuredAcceptanceReport"))
-        assertTrue(build.contains("property(\"mpmt.acceptance.report\", configuredAcceptanceReport)"))
+        // Loom run 与报告路径由车道约定插件承担：车道只声明"run 报告跟随 -Pmpmt.acceptance.report 覆盖"，
+        // 覆盖解析（-P 优先，否则 build/acceptance/server-report.txt）与 run 属性注入在插件单点实现，属性名不变。
+        assertTrue(build.contains("id(\"build-conventions.fabric\")"))
+        assertTrue(build.contains("fabric.acceptanceServerUsesOverriddenReport.set(true)"))
+        assertTrue(build.contains("acceptanceReportFile(matrixId)"))
+        val fabricRuns =
+            readRootFile("build-logic/build-conventions/src/main/kotlin/buildconventions/FabricRuns.kt")
+        assertTrue(fabricRuns.contains("acceptanceServerUsesOverriddenReport"))
+        assertTrue(fabricRuns.contains("AcceptanceRound.REPORT_PROPERTY"))
+        assertTrue(fabricRuns.contains("\"property\"(\"mpmt.acceptance.report\", report)"))
         assertTrue(build.contains("val systemPropertyPrefixes = task.systemProperties.keys.map"))
         assertTrue(build.contains("command += task.systemProperties.map"))
         assertTrue(build.contains("TimeUnit.SECONDS.toNanos(300)"))

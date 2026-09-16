@@ -1,17 +1,18 @@
+import buildconventions.FabricLaneExtension
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import net.fabricmc.loom.task.RemapJarTask
-import org.gradle.api.tasks.JavaExec
-import org.gradle.language.jvm.tasks.ProcessResources
-import java.security.MessageDigest
 
 // platform-fabric-1.21.1（L3）：根构建子模块（ADR-0026）；MC 1.21.1，common/server/client 分目录，Loom 根打包。
 // 关键链路（ADR-0012）：core 纯 Java 经 shadow shade 进产物（不被 remap），snakeyaml relocate；
 // remapJar 消费 shadowJar 产物产出最终 remapped mod jar。映射用 Mojang 官方（ADR-0016）。
+// gametest 接入层、Loom run 与验收注入、模拟服门禁、mod 元数据展开由 build-conventions.fabric 承担。
 
 plugins {
     id("build-conventions.quality")
     id("top.wcpe.loom")
+    // 车道约定插件须在 loom 之后应用：gametest 源集要晚于 loom 按现有源集注册 migrate*Mappings 任务的时机创建
+    id("build-conventions.fabric")
     id("com.gradleup.shadow") version "8.3.11"
     // 静态分析 / 质量工具链由根构建 subprojects{} 统一提供（含 spotbugs/ktlint/detekt/kover，见 ADR-0026）。
     // 车道内重复声明会分裂插件类加载器并破坏 loom 清单服务，故此处不再声明。
@@ -28,8 +29,6 @@ val fabricApiVersion = "0.116.14+1.21.1"
 val targetJavaVersion = 21
 val selectedL4Name = "v1_21"
 val unselectedL4Name = "v1_20"
-val loaderDependency = loaderVersion
-val fabricApiDependency = fabricApiVersion
 val snakeyamlVersion = "2.2"
 // 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经同根构建项目依赖消费
 val platformApiCoordinate = project(":platform:fabric:fabric-api")
@@ -60,6 +59,16 @@ quality {
     analysisJavaVersion.set(targetJavaVersion)
 }
 
+// fabric 车道参数：版本与矩阵轨 JDK 环境变量在此声明；
+// gametest 源集与依赖接线、Loom run、验收元数据注入、模拟服门禁、mod 元数据展开、单测系统属性均由插件承担。
+val fabric = extensions.getByType(FabricLaneExtension::class.java)
+fabric.mcVersion.set(mcVersion)
+fabric.targetJavaVersion.set(targetJavaVersion)
+fabric.loaderVersion.set(loaderVersion)
+fabric.fabricApiVersion.set(fabricApiVersion)
+// 矩阵轨 java 可执行文件取自本车道目标 JDK（21）
+fabric.matrixJavaHomeEnvironment.set("MPMT_JAVA21_HOME")
+
 // 专用配置：需 shade 进产物并 relocate 的内容（core + 第三方运行期依赖），不参与 Loom remap
 val shadowBundle: Configuration by configurations.creating
 
@@ -89,15 +98,6 @@ val verifyVersionSelection by tasks.registering {
         if (hasUnselected) throw GradleException("Fabric 版本校验失败：混入 " + unselectedL4Name)
     }
 }
-
-// realserver 验收接入层：gametest 模块源码
-val gametest: SourceSet by sourceSets.creating {
-    java.setSrcDirs(listOf("gametest/src/main/java"))
-    resources.setSrcDirs(listOf("gametest/src/main/resources"))
-    compileClasspath += sourceSets["main"].compileClasspath + sourceSets["main"].output
-    runtimeClasspath += sourceSets["main"].runtimeClasspath + sourceSets["main"].output
-}
-configurations["gametestImplementation"].extendsFrom(configurations["implementation"])
 
 dependencies {
     minecraft("com.mojang:minecraft:$mcVersion")
@@ -132,168 +132,6 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.junit.jupiter:junit-jupiter-params")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-// realserver 验收的 Loom 运行配置（dev 环境，加载 gametest 源集的 mpmt-acceptance 测试 mod）。
-// 服务端可 headless 跑（runAcceptanceServer）；客户端需显示，由用户本机经 quickPlay 自连（runAcceptanceClient）。
-val acceptanceReportFile = layout.buildDirectory.file("acceptance/server-report.txt")
-val simReportFile = layout.buildDirectory.file("acceptance/sim-report.txt")
-loom {
-    runs {
-        // 模拟服 GameTest 套件（FR-23①）：headless 起服跑 in-process 回环网络 GameTest，无外部客户端、可自动跑
-        create("simNetworkTest") {
-            server()
-            configName = "Sim Network GameTest"
-            source(gametest)
-            property("mpmt.simtest", "true")
-            property("mpmt.simtest.report", simReportFile.get().asFile.absolutePath)
-        }
-        create("acceptanceServer") {
-            server()
-            configName = "Acceptance Server"
-            source(gametest)
-            property("mpmt.acceptance", "true")
-            property("mpmt.acceptance.report", acceptanceReportFile.get().asFile.absolutePath)
-            // 看门狗绝对截止：须覆盖客户端冷启动 + 首场景 awaitClientReady（常 >3min）
-            property("mpmt.acceptance.deadlineMs", "660000")
-        }
-        create("acceptanceClient") {
-            client()
-            configName = "Acceptance Client"
-            source(gametest)
-            // 独立运行目录，避免与服务端 run/ 并发冲突
-            runDir("run-client")
-            // quickPlay 作首选；1.21 常被无障碍/资源包屏挡住，伴侣另有 ConnectScreen 程序化兜底。
-            // 默认对齐 run/server.properties 的 server-port=25571（仅 host 会落到 25565 导致 Connection refused）。
-            val acceptanceServerAddr =
-                (project.findProperty("mpmt.acceptance.server") as String?) ?: "127.0.0.1:25571"
-            programArgs("--quickPlayMultiplayer", acceptanceServerAddr)
-            // 伴侣自连读系统属性；与 programArgs 同源，避免只改 -P 时伴侣仍连默认口
-            property("mpmt.acceptance.server", acceptanceServerAddr)
-        }
-    }
-}
-
-fun sha256(file: File): String =
-    MessageDigest.getInstance("SHA-256")
-        .digest(file.readBytes())
-        .joinToString("") { "%02x".format(it) }
-
-// 模拟服报告绑定当前提交、版本与实际产品 jar；故障注入类只来自 gametest 源集，不进入该产品 jar。
-tasks.named<JavaExec>("runSimNetworkTest") {
-    dependsOn(tasks.named("remapJar"))
-    doFirst {
-        val productJar = tasks.named<RemapJarTask>("remapJar").get().archiveFile.get().asFile
-        val commit =
-            providers.exec {
-                commandLine("git", "rev-parse", "HEAD")
-            }.standardOutput.asText.get().trim()
-        systemProperty("mpmt.simtest.commit", commit)
-        systemProperty("mpmt.simtest.version", project.version.toString())
-        systemProperty("mpmt.simtest.mcVersion", mcVersion)
-        systemProperty("mpmt.simtest.serverVersion", "Fabric headless $mcVersion")
-        systemProperty("mpmt.simtest.productJarSha256", sha256(productJar))
-    }
-}
-
-// realserver v2 报告元数据：与模拟服同一套绑定（commit / 版本 / 产品 jar SHA）。
-// 矩阵轨（-Pmpmt.acceptance.matrix 声明矩阵值）：注入 runId/startEpoch/javaExecutable/五类制品，供 MatrixAcceptanceReportV2。
-tasks.named<JavaExec>("runAcceptanceServer") {
-    dependsOn(tasks.named("remapJar"), "gametestClasses")
-    doFirst {
-        val productJar = tasks.named<RemapJarTask>("remapJar").get().archiveFile.get().asFile
-        val commit =
-            providers.exec {
-                commandLine("git", "rev-parse", "HEAD")
-            }.standardOutput.asText.get().trim()
-        systemProperty("mpmt.acceptance.commit", commit)
-        systemProperty("mpmt.acceptance.version", project.version.toString())
-        systemProperty("mpmt.acceptance.mcVersion", mcVersion)
-        systemProperty("mpmt.acceptance.serverVersion", "Fabric realserver $mcVersion")
-        systemProperty("mpmt.acceptance.productJarSha256", sha256(productJar))
-
-        val matrixId = (project.findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
-        if (matrixId.isNotEmpty()) {
-            fun req(name: String): String {
-                val v = (project.findProperty(name) as String?)?.trim().orEmpty()
-                if (v.isEmpty()) {
-                    throw GradleException("矩阵 $matrixId 缺少 -P$name")
-                }
-                return v
-            }
-            val javaHome =
-                System.getenv("MPMT_JAVA21_HOME")
-                    ?: System.getProperty("java.home")
-                    ?: throw GradleException("矩阵轨需要 MPMT_JAVA21_HOME 或当前 java.home")
-            val javaSuffix = if (System.getProperty("os.name").lowercase().contains("win")) ".exe" else ""
-            val javaExec = file("$javaHome/bin/java$javaSuffix")
-            if (!javaExec.isFile) {
-                throw GradleException("找不到 Java 可执行文件：${javaExec.absolutePath}")
-            }
-
-            // Loom dev 无独立 server-runtime/acceptance jar 时，以产品 jar 占位；可用 -P 覆盖
-            fun artifactOrProduct(prop: String): File {
-                val raw = (project.findProperty(prop) as String?)?.trim().orEmpty()
-                return if (raw.isNotEmpty()) file(raw) else productJar
-            }
-            val serverRuntime = artifactOrProduct("mpmt.acceptance.artifact.server-runtime")
-            val acceptanceArtifact = artifactOrProduct("mpmt.acceptance.artifact.server-acceptance")
-            val clientProduct = artifactOrProduct("mpmt.acceptance.artifact.client-product")
-            val clientAcceptance = artifactOrProduct("mpmt.acceptance.artifact.client-acceptance")
-            systemProperty("mpmt.acceptance.matrix", matrixId)
-            systemProperty("mpmt.acceptance.runId", req("mpmt.acceptance.runId"))
-            systemProperty("mpmt.acceptance.startEpochMs", req("mpmt.acceptance.startEpochMs"))
-            systemProperty("mpmt.acceptance.javaExecutable", javaExec.absolutePath)
-            systemProperty("mpmt.acceptance.artifact.server-runtime", serverRuntime.absolutePath)
-            systemProperty("mpmt.acceptance.artifact.server-product", productJar.absolutePath)
-            systemProperty("mpmt.acceptance.artifact.server-acceptance", acceptanceArtifact.absolutePath)
-            systemProperty("mpmt.acceptance.artifact.client-product", clientProduct.absolutePath)
-            systemProperty("mpmt.acceptance.artifact.client-acceptance", clientAcceptance.absolutePath)
-            val matrixReport =
-                (project.findProperty("mpmt.acceptance.report") as String?)
-                    ?.trim()
-                    ?.takeIf { it.isNotEmpty() }
-                    ?.let { file(it) }
-                    ?: layout.buildDirectory.file("acceptance/server-report-${matrixId.lowercase()}.txt").get().asFile
-            systemProperty("mpmt.acceptance.report", matrixReport.absolutePath)
-            logger.lifecycle(
-                "[realserver] 矩阵 $matrixId 已注入：runId=${project.findProperty("mpmt.acceptance.runId")} report=${matrixReport.absolutePath}",
-            )
-        }
-    }
-}
-
-// 矩阵客户端：注入 javaExecutable，便于 ClientReady v2 上报
-tasks.named<JavaExec>("runAcceptanceClient") {
-    doFirst {
-        val matrixId = (project.findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
-        if (matrixId.isNotEmpty()) {
-            val javaHome =
-                System.getenv("MPMT_JAVA21_HOME")
-                    ?: System.getProperty("java.home")
-                    ?: throw GradleException("矩阵轨客户端需要 MPMT_JAVA21_HOME 或当前 java.home")
-            val javaSuffix = if (System.getProperty("os.name").lowercase().contains("win")) ".exe" else ""
-            val javaExec = file("$javaHome/bin/java$javaSuffix")
-            systemProperty("mpmt.acceptance.javaExecutable", javaExec.absolutePath)
-            systemProperty("mpmt.acceptance.matrix", matrixId)
-        }
-    }
-}
-
-// fabric.mod.json 占位由选中目标统一注入
-val metadataValues =
-    mapOf(
-        "version" to project.version,
-        "minecraftVersion" to mcVersion,
-        "javaVersion" to targetJavaVersion,
-        "loaderDependency" to loaderDependency,
-        "fabricApiDependency" to fabricApiDependency,
-    )
-tasks.processResources {
-    inputs.properties(metadataValues)
-    filesMatching("fabric.mod.json") {
-        expand(metadataValues)
-    }
 }
 
 // 打包链路：jar（仅本模块类）→ shadowJar（+core+snakeyaml，relocate）→ remapJar（remap MC 引用）
@@ -353,31 +191,6 @@ tasks.named("build") {
     dependsOn(verifyPackaging, verifyVersionSelection)
 }
 
-tasks.test {
-    useJUnitPlatform()
-    dependsOn(tasks.named("processGametestResources"))
-    systemProperty("mpmt.test.minecraftVersion", mcVersion)
-    systemProperty("mpmt.test.javaVersion", targetJavaVersion.toString())
-    systemProperty("mpmt.test.archiveName", "mpmt-fabric-$mcVersion")
-    systemProperty("mpmt.test.loaderDependency", loaderDependency)
-    systemProperty("mpmt.test.fabricApiDependency", fabricApiDependency)
-    systemProperty("mpmt.test.projectVersion", project.version.toString())
-    // 验收元数据：processGametestResources 注入与产品同口径的 depends
-    systemProperty(
-        "mpmt.test.acceptanceMetadata",
-        layout.buildDirectory.file("resources/gametest/fabric.mod.json").get().asFile.absolutePath,
-    )
-    systemProperty(
-        "mpmt.test.acceptanceArchiveName",
-        "mpmt-fabric-acceptance-$mcVersion-${project.version}.jar",
-    )
-}
-
-// 把 gametest 接入层纳入构建期编译校验（只编译、不运行——运行需真实服）
-tasks.named("build") {
-    dependsOn("gametestClasses")
-}
-
 val realRequiredScenarios =
     listOf(
         "acceptance/handshake-success",
@@ -413,7 +226,7 @@ tasks.register("runRealServerAcceptance") {
                     layout.buildDirectory.file("acceptance/server-report-${matrixId.lowercase()}.txt").get().asFile
                 }
             } else {
-                acceptanceReportFile.get().asFile
+                fabric.acceptanceReport.get().asFile
             }
         if (!report.exists()) {
             throw GradleException(
@@ -509,63 +322,5 @@ val simRequiredScenarios =
         "acceptance/integrated-loopback",
     )
 
-// 模拟服 GameTest 一键门禁：起 headless 服跑完整默认轨回环场景，并严格校验 acceptance v2 元数据与场景清单。
-tasks.register("runSimNetworkAcceptance") {
-    group = "verification"
-    description = "起 headless 服跑完整默认轨模拟服场景并严格校验 acceptance v2 报告"
-    dependsOn("runSimNetworkTest")
-    doLast {
-        val report = simReportFile.get().asFile
-        if (!report.exists()) {
-            throw GradleException("未找到模拟服报告（runSimNetworkTest 未写出）：${report.absolutePath}")
-        }
-        val text = report.readText()
-        logger.lifecycle("[sim] 模拟服 GameTest 权威报告：\n$text")
-        val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
-        if (lines.firstOrNull() != "SERVER-GAMETEST-REPORT v2") {
-            throw GradleException("[sim] 模拟服报告不是 acceptance v2")
-        }
-        val metadata =
-            lines.filter { it.startsWith("META ") }.associate { line ->
-                val entry = line.removePrefix("META ")
-                val separator = entry.indexOf('=')
-                if (separator <= 0) throw GradleException("[sim] 非法元数据行：$line")
-                entry.substring(0, separator) to entry.substring(separator + 1)
-            }
-        val requiredMetadata =
-            listOf("commit", "VERSION", "platform", "mcVersion", "serverVersion", "productJarSha256", "scenarios")
-        if (requiredMetadata.any { metadata[it].isNullOrBlank() }) {
-            throw GradleException("[sim] 模拟服报告缺少 acceptance v2 必需元数据")
-        }
-        if (metadata["platform"] != "sim-fabric") {
-            throw GradleException("[sim] platform 元数据必须为 sim-fabric：${metadata["platform"]}")
-        }
-        if (!metadata.getValue("productJarSha256").matches(Regex("[0-9a-fA-F]{64}"))) {
-            throw GradleException("[sim] productJarSha256 元数据非法")
-        }
-        if (metadata["scenarios"] != simRequiredScenarios.joinToString(",")) {
-            throw GradleException("[sim] 报告场景声明不完整：${metadata["scenarios"]}")
-        }
-        val resultLines = lines.filter { it.startsWith("RESULT ") }
-        if (resultLines != listOf("RESULT PASS") || lines.last() != "RESULT PASS") {
-            throw GradleException("[sim] 模拟服报告必须仅有一个末行 RESULT PASS")
-        }
-        val scenarioLines = lines.filter { it.startsWith("PASS ") || it.startsWith("FAIL ") || it.startsWith("ERROR ") || it.startsWith("SKIP ") }
-        val scenarios = scenarioLines.associateBy { it.split(' ', limit = 3)[1] }
-        if (scenarios.size != scenarioLines.size || scenarios.keys != simRequiredScenarios.toSet()) {
-            throw GradleException("[sim] 实际场景与默认轨清单不一致：${scenarios.keys}")
-        }
-        if (scenarioLines.any { !it.startsWith("PASS ") }) {
-            throw GradleException("[sim] 默认轨场景存在非 PASS 结果")
-        }
-        logger.lifecycle("[sim] 模拟服 GameTest 通过：acceptance v2，${simRequiredScenarios.size} 项默认轨场景全部 PASS")
-    }
-}
-
-// gametest 测试 mod 的 fabric.mod.json 同样注入版本号占位
-tasks.named<ProcessResources>("processGametestResources") {
-    inputs.properties(metadataValues)
-    filesMatching("fabric.mod.json") {
-        expand(metadataValues)
-    }
-}
+// 模拟服默认轨场景清单交插件门禁（runSimNetworkAcceptance）逐项校验
+fabric.simScenarios.set(simRequiredScenarios)
