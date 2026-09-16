@@ -1,12 +1,10 @@
+import buildconventions.frozenApiSnapshot
+import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
-import java.util.zip.ZipFile
-import buildconventions.packagingVerification
 
 // Bukkit 1.21.1 独立产品工程：common + modern + v1_21 → mpmt-bukkit-1.21.1-*.jar
 
@@ -57,18 +55,18 @@ platformLane {
     channelClass.set("BukkitAcceptanceControlChannelId")
 }
 
-val apiVerification =
-    configurations.create("apiVerification") {
-        isCanBeConsumed = false
-        isCanBeResolved = true
-        isTransitive = false
-    }
-
 acceptance.compileClasspath += mainSourceSet.output + mainSourceSet.compileClasspath
 acceptance.runtimeClasspath += mainSourceSet.output + mainSourceSet.runtimeClasspath
 
+// 冻结 paper-api：插件负责解析配置与 SHA-256 校验，并把校验挂到编译任务之前
+frozenApiSnapshot(
+    laneLabel = "Bukkit",
+    coordinate = apiCoordinate,
+    expectedSha256 = apiSha256,
+    mcVersion = minecraftVersion,
+)
+
 dependencies {
-    add(apiVerification.name, apiCoordinate)
     implementation(project(":platform:bukkit:common"))
     implementation(project(":platform:bukkit:modern"))
     compileOnly(apiCoordinate)
@@ -179,34 +177,6 @@ tasks.named<Test>("test") {
     )
 }
 
-fun sha256(file: File): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    file.inputStream().use { input ->
-        val buffer = ByteArray(8192)
-        while (true) {
-            val count = input.read(buffer)
-            if (count < 0) break
-            digest.update(buffer, 0, count)
-        }
-    }
-    return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
-}
-
-val verifyApiSnapshotFreeze by tasks.registering {
-    group = "verification"
-    description = "验证 Bukkit $minecraftVersion API JAR 与冻结 SHA-256 一致"
-    doLast {
-        val artifact = apiVerification.singleFile
-        val actual = sha256(artifact)
-        if (actual != apiSha256) {
-            throw GradleException(
-                "Bukkit $minecraftVersion API 校验失败：expected=$apiSha256, actual=$actual",
-            )
-        }
-        logger.lifecycle("Bukkit $minecraftVersion API 校验通过：${artifact.name} $actual")
-    }
-}
-
 val verifyPackaging by tasks.registering {
     group = "verification"
     description = "校验 Bukkit $minecraftVersion 产品/验收产物"
@@ -268,7 +238,7 @@ tasks.named("assemble") {
     dependsOn(verifyPackaging)
 }
 tasks.named("build") {
-    dependsOn(tasks.named("shadowJar"), acceptance.classesTaskName, verifyPackaging, verifyApiSnapshotFreeze)
+    dependsOn(tasks.named("shadowJar"), acceptance.classesTaskName, verifyPackaging, "verifyApiSnapshotFreeze")
 }
 
 val bukkitReportFile = layout.buildDirectory.file("acceptance/server-report.txt")

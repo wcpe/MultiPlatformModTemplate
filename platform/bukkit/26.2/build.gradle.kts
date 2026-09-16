@@ -1,13 +1,11 @@
+import buildconventions.frozenApiSnapshot
+import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.github.spotbugs.snom.SpotBugsExtension
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
-import java.util.zip.ZipFile
-import buildconventions.packagingVerification
 
 // Bukkit 26.2 独立产品工程：common + modern + v26_2 → mpmt-bukkit-26.2-*.jar
 
@@ -66,20 +64,20 @@ platformLane {
 // paper-api 26.2 的 Gradle 元数据要求 JVM 25：产物目标同为 25（见 targetJavaVersion），
 // 故可直接按普通坐标解析。冻结语义由 apiVerification 配置 + SHA-256 校验任务承担，
 // 与 bukkit 1.12.2 / 1.20.1 / 1.21.1 三车道保持一致，不再需要本地 libs jar。
-val apiVerification =
-    configurations.create("apiVerification") {
-        isCanBeConsumed = false
-        isCanBeResolved = true
-        isTransitive = false
-    }
-
 acceptance.compileClasspath += mainSourceSet.output + mainSourceSet.compileClasspath
 acceptance.runtimeClasspath += mainSourceSet.output + mainSourceSet.runtimeClasspath
+
+// 冻结 paper-api：插件负责解析配置与 SHA-256 校验，并把校验挂到编译任务之前
+frozenApiSnapshot(
+    laneLabel = "Bukkit",
+    coordinate = apiCoordinate,
+    expectedSha256 = apiSha256,
+    mcVersion = minecraftVersion,
+)
 
 dependencies {
     implementation(project(":platform:bukkit:common"))
     implementation(project(":platform:bukkit:modern"))
-    add(apiVerification.name, apiCoordinate)
     // 显式钉住编译期 adventure / guava / gson 版本（Paper 元数据亦会传递，这里避免解析漂移；均不入产物）
     compileOnly(platform("net.kyori:adventure-bom:5.2.0"))
     compileOnly(apiCoordinate)
@@ -217,36 +215,6 @@ configure<SpotBugsExtension> {
     toolVersion.set("4.9.8")
 }
 
-fun sha256(file: File): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    file.inputStream().use { input ->
-        val buffer = ByteArray(8192)
-        while (true) {
-            val count = input.read(buffer)
-            if (count < 0) break
-            digest.update(buffer, 0, count)
-        }
-    }
-    return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
-}
-
-val verifyApiSnapshotFreeze by tasks.registering {
-    group = "verification"
-    description = "验证 Bukkit $minecraftVersion API JAR 与冻结 SHA-256 一致"
-    doLast {
-        val artifact = apiVerification.singleFile
-        val actual = sha256(artifact)
-        if (actual != apiSha256) {
-            throw GradleException(
-                "Bukkit $minecraftVersion API 校验失败：expected=$apiSha256, actual=$actual",
-            )
-        }
-        logger.lifecycle("Bukkit $minecraftVersion API 校验通过：${artifact.name} $actual")
-    }
-}
-tasks.named("compileJava") { dependsOn(verifyApiSnapshotFreeze) }
-tasks.named(acceptance.compileJavaTaskName) { dependsOn(verifyApiSnapshotFreeze) }
-
 val verifyPackaging by tasks.registering {
     group = "verification"
     description = "校验 Bukkit $minecraftVersion 产品/验收产物"
@@ -259,11 +227,16 @@ val verifyPackaging by tasks.registering {
     ) { product, acceptance ->
         val acceptanceFile = acceptance ?: error("缺少验收产物输入")
         val adapterService =
-        "META-INF/services/top.wcpe.mc.mpmt.platform.bukkit.version.BukkitVersionAdapter"
+            "META-INF/services/top.wcpe.mc.mpmt.platform.bukkit.version.BukkitVersionAdapter"
         must(product.file.name.contains(minecraftVersion), "产品产物名未包含 MC 版本")
         must(acceptanceFile.file.name.contains(minecraftVersion), "验收产物名未包含 MC 版本")
         mustContain(product, adapterClassPath, "产品缺少选中的 L4 适配器")
-        must(product.entries.count { it.endsWith("BukkitVersionAdapter.class") && !it.endsWith("ModernBukkitVersionAdapter.class") && it != "top/wcpe/mc/mpmt/platform/bukkit/version/BukkitVersionAdapter.class" } == 1, "产品包含零个或多个 L4 适配器")
+        must(
+            product.entries.count {
+                it.endsWith("BukkitVersionAdapter.class") && !it.endsWith("ModernBukkitVersionAdapter.class") && it != "top/wcpe/mc/mpmt/platform/bukkit/version/BukkitVersionAdapter.class"
+            } == 1,
+            "产品包含零个或多个 L4 适配器",
+        )
         mustServiceEquals(product, adapterService, adapterClass, "产品 adapter services 与目标不符")
         mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "产品未 shade 核心")
         mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "产品未 shade SPI")
@@ -286,7 +259,7 @@ tasks.named("assemble") {
     dependsOn(verifyPackaging)
 }
 tasks.named("build") {
-    dependsOn(tasks.named("shadowJar"), acceptance.classesTaskName, verifyPackaging, verifyApiSnapshotFreeze)
+    dependsOn(tasks.named("shadowJar"), acceptance.classesTaskName, verifyPackaging, "verifyApiSnapshotFreeze")
 }
 
 // 26.2 车道没有"默认轨"：其唯一有效矩阵即 REALSERVER262（见 PlatformLane.BUKKIT_262.defaultMatrix）。
