@@ -11,6 +11,7 @@ import java.util.zip.ZipFile
 
 plugins {
     id("build-conventions.quality")
+    id("build-conventions.platform")
     java
     id("com.gradleup.shadow") version "8.3.11"
     id("top.wcpe.mc.mpmt.realserver-acceptance")
@@ -58,41 +59,12 @@ repositories {
 val acceptance: SourceSet = sourceSets.create("acceptance")
 val mainSourceSet = sourceSets.getByName("main")
 val testSourceSet = sourceSets.getByName("test")
-val generatedAcceptanceSources = layout.buildDirectory.dir("generated/sources/acceptance/java")
-acceptance.java.srcDir(generatedAcceptanceSources)
-
-val generateAcceptanceChannelId by tasks.registering {
-    group = "build"
-    description = "生成验收控制通道常量（MC $minecraftVersion）"
-    inputs.property("acceptanceChannel", acceptanceChannel)
-    outputs.dir(generatedAcceptanceSources)
-    doLast {
-        val packageDir =
-            generatedAcceptanceSources
-                .get()
-                .asFile
-                .resolve("top/wcpe/mc/mpmt/platform/bukkit/acceptance")
-        packageDir.mkdirs()
-        packageDir.resolve("BukkitAcceptanceControlChannelId.java").writeText(
-            """
-            package top.wcpe.mc.mpmt.platform.bukkit.acceptance;
-
-            /** 构建期生成的验收控制通道（MC $minecraftVersion）。 */
-            public final class BukkitAcceptanceControlChannelId {
-
-                /** 当前目标版本的验收控制通道。 */
-                public static final String CHANNEL = "$acceptanceChannel";
-
-                private BukkitAcceptanceControlChannelId() {
-                }
-            }
-            """.trimIndent() + "\n",
-            StandardCharsets.UTF_8,
-        )
-    }
-}
-tasks.named<JavaCompile>(acceptance.compileJavaTaskName) {
-    dependsOn(generateAcceptanceChannelId)
+// 验收控制通道常量由 build-conventions.platform 生成（生成内容与原内联实现逐字节一致）
+platformLane {
+    mcVersion.set(minecraftVersion)
+    channelName.set(acceptanceChannel)
+    channelPackage.set("top.wcpe.mc.mpmt.platform.bukkit.acceptance")
+    channelClass.set("BukkitAcceptanceControlChannelId")
 }
 
 val apiVerification =

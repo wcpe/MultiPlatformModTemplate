@@ -450,12 +450,6 @@ val packageArtifacts =
         dependsOn(verifyPackaging, staticQualityTasks)
     }
 
-tasks.register("package") {
-    group = "build"
-    description = "执行 Forge 26.2 双 JAR 打包校验"
-    dependsOn(packageArtifacts)
-}
-
 val java25Launcher =
     extensions.getByType(JavaToolchainService::class.java).launcherFor {
         languageVersion.set(JavaLanguageVersion.of(25))

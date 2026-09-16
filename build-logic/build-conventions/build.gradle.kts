@@ -17,6 +17,10 @@ gradlePlugin {
             id = "build-conventions.quality"
             implementationClass = "buildconventions.QualityConventionPlugin"
         }
+        register("platformLane") {
+            id = "build-conventions.platform"
+            implementationClass = "buildconventions.PlatformLanePlugin"
+        }
     }
 }
 

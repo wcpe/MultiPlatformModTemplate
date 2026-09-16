@@ -389,12 +389,6 @@ val packageArtifacts =
         dependsOn(verifyPackaging)
     }
 
-tasks.register("package") {
-    group = "build"
-    description = "执行 Forge 1.21.1 双 JAR 打包校验"
-    dependsOn(packageArtifacts)
-}
-
 val java21Launcher =
     javaToolchains.launcherFor {
         languageVersion.set(JavaLanguageVersion.of(21))
