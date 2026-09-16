@@ -1,3 +1,7 @@
+import buildconventions.acceptanceReportFile
+import buildconventions.packagingVerification
+import buildconventions.requiredAcceptanceProperty
+import buildconventions.verifyAcceptanceRoundReport
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.github.spotbugs.snom.Confidence
 import com.github.spotbugs.snom.Effort
@@ -15,8 +19,6 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
-import java.util.zip.ZipFile
-import buildconventions.packagingVerification
 
 // platform-fabric-26.2（L3）：根构建子模块（ADR-0026）；MC 26.2，common/server/client 分目录，Loom 根打包。
 // 关键链路（ADR-0012）：core 纯 Java 经 shadow shade 进产物，snakeyaml relocate；
@@ -259,14 +261,6 @@ fun sha256(file: File): String =
         .digest(file.readBytes())
         .joinToString("") { "%02x".format(it) }
 
-fun requiredMatrixProperty(matrixId: String, name: String): String {
-    val value = (project.findProperty(name) as String?)?.trim().orEmpty()
-    if (value.isEmpty()) {
-        throw GradleException("矩阵 $matrixId 缺少 -P$name")
-    }
-    return value
-}
-
 fun matrixJavaExecutable(): File {
     val javaHome =
         System.getenv("MPMT_JAVA25_HOME")
@@ -310,8 +304,8 @@ fun configureAcceptanceServer(task: JavaExec) {
             ?.let { file(it) }
             ?: layout.buildDirectory.file("acceptance/server-report-${matrixId.lowercase()}.txt").get().asFile
     task.systemProperty("mpmt.acceptance.matrix", matrixId)
-    task.systemProperty("mpmt.acceptance.runId", requiredMatrixProperty(matrixId, "mpmt.acceptance.runId"))
-    task.systemProperty("mpmt.acceptance.startEpochMs", requiredMatrixProperty(matrixId, "mpmt.acceptance.startEpochMs"))
+    task.systemProperty("mpmt.acceptance.runId", requiredAcceptanceProperty(matrixId, "mpmt.acceptance.runId"))
+    task.systemProperty("mpmt.acceptance.startEpochMs", requiredAcceptanceProperty(matrixId, "mpmt.acceptance.startEpochMs"))
     task.systemProperty("mpmt.acceptance.javaExecutable", javaExecutable.absolutePath)
     task.systemProperty("mpmt.acceptance.artifact.server-runtime", artifactOrProduct("mpmt.acceptance.artifact.server-runtime").absolutePath)
     task.systemProperty("mpmt.acceptance.artifact.server-product", productJar.absolutePath)
@@ -468,28 +462,6 @@ val realRequiredScenarios =
         "acceptance/real-round-trip",
     )
 
-fun matrixReportFile(matrixId: String): File {
-    val custom = (project.findProperty("mpmt.acceptance.report") as String?)?.trim().orEmpty()
-    return if (custom.isNotEmpty()) file(custom) else layout.buildDirectory.file("acceptance/server-report-${matrixId.lowercase()}.txt").get().asFile
-}
-
-fun verifyMatrixReport(report: File, matrixId: String) {
-    val lines = report.readLines().map { it.trim() }.filter { it.isNotEmpty() }
-    if (lines.firstOrNull() != "SERVER-GAMETEST-REPORT v2") throw GradleException("[realserver] 报告不是 acceptance v2")
-    val matrixLine = lines.firstOrNull { it.startsWith("MATRIX\t") || it.startsWith("MATRIX ") }
-    if (matrixLine == null || !matrixLine.contains(matrixId)) throw GradleException("[realserver] 矩阵报告缺少 MATRIX $matrixId：$matrixLine")
-    val runId = requiredMatrixProperty(matrixId, "mpmt.acceptance.runId")
-    if (lines.none { it == "RUN_ID\t$runId" || it == "RUN_ID $runId" }) {
-        throw GradleException("[realserver] 矩阵 $matrixId 报告不属于当前运行：$runId")
-    }
-    if (lines.lastOrNull() != "RESULT PASS") throw GradleException("[realserver] 矩阵 $matrixId 未通过：${report.absolutePath}")
-    for (id in listOf("product-handshake", "product-roundtrip", "client-hud")) {
-        if (lines.none { it.startsWith("SCENARIO\t$id\tPASS") || it.startsWith("PASS $id") || it.contains("\t$id\tPASS") }) {
-            throw GradleException("[realserver] 矩阵 $matrixId 缺少公共场景 PASS：$id")
-        }
-    }
-}
-
 fun launchAcceptanceProcess(task: JavaExec, logFile: File, runDirectory: File): Process {
     logFile.parentFile.mkdirs()
     if (!runDirectory.isDirectory && !runDirectory.mkdirs()) {
@@ -558,11 +530,11 @@ tasks.register("runFabricRealServer262Acceptance") {
     // 旧的遗留 launch.cfg 不再命中，故此处必须显式声明。
     dependsOn(tasks.named("shadowJar"), "gametestClasses", "generateDLIConfig")
     doLast {
-        val matrixId = requiredMatrixProperty("REALSERVER262", "mpmt.acceptance.matrix")
+        val matrixId = requiredAcceptanceProperty("REALSERVER262", "mpmt.acceptance.matrix")
         if (matrixId != "REALSERVER262") throw GradleException("该任务仅支持 MATRIX REALSERVER262：$matrixId")
-        val runId = requiredMatrixProperty(matrixId, "mpmt.acceptance.runId")
-        requiredMatrixProperty(matrixId, "mpmt.acceptance.startEpochMs")
-        val report = matrixReportFile(matrixId)
+        val runId = requiredAcceptanceProperty(matrixId, "mpmt.acceptance.runId")
+        requiredAcceptanceProperty(matrixId, "mpmt.acceptance.startEpochMs")
+        val report = acceptanceReportFile(matrixId)
         val serverTask = tasks.named<JavaExec>("runAcceptanceServer").get()
         val clientTask = tasks.named<JavaExec>("runAcceptanceClient").get()
         configureAcceptanceServer(serverTask)
@@ -583,7 +555,7 @@ tasks.register("runFabricRealServer262Acceptance") {
             if (!report.isFile || !report.readText().contains("RUN_ID\t$runId")) {
                 throw GradleException("[realserver] REALSERVER262 未在截止前生成当前运行报告：${report.absolutePath}")
             }
-            verifyMatrixReport(report, matrixId)
+            verifyAcceptanceRoundReport(report, matrixId)
             logger.lifecycle("[realserver] Fabric 26.2 REALSERVER262 报告 PASS：${report.absolutePath}")
         } finally {
             stopAcceptanceProcess(client)
@@ -607,7 +579,7 @@ tasks.register("runRealServerAcceptance") {
         val haveRoundContext =
             !(project.findProperty("mpmt.acceptance.runId") as String?)?.trim().isNullOrEmpty()
         val matrixId = explicitMatrix.ifEmpty { if (haveRoundContext) "REALSERVER262" else "" }
-        val report = if (matrixId.isEmpty()) acceptanceReportFile.get().asFile else matrixReportFile(matrixId)
+        val report = if (matrixId.isEmpty()) acceptanceReportFile.get().asFile else acceptanceReportFile(matrixId)
         if (!report.exists()) {
             throw GradleException(
                 "未找到验收报告（先跑 runAcceptanceServer + runAcceptanceClient）：${report.absolutePath}",
@@ -620,7 +592,7 @@ tasks.register("runRealServerAcceptance") {
             throw GradleException("[realserver] 报告不是 acceptance v2")
         }
         if (matrixId.isNotEmpty()) {
-            verifyMatrixReport(report, matrixId)
+            verifyAcceptanceRoundReport(report, matrixId)
             logger.lifecycle("[realserver] 矩阵 $matrixId 报告 PASS：${report.absolutePath}")
             return@doLast
         }
