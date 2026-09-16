@@ -1,3 +1,5 @@
+import buildconventions.ForgeLaneExtension
+import buildconventions.configureForgeShadowProductChain
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.github.spotbugs.snom.Confidence
@@ -11,7 +13,6 @@ import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.plugins.quality.Pmd
 import org.gradle.api.plugins.quality.PmdExtension
 import org.gradle.jvm.toolchain.JavaToolchainService
-import org.gradle.language.jvm.tasks.ProcessResources
 import java.security.MessageDigest
 
 // platform-forge（L3）：根构建普通子模块，仅应用 arch-loom（top.wcpe.loom，ADR-0007）。
@@ -34,9 +35,18 @@ plugins {
     checkstyle
     pmd
     jacoco
+    id("build-conventions.forge")
 }
 
 val forgeVersion = "1.20.1-47.4.2"
+
+// forge 车道参数：本车道走 shadow 打包链路（无 dev SecureJar 嵌入），只声明 lane 标签与 FG 时代 reobf 兼容路径
+val forge = extensions.getByType(ForgeLaneExtension::class.java)
+forge.mcVersion.set("1.20.1")
+forge.targetJavaVersion.set(17)
+forge.laneLabel.set("Forge 1.20.1")
+forge.reobfCopyTasks.put("reobfShadowJar", "remapJar")
+forge.reobfCopyTasks.put("reobfAcceptanceJar", "remapAcceptanceJar")
 val snakeyamlVersion = "2.2"
 // 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经根构建项目依赖消费
 val platformApiProject = project(":platform:forge:forge-api")
@@ -191,50 +201,9 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-// mods.toml 的 ${version} 占位由构建注入
-tasks.processResources {
-    inputs.property("version", project.version)
-    filesMatching("META-INF/mods.toml") {
-        expand("version" to project.version)
-    }
-}
-
 // 打包链路：shadowJar（shade core/spi + relocate snakeyaml，产物名 -dev-shadow）→ remapJar（named → SRG，
-// arch-loom 承担 FG reobf 的 forge 生产命名，产出无 classifier 的最终产品 jar）
-tasks.named<ShadowJar>("shadowJar") {
-    archiveClassifier.set("dev-shadow")
-    isPreserveFileTimestamps = false
-    isReproducibleFileOrder = true
-    configurations = listOf(shadowBundle)
-    relocate("org.yaml.snakeyaml", "top.wcpe.mc.mpmt.libs.org.yaml.snakeyaml")
-    exclude("META-INF/maven/**")
-    // Forge 生产期 Mixin 配置发现清单属性（旧 MixinGradle 自动写入，迁移后手工补齐；remapJar 保留清单）
-    manifest {
-        attributes("MixinConfigs" to "mpmt.mixins.json")
-    }
-    // shadow 改配置不刷新缓存指纹，令其确定性重跑、不缓存（与其它平台一致）
-    outputs.upToDateWhen { false }
-    outputs.cacheIf { false }
-}
-
-// remapJar 改吃 shadowJar 产物，使 core / 第三方随之进入最终 SRG 产物（target namespace 由 arch-loom
-// 按 forge 1.20.1 生产运行期解析为 SRG）
-tasks.named<RemapJarTask>("remapJar") {
-    dependsOn(tasks.named("shadowJar"))
-    inputFile.set(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
-    archiveClassifier.set("")
-}
-
-// 根门禁契约适配：根 collectReleaseArtifacts 依赖 includedBuild 任务 :reobfShadowJar，并按 FG 时代输出路径
-// build/reobfShadowJar/output.jar 收集发布制品；内容即 remapJar 的 SRG 产品 jar。
-val reobfShadowJar by tasks.registering(Copy::class) {
-    group = "build"
-    description = "把 remapJar 的 SRG 产品 jar 落位到 FG 时代输出路径 build/reobfShadowJar/output.jar（根门禁契约）"
-    dependsOn(tasks.named("remapJar"))
-    from(tasks.named<RemapJarTask>("remapJar").flatMap { it.archiveFile })
-    into(layout.buildDirectory.dir("reobfShadowJar"))
-    rename { "output.jar" }
-}
+// arch-loom 承担 FG reobf 的 forge 生产命名，产出无 classifier 的最终产品 jar）由 build-conventions.forge 接线
+configureForgeShadowProductChain(project, "shadowBundle", "mpmt.mixins.json")
 
 // 打包校验：mod jar 内核心 shade、snakeyaml relocate、mods.toml 与 services 在位、未误打入 Minecraft
 val verifyPackaging by tasks.registering {
@@ -275,10 +244,6 @@ tasks.named("assemble") {
 
 tasks.named("build") {
     dependsOn("reobfShadowJar", verifyPackaging)
-}
-
-tasks.test {
-    useJUnitPlatform()
 }
 
 // ============================================================================
@@ -379,14 +344,6 @@ dependencies {
     "acceptanceCompileOnly"(protocolProject)
 }
 
-// 验收 mod mods.toml 的 ${version} 占位由构建注入
-tasks.named<ProcessResources>("processAcceptanceResources") {
-    inputs.property("version", project.version)
-    filesMatching("META-INF/mods.toml") {
-        expand("version" to project.version)
-    }
-}
-
 // 验收驱动 mod jar：shade acceptance/protocol/core-domain（均第一方、无第三方运行期依赖，无需 relocate），
 // 产物名 -dev-shadow，作为 remapAcceptanceJar 的输入
 val acceptanceJar by tasks.registering(ShadowJar::class) {
@@ -416,16 +373,6 @@ val remapAcceptanceJar by tasks.registering(RemapJarTask::class) {
     archiveClassifier.set("")
 }
 
-// 历史编排路径适配：FG reobfAcceptanceJar 的输出路径 build/reobfAcceptanceJar/output.jar（内容即 remap 后验收 jar）
-val reobfAcceptanceJar by tasks.registering(Copy::class) {
-    group = "build"
-    description = "把 remapAcceptanceJar 的 SRG 验收 jar 落位到 FG 时代输出路径 build/reobfAcceptanceJar/output.jar"
-    dependsOn(remapAcceptanceJar)
-    from(remapAcceptanceJar.flatMap { it.archiveFile })
-    into(layout.buildDirectory.dir("reobfAcceptanceJar"))
-    rename { "output.jar" }
-}
-
 // 把验收源集纳入常规 build 的编译校验（只编译，不打包——打包由验收编排按需触发）
 val acceptanceContractTest by tasks.registering(Test::class) {
     group = "verification"
@@ -447,7 +394,7 @@ val runSimNetworkAcceptance by tasks.registering(JavaExec::class) {
     description = "运行 Forge 1.20.1 完整默认轨模拟服套件并生成 acceptance v2 报告"
     classpath = acceptance.runtimeClasspath
     mainClass.set("top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeDefaultSimulation")
-    dependsOn(tasks.named("acceptanceClasses"), tasks.named("reobfShadowJar"))
+    dependsOn("acceptanceClasses", "reobfShadowJar")
     systemProperty("mpmt.acceptance.report", simAcceptanceReport.get().asFile.absolutePath)
     systemProperty("mpmt.acceptance.version", project.version.toString())
     systemProperty("mpmt.acceptance.platform", "forge")

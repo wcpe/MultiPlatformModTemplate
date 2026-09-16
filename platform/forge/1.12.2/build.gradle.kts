@@ -1,7 +1,10 @@
+import buildconventions.FORGE_ARCHIVE_EXCLUDES
+import buildconventions.ForgeLaneExtension
+import buildconventions.ForgeModules
+import buildconventions.registerForgeAcceptanceJar
 import dev.architectury.pack200.java.Pack200Adapter
 import net.fabricmc.loom.task.RemapJarTask
 import org.gradle.jvm.toolchain.JavaToolchainService
-import org.gradle.language.jvm.tasks.ProcessResources
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.URI
@@ -25,6 +28,7 @@ plugins {
     id("build-conventions.quality")
     java
     id("top.wcpe.loom")
+    id("build-conventions.forge")
 }
 
 // 本工程为根构建的普通子模块（platform/forge/1.12.2）；group / version 由根 allprojects 统一提供。
@@ -48,10 +52,35 @@ val mappingsVersion = "20171003-1.12"
 val productChannel = "MPMT"
 val acceptanceChannel = "MPMTTEST"
 
-// 共享模块已为根构建子模块：按工程路径取各模块 jar 任务产物（FileCollection，自带任务依赖）
-val moduleJar = { projectPath: String ->
-    files(project(projectPath).tasks.withType<Jar>().matching { it.name == "jar" })
-}
+// forge 车道参数：本车道为 client-only + FG 时代 reobf 兼容路径（无 dev SecureJar 嵌入、无报告门）
+val forge = extensions.getByType(ForgeLaneExtension::class.java)
+forge.mcVersion.set(minecraftVersion)
+forge.targetJavaVersion.set(8)
+forge.laneLabel.set("Forge 1.12.2")
+forge.modMetadataResource.set("mcmod.info")
+forge.deduplicateProcessedResources.set(true)
+forge.acceptanceJarVersionedDevLibs.set(true)
+forge.acceptanceJarName.set("mpmt-forge-acceptance-1.12.2")
+forge.acceptanceJarTitle.set("MPMT Forge 1.12.2 客户端验收伴侣")
+forge.acceptanceExcludes.set(
+    listOf(
+        "top/wcpe/mc/mpmt/core/**",
+        "top/wcpe/mc/mpmt/protocol/**",
+        "top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class",
+        "top/wcpe/mc/mpmt/platform/forge/ForgeBuildInfo.class",
+        "top/wcpe/mc/mpmt/platform/forge/client/**",
+        "top/wcpe/mc/mpmt/platform/forge/hud/**",
+        "top/wcpe/mc/mpmt/platform/forge/net/**",
+    ),
+)
+forge.reobfCopyTasks.put("reobfJar", "remapJar")
+forge.reobfCopyTasks.put("reobfAcceptanceJar", "remapAcceptanceJar")
+forge.contractTestMainClass.set("top.wcpe.mc.mpmt.platform.forge.contract.Forge112ContractTest")
+forge.contractTestDescription.set("运行 1.12.2 构建、握手、wire 与双 JAR 隔离契约测试")
+forge.contractTestProductTask.set("remapJar")
+forge.contractTestAcceptanceTask.set("remapAcceptanceJar")
+forge.contractTestDependsOn.set(listOf("remapAcceptanceJar"))
+forge.contractTestProperties.put("mpmt.test.version", project.version.toString())
 
 // 共享模块（L0-L2）项目路径；acceptance 仅进验收伴侣，不进产品
 val productSharedProjects = listOf(":core:domain", ":core:runtime", ":core:client", ":core:protocol")
@@ -278,8 +307,8 @@ dependencies {
     add("mappings", "de.oceanlabs.mcp:mcp_snapshot:$mappingsVersion@zip")
     add("forge", "net.minecraftforge:forge:$forgeVersion")
 
-    add("implementation", files(productSharedProjects.map { moduleJar(it) }))
-    add("productBundle", files(productSharedProjects.map { moduleJar(it) }))
+    add("implementation", files(productSharedProjects.map { ForgeModules.moduleJar(project, it) }))
+    add("productBundle", files(productSharedProjects.map { ForgeModules.moduleJar(project, it) }))
 
     // 纯 JVM 单元测试：JUnit 5（BOM 统一版本，与其它车道同源）。
     // 被测类为 Java 8 字节码，测试同样以 Java 8 语法编译 / 运行（toolchain 已固定 8）。
@@ -287,13 +316,8 @@ dependencies {
     add("testImplementation", "org.junit.jupiter:junit-jupiter")
     add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
 
-    add("acceptanceImplementation", files(acceptanceSharedProjects.map { moduleJar(it) }))
-    add("acceptanceBundle", files(moduleJar(":modules:acceptance")))
-}
-
-// test 源集用 JUnit Platform（与其它车道一致）
-tasks.named<Test>("test") {
-    useJUnitPlatform()
+    add("acceptanceImplementation", files(acceptanceSharedProjects.map { ForgeModules.moduleJar(project, it) }))
+    add("acceptanceBundle", files(ForgeModules.moduleJar(project, ":modules:acceptance")))
 }
 
 loom {
@@ -342,43 +366,12 @@ val generateBuildInfo by tasks.registering {
 sourceSets["main"].java.srcDir(file("${layout.buildDirectory.get().asFile}/generated/sources/buildInfo"))
 tasks.named("compileJava") { dependsOn(generateBuildInfo) }
 
-tasks.named<ProcessResources>("processResources") {
-    // Gradle 9 默认对重复条目报错（FG5 时代默认放行）；同名资源内容一致，保留先到者
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    inputs.property("version", project.version)
-    filesMatching("mcmod.info") {
-        expand(mapOf("version" to project.version))
-    }
-}
-
-tasks.named<ProcessResources>("processAcceptanceResources") {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    inputs.property("version", project.version)
-    filesMatching("mcmod.info") {
-        expand(mapOf("version" to project.version))
-    }
-}
-
-tasks.withType<JavaCompile>().configureEach {
-    options.encoding = "UTF-8"
-    options.compilerArgs = options.compilerArgs + listOf("-Xlint:all")
-}
-
-val archiveExcludes =
-    listOf(
-        "META-INF/*.SF",
-        "META-INF/*.DSA",
-        "META-INF/*.RSA",
-        "META-INF/MANIFEST.MF",
-        "META-INF/maven/**",
-    )
-
 tasks.named<Jar>("jar") {
     // loom 约定：jar 产物改落 build/devlibs 且带 -dev 分类器；
     // build/libs 下的正式产品名（无分类器）由 remapJar 以生产命名输出（见 reobfJar 兼容层）
     from(productBundle.elements.map { elements -> elements.map { zipTree(it.asFile) } })
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    archiveExcludes.forEach { exclude(it) }
+    FORGE_ARCHIVE_EXCLUDES.forEach { exclude(it) }
     exclude("top/wcpe/mc/mpmt/acceptance/**")
     exclude("top/wcpe/mc/mpmt/platform/forge/acceptance/**")
     manifest {
@@ -390,31 +383,8 @@ tasks.named<Jar>("jar") {
     }
 }
 
-val acceptanceJar by tasks.registering(Jar::class) {
-    group = "build"
-    description = "构建独立 client-only 1.12.2 验收伴侣 JAR（dev/MCP 命名中间产物）"
-    archiveBaseName.set("mpmt-forge-acceptance-1.12.2")
-    archiveVersion.set(project.version.toString())
-    // loom 约定：dev 产物落 devlibs，避免与 build/libs 下 remapAcceptanceJar 的正式产物重名
-    destinationDirectory.set(layout.buildDirectory.dir("devlibs"))
-    from(sourceSets["acceptance"].output)
-    from(acceptanceBundle.elements.map { elements -> elements.map { zipTree(it.asFile) } })
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    archiveExcludes.forEach { exclude(it) }
-    exclude("top/wcpe/mc/mpmt/core/**")
-    exclude("top/wcpe/mc/mpmt/protocol/**")
-    exclude("top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class")
-    exclude("top/wcpe/mc/mpmt/platform/forge/ForgeBuildInfo.class")
-    exclude("top/wcpe/mc/mpmt/platform/forge/client/**")
-    exclude("top/wcpe/mc/mpmt/platform/forge/hud/**")
-    exclude("top/wcpe/mc/mpmt/platform/forge/net/**")
-    manifest {
-        attributes(
-            "Implementation-Title" to "MPMT Forge 1.12.2 客户端验收伴侣",
-            "Implementation-Version" to project.version,
-        )
-    }
-}
+// 验收伴侣 dev 命名中间产物（落 devlibs），剔除清单与产物名由车道参数给出
+val acceptanceJar = registerForgeAcceptanceJar(project, forge)
 
 // 验收伴侣生产产物：named(MCP) → srg 重映射（等价原 FG reobfAcceptanceJar），
 // 输出保持 build/libs/mpmt-forge-acceptance-1.12.2-<version>.jar（根文档/契约既有预期）
@@ -429,27 +399,9 @@ val remapAcceptanceJar by tasks.registering(RemapJarTask::class) {
     archiveClassifier.set("")
 }
 
-// FG 时代 reobf 产物路径/任务名兼容层（根文件契约不可断）：
-// - 根 :collectReleaseArtifacts 的 ReleaseArtifact 硬引用 platform/forge/1.12.2/build/reobfJar/output.jar
-// - 根 realserver 说明沿用 `gradlew reobfJar reobfAcceptanceJar` 命令与产物路径
-// arch-loom 下重映射由 remapJar / remapAcceptanceJar 产出，这里同步到既有路径。
-val reobfJar by tasks.registering(Copy::class) {
-    group = "build"
-    description = "同步 remapJar 产物到 build/reobfJar/output.jar（根门禁 ReleaseArtifact 既有路径）"
-    dependsOn(tasks.named<RemapJarTask>("remapJar"))
-    from(tasks.named<RemapJarTask>("remapJar").flatMap { it.archiveFile })
-    into(layout.buildDirectory.dir("reobfJar"))
-    rename { "output.jar" }
-}
-
-val reobfAcceptanceJar by tasks.registering(Copy::class) {
-    group = "build"
-    description = "同步 remapAcceptanceJar 产物到 build/reobfAcceptanceJar/output.jar（client-companion 既有首选路径）"
-    dependsOn(remapAcceptanceJar)
-    from(remapAcceptanceJar.flatMap { it.archiveFile })
-    into(layout.buildDirectory.dir("reobfAcceptanceJar"))
-    rename { "output.jar" }
-}
+// FG 时代 reobf 产物路径兼容层（reobfJar / reobfAcceptanceJar）由 build-conventions.forge 注册：
+// 根 :collectReleaseArtifacts 硬引用 platform/forge/1.12.2/build/reobfJar/output.jar，
+// 根 realserver 说明沿用 `gradlew reobfJar reobfAcceptanceJar` 命令与产物路径。
 
 /**
  * 将 client-only 产品 + 验收伴侣拷到 build/client-companion/，供 CatServer（HYBRID 矩阵）手工/编排消费。
@@ -458,7 +410,7 @@ val reobfAcceptanceJar by tasks.registering(Copy::class) {
 val prepareClientCompanionArtifacts by tasks.registering {
     group = "build"
     description = "拷贝 Forge 1.12.2 client-only 产品/验收 jar 到 build/client-companion/（供 CatServer（HYBRID 矩阵））"
-    dependsOn(reobfJar, reobfAcceptanceJar)
+    dependsOn("reobfJar", "reobfAcceptanceJar")
     doLast {
         val outDir = layout.buildDirectory.dir("client-companion").get().asFile
         outDir.mkdirs()
@@ -496,19 +448,6 @@ val java8Launcher =
         languageVersion.set(JavaLanguageVersion.of(8))
     }
 
-val contractTest by tasks.registering(JavaExec::class) {
-    group = "verification"
-    description = "运行 1.12.2 构建、握手、wire 与双 JAR 隔离契约测试"
-    dependsOn(tasks.named<RemapJarTask>("remapJar"), remapAcceptanceJar, tasks.named("contractTestClasses"))
-    classpath = sourceSets["contractTest"].runtimeClasspath
-    mainClass.set("top.wcpe.mc.mpmt.platform.forge.contract.Forge112ContractTest")
-    javaLauncher.set(java8Launcher)
-    systemProperty("mpmt.test.repositoryRoot", rootProject.projectDir.absolutePath)
-    systemProperty("mpmt.test.productJar", tasks.named<RemapJarTask>("remapJar").flatMap { it.archiveFile }.get().asFile.absolutePath)
-    systemProperty("mpmt.test.acceptanceJar", remapAcceptanceJar.flatMap { it.archiveFile }.get().asFile.absolutePath)
-    systemProperty("mpmt.test.version", project.version.toString())
-}
-
 // runClient 逐项等价原 FG3 client run：除 runDir/系统属性外，1.12.2 客户端本体只能在 Java 8 上启动
 tasks.matching { it.name == "runClient" }.configureEach {
     val runClientTask = this
@@ -520,9 +459,9 @@ tasks.matching { it.name == "runClient" }.configureEach {
     }
 }
 
-tasks.named("check") { dependsOn(contractTest) }
+tasks.named("check") { dependsOn("contractTest") }
 // build 须同时产出生产验收 jar 与根门禁/文档既有的 reobf* 兼容路径（产品 remapJar 由 assemble 链触发）
-tasks.named("build") { dependsOn(remapAcceptanceJar, reobfJar, reobfAcceptanceJar) }
+tasks.named("build") { dependsOn("remapAcceptanceJar", "reobfJar", "reobfAcceptanceJar") }
 
 tasks.named<Delete>("clean") {
     doFirst {
