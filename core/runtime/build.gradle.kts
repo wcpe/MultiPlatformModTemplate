@@ -3,6 +3,7 @@
 // 不做平台发现（发现在 L2 platform-spi，注入进本运行时；L1 不依赖 L2）。
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
 }
 

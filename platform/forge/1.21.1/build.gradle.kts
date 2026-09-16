@@ -8,6 +8,7 @@ import java.io.DataInputStream
 import java.util.zip.ZipFile
 
 plugins {
+    id("build-conventions.quality")
     java
     id("top.wcpe.loom")
 }

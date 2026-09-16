@@ -3,6 +3,7 @@
 // 它负责「发现并装配」：发现唯一活跃平台、把端口注入 L1 运行时；L1 不反向依赖本层。
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
 }
 

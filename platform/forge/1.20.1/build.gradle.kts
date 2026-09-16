@@ -22,6 +22,7 @@ import java.util.zip.ZipFile
 // 取代旧 MixinGradle（buildscript classpath + apply）。
 
 plugins {
+    id("build-conventions.quality")
     java
     id("top.wcpe.loom")
     // 8.3.11：修复 RelocatorRemapper.mapValue 与 loom 依赖树上新 ASM（visitLdcInsn 传 Type）的不兼容

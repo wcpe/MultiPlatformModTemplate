@@ -10,6 +10,7 @@ import java.util.zip.ZipFile
 // Bukkit 1.12.2 独立产品工程：common + v1_12 适配器 → mpmt-bukkit-1.12.2-*.jar
 
 plugins {
+    id("build-conventions.quality")
     java
     id("com.gradleup.shadow") version "8.3.11"
     id("top.wcpe.mc.mpmt.realserver-acceptance")

@@ -33,6 +33,8 @@ pluginManagement {
     }
     // 真服验收编排约定插件（Gradle 插件工程，必须经 includeBuild 引入；ADR-0026 决策 2）
     includeBuild("build-logic/realserver-acceptance")
+    // 构建约定插件（公共构建流程：质量门禁、车道基座、打包断言等；ADR-0027）
+    includeBuild("build-logic/build-conventions")
 }
 
 plugins {

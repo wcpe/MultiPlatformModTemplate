@@ -2,6 +2,7 @@
 // 依架构 protocol → core-domain（ADR-0001）：收发管线 PacketDispatcher 经 L0 TransportPort 收发。
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
 }
 

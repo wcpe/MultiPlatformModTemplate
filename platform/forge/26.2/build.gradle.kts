@@ -28,6 +28,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 
 plugins {
+    id("build-conventions.quality")
     id("java")
     // EGT 迁移（ADR-0025 后续）： Forge 26.2 改用本地 wcpe loom fork（architectury-loom 系，
     // 为无混淆 Forge 补齐 mcp merge 预补丁管线）；版本由 settings pluginManagement 钉在 mavenLocal。

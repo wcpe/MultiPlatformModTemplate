@@ -19,6 +19,7 @@ import java.util.zip.ZipFile
 // remapJar 消费 shadowJar 产物产出最终 remapped mod jar。映射用 Mojang 官方（ADR-0016）。
 
 plugins {
+    id("build-conventions.quality")
     id("top.wcpe.loom")
     id("com.gradleup.shadow") version "8.3.11"
     // 静态分析 / 质量工具链由根构建 subprojects{} 统一提供（含 spotbugs/ktlint/detekt/kover，见 ADR-0026）。

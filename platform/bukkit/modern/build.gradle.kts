@@ -2,6 +2,7 @@
 // 仅 1.20+ server 工程依赖；不单独发布产品 jar。
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
 }
 

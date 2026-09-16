@@ -2,6 +2,7 @@
 // 不参与 :collectReleaseArtifacts 发布产物，仅作模板范本。
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
 }
 

@@ -3,6 +3,7 @@
 // 严格 Java 8（与核心一致，最大兼容；纯 JVM 测试设施无平台依赖）。
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
 }
 

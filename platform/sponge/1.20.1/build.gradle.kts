@@ -19,6 +19,7 @@ import java.util.zip.ZipFile
 // 无 reobf（Sponge 不 remap，同 NeoForge）。sponge{} DSL 生成插件元数据，不手写 sponge_plugins.json。
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
     id("org.spongepowered.gradle.plugin")
     id("com.gradleup.shadow") version "8.3.11"

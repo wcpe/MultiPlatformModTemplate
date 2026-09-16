@@ -2,6 +2,7 @@
 // 经进程内回环传输跑通"握手 + 版本协商 + 往返包"全链路（纯 JVM，无需真实平台 / 实机，FR-11 ② 的逻辑证明）。
 
 plugins {
+    id("build-conventions.quality")
     java
 }
 

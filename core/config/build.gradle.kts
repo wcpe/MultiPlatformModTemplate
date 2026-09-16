@@ -2,6 +2,7 @@
 // 严格 Java 8；依赖 snakeyaml（YAML）+ gson（JSON），源码用其原始包名，relocate 到 libs.* 是各平台 shade 期职责（ADR-0012）。
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
 }
 

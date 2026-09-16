@@ -2,6 +2,7 @@
 // 基目录经 L0 DataDirectoryPort 由平台提供；本模块只在其下拼相对预设位置，不硬编码绝对路径。
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
 }
 

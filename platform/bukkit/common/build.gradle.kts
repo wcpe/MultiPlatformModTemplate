@@ -2,6 +2,7 @@
 // 不单独发布产品 jar；由各 server-* 工程 shadow 进版本产物。
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
 }
 

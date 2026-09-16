@@ -22,6 +22,7 @@ buildscript {
 }
 
 plugins {
+    id("build-conventions.quality")
     java
     id("top.wcpe.loom")
 }

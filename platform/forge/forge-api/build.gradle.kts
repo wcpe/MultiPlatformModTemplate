@@ -7,6 +7,7 @@ base {
 }
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
 }
 

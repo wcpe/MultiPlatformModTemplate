@@ -22,6 +22,7 @@ import java.util.zip.ZipFile
 // MC 26.1+ 使用 Mojang 无混淆原始命名，shadowJar 直接产出权威产品 jar（ADR-0022）。
 
 plugins {
+    id("build-conventions.quality")
     id("top.wcpe.loom-no-remap")
     id("com.gradleup.shadow") version "8.3.11"
     // 静态分析 / 质量工具链由根构建 subprojects{} 统一提供（含 spotbugs/ktlint/detekt/kover，见 ADR-0026）。

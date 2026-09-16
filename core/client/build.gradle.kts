@@ -2,6 +2,7 @@
 // 当前承载握手客户端服务；经 protocol 收发（protocol 已 api 暴露 core-domain）。不含具体渲染调用。
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
 }
 

@@ -3,6 +3,7 @@
 // （比仅锁 sourceCompatibility 更强；满足 ADR-0004 / static-analysis 对 Java 8 的强制要求）。
 
 plugins {
+    id("build-conventions.quality")
     `java-library`
 }
 
