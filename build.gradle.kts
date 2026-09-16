@@ -39,9 +39,6 @@ allprojects {
     version = mpmtVersion
 }
 
-// 脚手架换名：纯 kts（gradle/scaffold-rename.gradle.kts），无 python 依赖
-apply(from = "gradle/scaffold-rename.gradle.kts")
-
 // ============================================================================
 // 静态分析 / 质量工具链（严格门禁，static-analysis.md）——根构建各 Java 模块统一接入。
 // 核心 Gradle 插件（checkstyle 等）经 subprojects 统一配置，共享 config/ 规则集；

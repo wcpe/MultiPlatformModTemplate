@@ -60,13 +60,13 @@
 ### 4.2 FR-17 · 脚手架发布与版本化
 
 - 仓库元信息：`.github/RELEASE_TEMPLATE.md`、`docs/VERSIONING.md`（SemVer 节奏 + `:collectReleaseArtifacts` 产出与 `git tag` 关系 + 路线图链接）。
-- 现有 `tools/README.md`（renameScaffold 用法）已齐；本规格只补"产物如何对外发布"一节，不重写工具。
+- 现有 `tools/README.md`（`init.sh` 换名用法）已齐；本规格只补"产物如何对外发布"一节，不重写工具。
 - 范围明确：公开 GitHub Template 的"复刻提示"由 README 顶部"从模板起步"段承担，不引入 GitHub Actions / 云端流水线（属第三期外）。
 
 ### 4.3 FR-18 · 上手文档与示例
 
-- 新增 `docs/HOWTO-CLONE-AND-WRITE-PLAY.md`：克隆 → `renameScaffold`（dry-run → 写盘）→ 在 L0 写一个最小玩法域（Counter：玩家加入时异步持久化首次加入与计数、按实体归属发消息、离开释放周期句柄；非产品玩法）→ 编译并运行纯 JVM 测试。指南同时说明使用者如何借用既有 L3 范本，把自己的产品域接入目标平台并在真实 Paper/Fabric/Forge 服验证。
-- 新增 `examples/counter`（域包 + 接入范本）：参考 ADR-0015 域组织，不预建其它空域骨架；可被 `renameScaffold` 视为可选复制项。
+- 新增 `docs/HOWTO-CLONE-AND-WRITE-PLAY.md`：克隆 → `./init.sh`（dry-run → 写盘）→ 在 L0 写一个最小玩法域（Counter：玩家加入时异步持久化首次加入与计数、按实体归属发消息、离开释放周期句柄；非产品玩法）→ 编译并运行纯 JVM 测试。指南同时说明使用者如何借用既有 L3 范本，把自己的产品域接入目标平台并在真实 Paper/Fabric/Forge 服验证。
+- 新增 `examples/counter`（域包 + 接入范本）：参考 ADR-0015 域组织，不预建其它空域骨架；可被换名脚本视为可选复制项。
 - 文档走 `docs/specs/_template` 五段式：背景 / 范围 / 设计 / 任务拆分 / 验收；与 P2 `p2-version-matrix.md` 同结构。
 
 ## 5. 任务拆分（确认后执行）
@@ -91,7 +91,7 @@
   - 不引入新 CI / 云端流水线。
   - 公开 GitHub Template 已实际启用；目标版本的 `v0.3.0` / GitHub Release 仍须在验收完成后实际创建，本地 tag / 文档存在不替代该远端操作。
 - **FR-18**
-  - `docs/HOWTO-CLONE-AND-WRITE-PLAY.md` 在干净工作区能照做完：克隆 → renameScaffold → 参照 Counter 编写 L0 玩法域 → 编译并通过纯 JVM 测试。该路径已在本机预热缓存下的干净克隆复现，不能宣称为冷缓存或新机器验证。
+  - `docs/HOWTO-CLONE-AND-WRITE-PLAY.md` 在干净工作区能照做完：克隆 → `./init.sh` → 参照 Counter 编写 L0 玩法域 → 编译并通过纯 JVM 测试。该路径已在本机预热缓存下的干净克隆复现，不能宣称为冷缓存或新机器验证。
   - `examples/counter` 走纯 JVM 单测（不依赖任何 L3 平台代码）；其不预置跨平台 L3 装配。使用者把自己的产品域接入既有 L3 范本后，再自行构建目标平台产物并完成真服验证。
 - **每项 FR 单独通过前不得互相预标交付**。第三期发版在三项全部已交付后由 `sdd-release-version` 统一落 `v0.3.0`、tag，**不预标、不 push**。
 
@@ -100,4 +100,4 @@
 - Forge 26.2 的 Java 25 / Gradle 9.6.1 / `top.wcpe.loom-no-remap` 1.17.1 已冻结；车道为根构建子模块，根门直接依赖 `:platform:forge:forge-26.2` 的任务读取制品与报告。
 - REALSERVER262 历史报告已因冻结制品与严格报告门更新而失效；仅当前候选提交的同轮报告经 `:runRealServerGate262` 通过才满足 ADR-0023。不得以 P2 R1–R6 归档、单元测试、构建产物或未经过严格门的报告替代该证据。
 - 上手示例已定为 Counter：玩家加入时异步记录首次加入与计数，消息按实体归属调度，玩家离开时释放周期句柄。
-- `renameScaffold` 已存在，本规格不修改它的参数；如示例需要 `mpmt.scaffold.rewriteChannels=true`，文档里写明建议在产品化时再开。
+- `./init.sh` 已存在，本规格不修改它的参数；如示例需要 `--rewrite-channels`，文档里写明建议在产品化时再开。

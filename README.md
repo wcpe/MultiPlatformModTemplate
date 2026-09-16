@@ -98,15 +98,11 @@ modules/       smoke acceptance
 ### 克隆后换名（脚手架）
 
 ```bash
-./gradlew \
-  -P mpmt.scaffold.id=mygame \
-  -P mpmt.scaffold.group=com.example.mygame \
-  -P mpmt.scaffold.name=MyGame \
-  -P mpmt.scaffold.dryRun=true \
-  renameScaffold
+./init.sh --dry-run --id mygame --group com.example.mygame --name MyGame   # 先预览
+./init.sh --id mygame --group com.example.mygame --name MyGame             # 写盘
 ```
 
-详见 [`tools/README.md`](tools/README.md)。纯 kts 实现，无需 python。
+零 JDK 依赖（bash + perl），不必先跑通 Gradle 配置。详见 [`tools/README.md`](tools/README.md)。
 
 ## 约定
 

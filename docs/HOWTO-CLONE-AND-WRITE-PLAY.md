@@ -8,35 +8,45 @@
 
 | 项 | 说明 |
 |---|---|
-| JDK | 根构建建议 **JDK 17 或 21**；1.12.2 车道另需 JDK 8（普通上手只用 17+ 即可） |
+| JDK | 换名（`./init.sh`）**不需要 JDK**；编译与构建根工程须 **JDK 25**（26.2 两条车道在配置期硬校验，见 ADR-0026），1.12.2 车道另需 JDK 8 |
 | Gradle | 用仓库自带 `./gradlew` wrapper，无需单独安装 |
 | Git | 克隆 / 分支管理 |
+| bash + perl | 仅 `init.sh` 需要（Git Bash / macOS / Linux 自带） |
 | mc-testkit | 上游 plugin marker 当前不可用；根构建只会从本机 Maven 缓存回退解析插件及实现模块。首次配置失败时，先按 [`OPERATIONS.md`](OPERATIONS.md) 准备本地制品；此临时前提不等于冷缓存或新机器验证已通过。 |
 
-## 2. 克隆并重命名
+## 2. 获取模板并重命名
+
+两种方式任选；**换名步骤完全相同**，区别只是历史与后续同步方式。
+
+| 方式 | 得到的仓库 | 适用 |
+|---|---|---|
+| **Use this template**（推荐） | **全新历史**（单条初始提交），与模板无共同祖先 | 开始自己的项目；不需要跟随模板后续更新 |
+| `git clone` | **带上模板的完整开发史** | 想参考模板演进过程、或打算手动 merge 模板更新 |
 
 ```bash
-git clone <此仓库 URL> mygame
+# 方式一：在 GitHub 页面点 “Use this template” 创建新仓库，然后 clone 自己的仓库
+git clone <你的新仓库 URL> mygame
 cd mygame
 
+# 方式二：直接克隆模板（会带上模板历史）
+git clone <模板仓库 URL> mygame
+cd mygame
+```
+
+换名（零 JDK 依赖，不需要先跑通 Gradle）：
+
+```bash
 # 预览（dry-run，不修改文件）
-./gradlew \
-  -P mpmt.scaffold.id=mygame \
-  -P mpmt.scaffold.group=com.example.mygame \
-  -P mpmt.scaffold.name=MyGame \
-  -P mpmt.scaffold.dryRun=true \
-  renameScaffold
+./init.sh --dry-run --id mygame --group com.example.mygame --name MyGame
 
 # 确认无误后写盘
-./gradlew \
-  -P mpmt.scaffold.id=mygame \
-  -P mpmt.scaffold.group=com.example.mygame \
-  -P mpmt.scaffold.name=MyGame \
-  renameScaffold
+./init.sh --id mygame --group com.example.mygame --name MyGame
 ```
 
 参数含义见 [`tools/README.md`](../tools/README.md)。
-**产品化时**若要改协议通道名（`mpmt:main` 等），加 `-P mpmt.scaffold.rewriteChannels=true`；互通双方必须同一通道。
+**产品化时**若要改协议通道名（`mpmt:main` 等），加 `--rewrite-channels`；互通双方必须同一通道。
+
+> 换名完成后可删除 `init.sh`（它已完成使命）。
 
 ## 3. 在 L0 写一个最小玩法域——以 Counter 为参照
 

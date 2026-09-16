@@ -152,16 +152,15 @@ Forge 1.12.2：**禁止** Forge 服务端 mod；真服走 CatServer HYBRID：
 
 ## 4. 脚手架换名
 
+零 JDK 依赖，不需先跑通 Gradle 配置：
+
 ```bash
-./gradlew \
-  -P mpmt.scaffold.id=mygame \
-  -P mpmt.scaffold.group=com.example.mygame \
-  -P mpmt.scaffold.name=MyGame \
-  -P mpmt.scaffold.dryRun=true \
-  renameScaffold
+./init.sh                # 交互式
+./init.sh --dry-run --id mygame --group com.example.mygame --name MyGame   # 预览
+./init.sh --id mygame --group com.example.mygame --name MyGame             # 写盘
 ```
 
-见 [`../tools/README.md`](../tools/README.md)。纯 kts，无需 python。
+见 [`../tools/README.md`](../tools/README.md)。无需 python，搬迁 `java/` 与 `kotlin/` 下的源码包目录（含 `build-logic`）。
 
 ## 5. GitHub Actions
 

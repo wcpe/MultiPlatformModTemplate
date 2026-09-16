@@ -12,8 +12,10 @@
 - **REALSERVER262 三平台验收目录（FR-16）**：`MatrixScenarioCatalog` 为 REALSERVER262 固定 `product-handshake`、`product-roundtrip`、`client-hud` 三个 required 场景；根 P3 门聚合 Paper、Fabric、Forge 26.2 的构建与当前报告。
 - **上手指南与 Counter 示例域（FR-18）**：`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`；`examples/counter` 是纯 L0 非产品玩法，玩家加入时异步记录首次加入与计数、按实体归属发送消息，离开时释放周期句柄，并有纯 JVM 测试。
 - **版本节奏、公开 GitHub Template 与发布说明（FR-17）**：`docs/VERSIONING.md`；`.github/RELEASE_TEMPLATE.md`；README 顶部强化「克隆本模板」入口；GitHub 仓库已启用为公开 Template。
+- **零 JDK 依赖的一键初始化脚本（FR-17）**：新增仓库根 `init.sh`，用 bash + perl 完成换名（文本替换、源码包目录搬迁、Service 描述符重命名），**不需要 JDK 或 Gradle 配置成功**，解决"必须先装好 JDK 25 并让全量构建配置通过才能换名"的鸡生蛋问题；支持交互式、`--dry-run` 预览、`--rewrite-channels`，换名后提示删除自身。换名入口收敛为 `init.sh` 单一实现，原 `renameScaffold` Gradle 任务及其 `gradle/scaffold-rename.gradle.kts` 已删除。
 
 ### 变更
+- **脚手架换名入口收敛**：删除 Gradle 任务 `renameScaffold` 与 `gradle/scaffold-rename.gradle.kts`（根构建不再 `apply(from = ...)`），换名只保留 `init.sh` 一个实现，避免两份实现语义漂移；`docs/OPERATIONS.md`、`tools/README.md`、`README.md`、上手指南同步改为 `./init.sh`。
 - **真服门命名去里程碑编号**：插件 `p3-r7-report-gate` 更名 `realserver-report-gate`；任务 `runP3R7Build` / `runP3R7RealServerAcceptance` / `runP3R7Gate` / `verifyP3R7ReportsStrict` 分别更名 `buildRealServerArtifacts262` / `runRealServerAcceptance262` / `runRealServerGate262` / `verifyRealServerReportsStrict`；验收矩阵值 `R7` 更名 `REALSERVER262`（报告 `MATRIX` 行与 `server-report-realserver262.txt` 随之变化，旧 R7 报告不再被新门接受）。
 - **验收矩阵与门禁命名去编号**：矩阵值 `R1`–`R4` 合并为 `STANDARD`，`R5` 更名 `HYBRID`，`R6` 更名 `SCHEDULER`（报告 `MATRIX` 行与 `server-report-*.txt` 文件名随之变化，旧值报告不再被接受）；任务 `runP2RealServerAcceptance` 更名 `runVersionMatrixRealServerAcceptance`，历史别名 `runP2StrictCheck` 删除；`P1ScenarioMatrix` 更名 `DefaultScenarioMatrix`，默认 P1 轨改称默认轨。
 - **P3 26.2 真服门放行权威（ADR-0023）**：对 FR-16，冻结 Paper build 71 下 Paper、Fabric、Forge 三车道同轮的 `:runRealServerGate262` 成为最终自动化验收；不再额外要求人工实机确认。此例外仅限 26.2 真服门，不改变其他版本或阶段的实机确认规则。
@@ -25,6 +27,10 @@
 - **26.1+ 命名策略**：新增 ADR-0022 并取代 ADR-0016；26.2 使用上游无混淆命名链路，不声明 Mojmap、Yarn 或 intermediary remap（其构建链路表述随后由 ADR-0025/0026 更新为 WCPE Loom）。
 
 ### 修复
+- **换名写坏 SpotBugs 排除规则**：`config/spotbugs/exclude.xml` 里 `~top\.wcpe\.mc\.mpmt\.protocol\.packet` 是**正则转义**写法，文本替换只命中 id 词规则，把它拼成了 `top\.wcpe\.mc\.mygame\.protocol\.packet`（旧前缀 + 新 id），`protocol.packet` 的 EI 豁免失效，换名后 `:core:protocol:spotbugsMain` 因既有误报而失败；现先把转义形式整段替换，再走普通替换。
+- **换名破坏 wire golden 基线**：`init.sh` 会把 `core/protocol`、`forge 1.21.1/26.2` 三份 `src/test/resources/golden/wire-v1.json` 里的 `mpmt` 元数据一并替换，而同一向量里的 Base64 载荷是历史字节快照，二者不再自洽——换名后 `WireV1GoldenTest` 报"array lengths differ, expected: <12> but was: <14>"；现把字节基线目录排除出文本替换。
+- **换名漏搬 Kotlin 源码包目录**：`init.sh` 原先只搬迁 `java/top/wcpe/mc/mpmt`，漏掉 `build-logic` 的 `kotlin/` 源码树，导致包声明已改而目录未动、换名后该 includeBuild 编译失败；现按源码根段（`java` / `kotlin`）统一判定与搬迁。
+- **换名漏改文件名中的身份**：`init.sh` 原先只重命名 `META-INF/services/<group>.<类>` 描述符，漏掉 `platform/forge/1.20.1/common/src/main/resources/mpmt.mixins.json` 这类**文件名**含旧标识的资源，结果是文件内容已指向 `mygame.mixins.json` 而文件仍叫 `mpmt.mixins.json`，换名后 Forge 1.20.1 的 `verifyPackaging` 报"缺少 Mixin 配置"；现按与文本替换相同的规则（整段 group、id 独立词）对所有身份文件改名。
 - **运行时与平台生命周期**：运行时特性启用失败会逆序回滚；平台提供者以进程级所有权令牌防止跨类加载器双重启动；Fabric 连接事件全局只注册一次且停服时清除旧运行时路由；各平台持久化失败不再被静默吞掉。
 - **可靠性与示例并发**：重组器限制零字节未完成分组与完成去重缓存，防止空载荷元数据耗尽；Counter 按玩家串行异步持久化，避免同一玩家并发加入丢失计数。
 - **mc-testkit 本地回退**：上游 plugin marker 暂不可用时，根插件解析限域优先使用本机 Maven 仓库中的 `top.wcpe.mc-testkit` marker 与 `top.wcpe.mc` 实现模块；不改变插件版本，也不将整座本地仓库暴露给构建。

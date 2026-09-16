@@ -1,0 +1,4 @@
+# 换行符控制：init.sh 必须在 Windows 检出后仍是 LF，否则 shebang 会变成
+# "#!/usr/bin/env bash\r"，Git Bash / Linux / macOS 全部无法执行。
+# 本机 core.autocrlf=true 时这一条是必需的。
+/init.sh text eol=lf
