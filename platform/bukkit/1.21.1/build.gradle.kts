@@ -1,18 +1,18 @@
+import buildconventions.BukkitLaneExtension
 import buildconventions.frozenApiSnapshot
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import org.gradle.api.tasks.SourceSet
-import org.gradle.api.tasks.compile.JavaCompile
-import org.gradle.jvm.toolchain.JavaToolchainService
-import org.gradle.language.jvm.tasks.ProcessResources
 
 // Bukkit 1.21.1 独立产品工程：common + modern + v1_21 → mpmt-bukkit-1.21.1-*.jar
+// 验收源集、打包链路、plugin.yml 元数据、编译工具链、单测属性与 realserver 门禁接线由 build-conventions.bukkit 承担。
 
 plugins {
     id("build-conventions.quality")
     id("build-conventions.platform")
     java
     id("com.gradleup.shadow") version "8.3.11"
+    // 车道约定插件须晚于 shadow（打包链路按名取 jar/shadowJar），早于 realserver 门禁（验收扩展取值先落地）
+    id("build-conventions.bukkit")
     id("top.wcpe.mc.mpmt.realserver-acceptance")
 }
 
@@ -30,23 +30,11 @@ val regionSchedulerClass = "top.wcpe.mc.mpmt.platform.bukkit.capability.FoliaSch
 val adapterClass = "top.wcpe.mc.mpmt.platform.bukkit.version.v1_21.V1_21BukkitVersionAdapter"
 val adapterClassPath = "top/wcpe/mc/mpmt/platform/bukkit/version/v1_21/V1_21BukkitVersionAdapter.class"
 
-base {
-    archivesName.set("mpmt-bukkit-$minecraftVersion")
-}
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(targetJavaVersion)
-    }
-}
-
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/") { name = "PaperMC" }
 }
 
-val acceptance: SourceSet = sourceSets.create("acceptance")
-val mainSourceSet = sourceSets.getByName("main")
 // 验收控制通道常量由 build-conventions.platform 生成（生成内容与原内联实现逐字节一致）
 platformLane {
     mcVersion.set(minecraftVersion)
@@ -55,8 +43,16 @@ platformLane {
     channelClass.set("BukkitAcceptanceControlChannelId")
 }
 
-acceptance.compileClasspath += mainSourceSet.output + mainSourceSet.compileClasspath
-acceptance.runtimeClasspath += mainSourceSet.output + mainSourceSet.runtimeClasspath
+// 车道参数：loader 层接线由 build-conventions.bukkit 承担，车道只声明参数与偏离项
+val bukkit = extensions.getByType(BukkitLaneExtension::class.java)
+bukkit.mcVersion.set(minecraftVersion)
+bukkit.apiCoordinate.set(apiCoordinate)
+bukkit.targetJavaVersion.set(targetJavaVersion)
+bukkit.apiVersion.set(apiVersion)
+bukkit.foliaSupported.set(true)
+bukkit.productChannel.set(productChannel)
+bukkit.acceptanceChannel.set(acceptanceChannel)
+bukkit.regionSchedulerClass.set(regionSchedulerClass)
 
 // 冻结 paper-api：插件负责解析配置与 SHA-256 校验，并把校验挂到编译任务之前
 frozenApiSnapshot(
@@ -66,126 +62,15 @@ frozenApiSnapshot(
     mcVersion = minecraftVersion,
 )
 
-dependencies {
-    implementation(project(":platform:bukkit:common"))
-    implementation(project(":platform:bukkit:modern"))
-    compileOnly(apiCoordinate)
-    testImplementation(apiCoordinate)
-    testImplementation(platform("org.junit:junit-bom:5.10.3"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-
-    add(acceptance.compileOnlyConfigurationName, apiCoordinate)
-    // 产品入口仅 compileOnly：运行期由已加载的产品插件提供，禁止 shade 进验收 jar
-    add(acceptance.compileOnlyConfigurationName, project(":platform:bukkit:common"))
-    add(acceptance.compileOnlyConfigurationName, project(":platform:bukkit:modern"))
-    add(acceptance.implementationConfigurationName, project(":modules:acceptance"))
-    add(acceptance.implementationConfigurationName, project(":core:protocol"))
-    add(acceptance.implementationConfigurationName, project(":core:server"))
-    add(acceptance.implementationConfigurationName, project(":core:client"))
-}
-
-val toolchains = extensions.getByType(JavaToolchainService::class.java)
-tasks.withType<JavaCompile>().configureEach {
-    javaCompiler.set(
-        toolchains.compilerFor {
-            languageVersion.set(JavaLanguageVersion.of(targetJavaVersion))
-        },
-    )
-    options.encoding = "UTF-8"
-    options.release.set(targetJavaVersion)
-}
-
-val metadataProperties =
-    mapOf(
-        "version" to project.version,
-        "apiVersionMetadata" to "api-version: '$apiVersion'",
-        "foliaMetadata" to "folia-supported: true",
-    )
-
-tasks.named<ProcessResources>(mainSourceSet.processResourcesTaskName) {
-    inputs.properties(metadataProperties)
-    filesMatching("plugin.yml") {
-        expand(metadataProperties)
-    }
-}
-tasks.named<ProcessResources>(acceptance.processResourcesTaskName) {
-    inputs.properties(metadataProperties)
-    filesMatching("plugin.yml") {
-        expand(metadataProperties)
-    }
-}
-
-tasks.named<Jar>("jar") {
-    archiveClassifier.set("plain")
-}
-
-tasks.named<ShadowJar>("shadowJar") {
-    archiveClassifier.set("")
-    isPreserveFileTimestamps = false
-    isReproducibleFileOrder = true
-    configurations = listOf(project.configurations.runtimeClasspath.get())
-    relocate("org.yaml.snakeyaml", "top.wcpe.mc.mpmt.libs.org.yaml.snakeyaml")
-    exclude("META-INF/maven/**")
-    dependencies {
-        exclude(dependency("io.papermc.paper:paper-api"))
-        exclude(dependency("org.spigotmc:spigot-api"))
-    }
-    outputs.upToDateWhen { false }
-    outputs.cacheIf { false }
-}
-
-val acceptanceJar by tasks.registering(ShadowJar::class) {
-    group = "build"
-    description = "构建 MC $minecraftVersion 的 Bukkit realserver 验收插件"
-    archiveBaseName.set("mpmt-bukkit-acceptance-$minecraftVersion")
-    archiveClassifier.set("")
-    from(acceptance.output)
-    from(mainSourceSet.output) {
-        include("top/wcpe/mc/mpmt/platform/bukkit/version/**")
-        include("META-INF/services/top.wcpe.mc.mpmt.platform.bukkit.version.BukkitVersionAdapter")
-    }
-    configurations = listOf(project.configurations[acceptance.runtimeClasspathConfigurationName])
-    dependencies {
-        exclude(dependency("io.papermc.paper:paper-api"))
-        exclude(dependency("org.spigotmc:spigot-api"))
-    }
-    exclude("META-INF/maven/**")
-    outputs.upToDateWhen { false }
-    outputs.cacheIf { false }
-}
-
-tasks.named<Test>("test") {
-    useJUnitPlatform()
-    dependsOn(acceptance.processResourcesTaskName)
-    javaLauncher.set(
-        toolchains.launcherFor {
-            languageVersion.set(JavaLanguageVersion.of(targetJavaVersion))
-        },
-    )
-    systemProperty("mpmt.test.minecraftVersion", minecraftVersion)
-    systemProperty("mpmt.test.javaVersion", targetJavaVersion.toString())
-    systemProperty("mpmt.test.archiveName", "mpmt-bukkit-$minecraftVersion")
-    systemProperty("mpmt.test.productChannel", productChannel)
-    systemProperty("mpmt.test.acceptanceChannel", acceptanceChannel)
-    systemProperty("mpmt.test.regionSchedulerClass", regionSchedulerClass)
-    systemProperty("mpmt.test.apiVersion", apiVersion)
-    systemProperty("mpmt.test.foliaMetadata", true)
-    systemProperty(
-        "mpmt.test.acceptanceMetadata",
-        layout.buildDirectory.file("resources/acceptance/plugin.yml").get().asFile.absolutePath,
-    )
-}
-
 val verifyPackaging by tasks.registering {
     group = "verification"
     description = "校验 Bukkit $minecraftVersion 产品/验收产物"
-    dependsOn(tasks.named("shadowJar"), acceptanceJar)
+    dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"))
     packagingVerification(
         laneLabel = "Bukkit",
         mcVersion = minecraftVersion,
         product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
-        acceptance = acceptanceJar.flatMap { it.archiveFile },
+        acceptance = tasks.named<ShadowJar>("acceptanceJar").flatMap { it.archiveFile },
     ) { product, acceptance ->
         val acceptanceFile = acceptance ?: error("缺少验收产物输入")
         val adapterService =
@@ -234,34 +119,8 @@ val verifyPackaging by tasks.registering {
     }
 }
 
-tasks.named("assemble") {
-    dependsOn(verifyPackaging)
-}
-tasks.named("build") {
-    dependsOn(tasks.named("shadowJar"), acceptance.classesTaskName, verifyPackaging, "verifyApiSnapshotFreeze")
-}
-
-val bukkitReportFile = layout.buildDirectory.file("acceptance/server-report.txt")
-val autoHost =
-    providers.gradleProperty("mpmt.realserver.autoHost").map { it == "true" }.orElse(false)
-
-mpmtRealServerAcceptance {
-    reportFile.set(bukkitReportFile)
-    laneId.set("Bukkit")
-    matrix.set(providers.gradleProperty("mpmt.acceptance.matrix").orElse(""))
-    autoStartPaperHost.set(autoHost)
-    paperVersion.set(minecraftVersion)
-    paperPort.set(
-        providers.gradleProperty("mpmt.realserver.port").map { it.toInt() }.orElse(25599),
-    )
-    pluginJar.set(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
-    acceptanceDriverJar.set(acceptanceJar.flatMap { it.archiveFile })
-    clientTaskName.set("runAcceptanceClient")
-    extraDependsOn.set(listOf("shadowJar", "acceptanceJar"))
-}
-
 tasks.named("runRealServerAcceptance") {
     group = "verification"
     description = "Bukkit $minecraftVersion realserver 门禁"
-    dependsOn(tasks.named("shadowJar"), acceptanceJar, "verifyMpmtAcceptanceReport")
+    dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"), "verifyMpmtAcceptanceReport")
 }

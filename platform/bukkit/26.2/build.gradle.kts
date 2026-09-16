@@ -1,19 +1,19 @@
+import buildconventions.BukkitLaneExtension
 import buildconventions.frozenApiSnapshot
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.github.spotbugs.snom.SpotBugsExtension
-import org.gradle.api.tasks.SourceSet
-import org.gradle.api.tasks.compile.JavaCompile
-import org.gradle.jvm.toolchain.JavaToolchainService
-import org.gradle.language.jvm.tasks.ProcessResources
 
 // Bukkit 26.2 独立产品工程：common + modern + v26_2 → mpmt-bukkit-26.2-*.jar
+// 验收源集、打包链路、plugin.yml 元数据、编译工具链、单测属性与 realserver 门禁接线由 build-conventions.bukkit 承担。
 
 plugins {
     id("build-conventions.quality")
     id("build-conventions.platform")
     java
     id("com.gradleup.shadow") version "8.3.11"
+    // 车道约定插件须晚于 shadow（打包链路按名取 jar/shadowJar），早于 realserver 门禁（验收扩展取值先落地）
+    id("build-conventions.bukkit")
     id("top.wcpe.mc.mpmt.realserver-acceptance")
 }
 
@@ -35,24 +35,11 @@ val regionSchedulerClass = "top.wcpe.mc.mpmt.platform.bukkit.capability.FoliaSch
 val adapterClass = "top.wcpe.mc.mpmt.platform.bukkit.version.v26_2.V26_2BukkitVersionAdapter"
 val adapterClassPath = "top/wcpe/mc/mpmt/platform/bukkit/version/v26_2/V26_2BukkitVersionAdapter.class"
 
-base {
-    archivesName.set("mpmt-bukkit-$minecraftVersion")
-}
-
-java {
-    toolchain {
-        // 编译器用 25 才能解析 paper-api（class major 69）
-        languageVersion = JavaLanguageVersion.of(compilerJavaVersion)
-    }
-}
-
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/") { name = "PaperMC" }
 }
 
-val acceptance: SourceSet = sourceSets.create("acceptance")
-val mainSourceSet = sourceSets.getByName("main")
 // 验收控制通道常量由 build-conventions.platform 生成（生成内容与原内联实现逐字节一致）
 platformLane {
     mcVersion.set(minecraftVersion)
@@ -61,26 +48,24 @@ platformLane {
     channelClass.set("BukkitAcceptanceControlChannelId")
 }
 
-// paper-api 26.2 的 Gradle 元数据要求 JVM 25：产物目标同为 25（见 targetJavaVersion），
-// 故可直接按普通坐标解析。冻结语义由 apiVerification 配置 + SHA-256 校验任务承担，
-// 与 bukkit 1.12.2 / 1.20.1 / 1.21.1 三车道保持一致，不再需要本地 libs jar。
-acceptance.compileClasspath += mainSourceSet.output + mainSourceSet.compileClasspath
-acceptance.runtimeClasspath += mainSourceSet.output + mainSourceSet.runtimeClasspath
+// 车道参数：loader 层接线由 build-conventions.bukkit 承担，车道只声明参数与偏离项
+val bukkit = extensions.getByType(BukkitLaneExtension::class.java)
+bukkit.mcVersion.set(minecraftVersion)
+bukkit.apiCoordinate.set(apiCoordinate)
+bukkit.targetJavaVersion.set(targetJavaVersion)
+bukkit.compilerJavaVersion.set(compilerJavaVersion)
+bukkit.apiVersion.set(apiVersion)
+bukkit.foliaSupported.set(true)
+bukkit.productChannel.set(productChannel)
+bukkit.acceptanceChannel.set(acceptanceChannel)
+bukkit.regionSchedulerClass.set(regionSchedulerClass)
 
-// 冻结 paper-api：插件负责解析配置与 SHA-256 校验，并把校验挂到编译任务之前
-frozenApiSnapshot(
-    laneLabel = "Bukkit",
-    coordinate = apiCoordinate,
-    expectedSha256 = apiSha256,
-    mcVersion = minecraftVersion,
-)
+// 验收源集由 build-conventions.bukkit 创建；本车道偏离项：显式钉住编译期 adventure / guava / gson 版本
+// （Paper 元数据亦会传递，这里避免解析漂移；均不入产物），故直接往验收源集配置上加依赖。
+val acceptance = sourceSets.getByName("acceptance")
 
 dependencies {
-    implementation(project(":platform:bukkit:common"))
-    implementation(project(":platform:bukkit:modern"))
-    // 显式钉住编译期 adventure / guava / gson 版本（Paper 元数据亦会传递，这里避免解析漂移；均不入产物）
     compileOnly(platform("net.kyori:adventure-bom:5.2.0"))
-    compileOnly(apiCoordinate)
     compileOnly("net.kyori:adventure-api")
     compileOnly("net.kyori:adventure-key")
     compileOnly("net.kyori:adventure-text-minimessage")
@@ -92,14 +77,9 @@ dependencies {
     compileOnly("com.google.code.gson:gson:2.14.0")
     compileOnly("org.jetbrains:annotations:26.0.2")
     testImplementation(platform("net.kyori:adventure-bom:5.2.0"))
-    testImplementation(apiCoordinate)
     testImplementation("net.kyori:adventure-api")
-    testImplementation(platform("org.junit:junit-bom:5.10.3"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     add(acceptance.compileOnlyConfigurationName, platform("net.kyori:adventure-bom:5.2.0"))
-    add(acceptance.compileOnlyConfigurationName, apiCoordinate)
     add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-api")
     add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-key")
     add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-minimessage")
@@ -109,107 +89,15 @@ dependencies {
     add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-logger-slf4j")
     add(acceptance.compileOnlyConfigurationName, "com.google.guava:guava:33.6.0-jre")
     add(acceptance.compileOnlyConfigurationName, "org.jetbrains:annotations:26.0.2")
-    // 产品入口仅 compileOnly：运行期由已加载的产品插件提供，禁止 shade 进验收 jar
-    add(acceptance.compileOnlyConfigurationName, project(":platform:bukkit:common"))
-    add(acceptance.compileOnlyConfigurationName, project(":platform:bukkit:modern"))
-    add(acceptance.implementationConfigurationName, project(":modules:acceptance"))
-    add(acceptance.implementationConfigurationName, project(":core:protocol"))
-    add(acceptance.implementationConfigurationName, project(":core:server"))
-    add(acceptance.implementationConfigurationName, project(":core:client"))
 }
 
-val toolchains = extensions.getByType(JavaToolchainService::class.java)
-tasks.withType<JavaCompile>().configureEach {
-    javaCompiler.set(
-        toolchains.compilerFor {
-            languageVersion.set(JavaLanguageVersion.of(compilerJavaVersion))
-        },
-    )
-    options.encoding = "UTF-8"
-    // 产物与 paper-api 26.2 的运行时要求一致：Java 25 字节码
-    options.release.set(targetJavaVersion)
-}
-
-val metadataProperties =
-    mapOf(
-        "version" to project.version,
-        "apiVersionMetadata" to "api-version: '$apiVersion'",
-        "foliaMetadata" to "folia-supported: true",
-    )
-
-tasks.named<ProcessResources>(mainSourceSet.processResourcesTaskName) {
-    inputs.properties(metadataProperties)
-    filesMatching("plugin.yml") {
-        expand(metadataProperties)
-    }
-}
-tasks.named<ProcessResources>(acceptance.processResourcesTaskName) {
-    inputs.properties(metadataProperties)
-    filesMatching("plugin.yml") {
-        expand(metadataProperties)
-    }
-}
-
-tasks.named<Jar>("jar") {
-    archiveClassifier.set("plain")
-}
-
-tasks.named<ShadowJar>("shadowJar") {
-    archiveClassifier.set("")
-    isPreserveFileTimestamps = false
-    isReproducibleFileOrder = true
-    configurations = listOf(project.configurations.runtimeClasspath.get())
-    relocate("org.yaml.snakeyaml", "top.wcpe.mc.mpmt.libs.org.yaml.snakeyaml")
-    exclude("META-INF/maven/**")
-    dependencies {
-        exclude(dependency("io.papermc.paper:paper-api"))
-        exclude(dependency("org.spigotmc:spigot-api"))
-    }
-    outputs.upToDateWhen { false }
-    outputs.cacheIf { false }
-}
-
-val acceptanceJar by tasks.registering(ShadowJar::class) {
-    group = "build"
-    description = "构建 MC $minecraftVersion 的 Bukkit realserver 验收插件"
-    archiveBaseName.set("mpmt-bukkit-acceptance-$minecraftVersion")
-    archiveClassifier.set("")
-    from(acceptance.output)
-    from(mainSourceSet.output) {
-        include("top/wcpe/mc/mpmt/platform/bukkit/version/**")
-        include("META-INF/services/top.wcpe.mc.mpmt.platform.bukkit.version.BukkitVersionAdapter")
-    }
-    configurations = listOf(project.configurations[acceptance.runtimeClasspathConfigurationName])
-    dependencies {
-        exclude(dependency("io.papermc.paper:paper-api"))
-        exclude(dependency("org.spigotmc:spigot-api"))
-    }
-    exclude("META-INF/maven/**")
-    outputs.upToDateWhen { false }
-    outputs.cacheIf { false }
-}
-
-tasks.named<Test>("test") {
-    useJUnitPlatform()
-    dependsOn(acceptance.processResourcesTaskName)
-    javaLauncher.set(
-        toolchains.launcherFor {
-            languageVersion.set(JavaLanguageVersion.of(targetJavaVersion))
-        },
-    )
-    systemProperty("mpmt.test.minecraftVersion", minecraftVersion)
-    systemProperty("mpmt.test.javaVersion", targetJavaVersion.toString())
-    systemProperty("mpmt.test.archiveName", "mpmt-bukkit-$minecraftVersion")
-    systemProperty("mpmt.test.productChannel", productChannel)
-    systemProperty("mpmt.test.acceptanceChannel", acceptanceChannel)
-    systemProperty("mpmt.test.regionSchedulerClass", regionSchedulerClass)
-    systemProperty("mpmt.test.apiVersion", apiVersion)
-    systemProperty("mpmt.test.foliaMetadata", true)
-    systemProperty(
-        "mpmt.test.acceptanceMetadata",
-        layout.buildDirectory.file("resources/acceptance/plugin.yml").get().asFile.absolutePath,
-    )
-}
+// 冻结 paper-api：插件负责解析配置与 SHA-256 校验，并把校验挂到编译任务之前
+frozenApiSnapshot(
+    laneLabel = "Bukkit",
+    coordinate = apiCoordinate,
+    expectedSha256 = apiSha256,
+    mcVersion = minecraftVersion,
+)
 
 configure<SpotBugsExtension> {
     toolVersion.set("4.9.8")
@@ -218,12 +106,12 @@ configure<SpotBugsExtension> {
 val verifyPackaging by tasks.registering {
     group = "verification"
     description = "校验 Bukkit $minecraftVersion 产品/验收产物"
-    dependsOn(tasks.named("shadowJar"), acceptanceJar)
+    dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"))
     packagingVerification(
         laneLabel = "Bukkit",
         mcVersion = minecraftVersion,
         product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
-        acceptance = acceptanceJar.flatMap { it.archiveFile },
+        acceptance = tasks.named<ShadowJar>("acceptanceJar").flatMap { it.archiveFile },
     ) { product, acceptance ->
         val acceptanceFile = acceptance ?: error("缺少验收产物输入")
         val adapterService =
@@ -255,13 +143,6 @@ val verifyPackaging by tasks.registering {
     }
 }
 
-tasks.named("assemble") {
-    dependsOn(verifyPackaging)
-}
-tasks.named("build") {
-    dependsOn(tasks.named("shadowJar"), acceptance.classesTaskName, verifyPackaging, "verifyApiSnapshotFreeze")
-}
-
 // 26.2 车道没有"默认轨"：其唯一有效矩阵即 REALSERVER262（见 PlatformLane.BUKKIT_262.defaultMatrix）。
 // 因此在本轮上下文（带 -Pmpmt.acceptance.runId）下若未显式声明矩阵，就按 REALSERVER262 解析报告——
 // 使跨 lane 聚合门（只有一个全局矩阵值，无法逐 lane 区分）也能正确定位本车道的报告；
@@ -283,28 +164,17 @@ val fabric262Product =
     rootProject.layout.projectDirectory.file(
         "platform/fabric/26.2/build/libs/mpmt-fabric-26.2-${rootProject.version}.jar",
     )
-val autoHost =
-    providers.gradleProperty("mpmt.realserver.autoHost").map { it == "true" }.orElse(false)
 
 mpmtRealServerAcceptance {
+    // 本车道偏离项：矩阵命名的报告路径、冻结 Paper 运行时与跨车道客户端制品；其余接线由约定插件承担
     reportFile.set(bukkitReportFile)
-    laneId.set("Bukkit")
     matrix.set(acceptanceMatrix)
-    autoStartPaperHost.set(autoHost)
-    paperVersion.set(minecraftVersion)
     paperBuild.set(paperRuntimeBuild)
     paperJarSizeBytes.set(paperRuntimeSizeBytes)
     paperJarSha256.set(paperRuntimeSha256)
     paperJavaVersion.set(compilerJavaVersion)
-    paperPort.set(
-        providers.gradleProperty("mpmt.realserver.port").map { it.toInt() }.orElse(25599),
-    )
-    pluginJar.set(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
-    acceptanceDriverJar.set(acceptanceJar.flatMap { it.archiveFile })
     acceptanceClientProductJar.set(fabric262Product)
     acceptanceClientAcceptanceJar.set(fabric262Product)
-    clientTaskName.set("runAcceptanceClient")
-    extraDependsOn.set(listOf("shadowJar", "acceptanceJar"))
     acceptanceRunId.set(providers.gradleProperty("mpmt.acceptance.runId").orElse(""))
     acceptanceStartEpochMs.set(providers.gradleProperty("mpmt.acceptance.startEpochMs").orElse(""))
 }
@@ -312,5 +182,5 @@ mpmtRealServerAcceptance {
 tasks.named("runRealServerAcceptance") {
     group = "verification"
     description = "Bukkit $minecraftVersion realserver 门禁"
-    dependsOn(tasks.named("shadowJar"), acceptanceJar, "verifyMpmtAcceptanceReport")
+    dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"), "verifyMpmtAcceptanceReport")
 }
