@@ -13,6 +13,7 @@ import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
 import java.security.MessageDigest
 import java.util.zip.ZipFile
+import buildconventions.packagingVerification
 
 // platform-forge（L3）：根构建普通子模块，仅应用 arch-loom（top.wcpe.loom，ADR-0007）。
 // 打包链路（ADR-0012）：shade platform-spi + core + relocate snakeyaml 进 mod jar，再经 remapJar remap 到
@@ -241,33 +242,31 @@ val verifyPackaging by tasks.registering {
     group = "verification"
     description = "校验 Forge mod jar：核心 shade、snakeyaml relocate、mods.toml/services 在位、SRG remap、未打入 Minecraft"
     dependsOn(tasks.named("remapJar"))
-    doLast {
+    packagingVerification(
+        laneLabel = "Forge",
+        product = tasks.named<RemapJarTask>("remapJar").flatMap { it.archiveFile },
+        acceptance = null,
+    ) { product, _ ->
         val shadow = tasks.named<ShadowJar>("shadowJar").get()
         val plain = tasks.named<Jar>("jar").get()
-        val jar = tasks.named<RemapJarTask>("remapJar").get().archiveFile.get().asFile
-        val entries = ZipFile(jar).use { zf -> zf.entries().asSequence().map { it.name }.toList() }
-
-        fun must(cond: Boolean, msg: String) {
-            if (!cond) throw GradleException("Forge 打包校验失败：$msg")
-        }
-        must(plain.archiveFile.get().asFile != jar, "普通 jar 与最终 remapJar 输出路径冲突")
+        must(plain.archiveFile.get().asFile != product.file, "普通 jar 与最终 remapJar 输出路径冲突")
         must(!shadow.isPreserveFileTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
         must(shadow.isReproducibleFileOrder, "最终产品未启用可复现文件顺序")
-        must(entries.contains("top/wcpe/mc/mpmt/core/domain/Mpmt.class"), "核心类未 shade 进 mod jar")
-        must(entries.contains("top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class"), "platform-spi 未 shade 进 mod jar")
-        must(entries.contains("top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class"), "缺少 Forge mod 主类")
-        must(entries.any { it.startsWith("top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/") }, "snakeyaml 未 relocate 到 libs.*")
-        must(entries.none { it.startsWith("org/yaml/snakeyaml/") }, "snakeyaml 原包名残留")
-        must(entries.none { it.startsWith("META-INF/maven/org.yaml/") }, "snakeyaml Maven 元数据残留")
-        must(entries.contains("META-INF/mods.toml"), "缺少 META-INF/mods.toml")
-        must(entries.contains("META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap"), "缺少 SPI services 声明")
+        mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "核心类未 shade 进 mod jar")
+        mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "platform-spi 未 shade 进 mod jar")
+        mustContain(product, "top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class", "缺少 Forge mod 主类")
+        mustContainPrefix(product, "top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/", "snakeyaml 未 relocate 到 libs.*")
+        mustNotBundle(product, listOf("org/yaml/snakeyaml/"), "snakeyaml 原包名残留")
+        mustNotBundle(product, listOf("META-INF/maven/org.yaml/"), "snakeyaml Maven 元数据残留")
+        mustContain(product, "META-INF/mods.toml", "缺少 META-INF/mods.toml")
+        mustContain(product, "META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap", "缺少 SPI services 声明")
         // Mixin（ADR-0018）：配置 + refmap 须在产物内，否则生产期 mixin apply 失败（target method not found）
-        must(entries.contains("mpmt.mixins.json"), "缺少 Mixin 配置 mpmt.mixins.json")
-        must(entries.contains("mpmt.refmap.json"), "缺少 Mixin refmap（AP 未生成或未打包，生产期会 apply 失败）")
-        must(entries.none { it.startsWith("net/minecraft/") }, "误把 Minecraft 类打入 mod jar")
+        mustContain(product, "mpmt.mixins.json", "缺少 Mixin 配置 mpmt.mixins.json")
+        mustContain(product, "mpmt.refmap.json", "缺少 Mixin refmap（AP 未生成或未打包，生产期会 apply 失败）")
+        mustNotBundle(product, listOf("net/minecraft/"), "误把 Minecraft 类打入 mod jar")
         println("Forge 打包校验通过：")
-        println("  产物 = ${jar.name}（条目数 ${entries.size}）")
-        println("  核心已 shade、snakeyaml 已 relocate、mods.toml/services 在位、已 remap 到 SRG、未打入 Minecraft")
+        println(" 产物 = ${product.file.name}（条目数 ${product.entries.size}）")
+        println(" 核心已 shade、snakeyaml 已 relocate、mods.toml/services 在位、已 remap 到 SRG、未打入 Minecraft")
     }
 }
 

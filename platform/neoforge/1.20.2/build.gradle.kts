@@ -14,6 +14,7 @@ import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
 import java.security.MessageDigest
 import java.util.zip.ZipFile
+import buildconventions.packagingVerification
 
 // platform-neoforge（L3）：根构建子模块，应用 arch-loom（top.wcpe.loom，ADR-0007，隔离加载器专属插件）。
 // 锚点 MC 1.20.2（NeoForge 无 1.20.1；PRD §7）。NeoForge 运行期用官方 Mojmap（arch-loom usesMojangAtRuntime
@@ -284,30 +285,28 @@ val verifyPackaging by tasks.registering {
     group = "verification"
     description = "校验 NeoForge mod jar：核心 shade、snakeyaml relocate、mods.toml/services 在位、未打入 Minecraft"
     dependsOn(tasks.named("remapJar"))
-    doLast {
+    packagingVerification(
+        laneLabel = "NeoForge",
+        product = tasks.named<RemapJarTask>("remapJar").flatMap { it.archiveFile },
+        acceptance = null,
+    ) { product, _ ->
         val shadow = tasks.named<ShadowJar>("shadowJar").get()
         val plain = tasks.named<Jar>("jar").get()
-        val jar = tasks.named<RemapJarTask>("remapJar").get().archiveFile.get().asFile
-        val entries = ZipFile(jar).use { zf -> zf.entries().asSequence().map { it.name }.toList() }
-
-        fun must(condition: Boolean, message: String) {
-            if (!condition) throw GradleException("NeoForge 打包校验失败：$message")
-        }
-        must(plain.archiveFile.get().asFile != jar, "普通 jar 与最终产品 jar 输出路径冲突")
+        must(plain.archiveFile.get().asFile != product.file, "普通 jar 与最终产品 jar 输出路径冲突")
         must(!shadow.isPreserveFileTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
         must(shadow.isReproducibleFileOrder, "最终产品未启用可复现文件顺序")
-        must(entries.contains("top/wcpe/mc/mpmt/core/domain/Mpmt.class"), "核心类未 shade 进 mod jar")
-        must(entries.contains("top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class"), "platform-spi 未 shade 进 mod jar")
-        must(entries.contains("top/wcpe/mc/mpmt/platform/neoforge/MpmtNeoForgeMod.class"), "缺少 NeoForge mod 主类")
-        must(entries.any { it.startsWith("top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/") }, "snakeyaml 未 relocate 到 libs.*")
-        must(entries.none { it.startsWith("org/yaml/snakeyaml/") }, "snakeyaml 原包名残留")
-        must(entries.none { it.startsWith("META-INF/maven/org.yaml/") }, "snakeyaml Maven 元数据残留")
-        must(entries.contains("META-INF/mods.toml"), "缺少 META-INF/mods.toml")
-        must(entries.contains("META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap"), "缺少 SPI services 声明")
-        must(entries.none { it.startsWith("net/minecraft/") }, "误把 Minecraft 类打入 mod jar")
+        mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "核心类未 shade 进 mod jar")
+        mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "platform-spi 未 shade 进 mod jar")
+        mustContain(product, "top/wcpe/mc/mpmt/platform/neoforge/MpmtNeoForgeMod.class", "缺少 NeoForge mod 主类")
+        mustContainPrefix(product, "top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/", "snakeyaml 未 relocate 到 libs.*")
+        mustNotBundle(product, listOf("org/yaml/snakeyaml/"), "snakeyaml 原包名残留")
+        mustNotBundle(product, listOf("META-INF/maven/org.yaml/"), "snakeyaml Maven 元数据残留")
+        mustContain(product, "META-INF/mods.toml", "缺少 META-INF/mods.toml")
+        mustContain(product, "META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap", "缺少 SPI services 声明")
+        mustNotBundle(product, listOf("net/minecraft/"), "误把 Minecraft 类打入 mod jar")
         println("NeoForge 打包校验通过：")
-        println("  产物 = ${jar.name}（条目数 ${entries.size}）")
-        println("  核心已 shade、snakeyaml 已 relocate、mods.toml/services 在位、未打入 Minecraft")
+        println(" 产物 = ${product.file.name}（条目数 ${product.entries.size}）")
+        println(" 核心已 shade、snakeyaml 已 relocate、mods.toml/services 在位、未打入 Minecraft")
     }
 }
 

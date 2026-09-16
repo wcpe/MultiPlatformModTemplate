@@ -11,6 +11,7 @@ import org.gradle.jvm.toolchain.JavaToolchainService
 import org.spongepowered.gradle.plugin.config.PluginLoaders
 import org.spongepowered.plugin.metadata.model.PluginDependency
 import java.util.zip.ZipFile
+import buildconventions.packagingVerification
 
 // platform-sponge（L3）：根构建子模块，应用 SpongeGradle（ADR-0007，隔离加载器专属插件）。
 // 锚点 MC 1.20.1 / SpongeAPI 11.0.0（SpongeVanilla）。Sponge 为纯服务端平台（无客户端插件 API）：
@@ -220,27 +221,25 @@ val verifyPackaging by tasks.registering {
     group = "verification"
     description = "校验 Sponge 插件 jar：最终产品自包含、输出不冲突、未打入 SpongeAPI"
     dependsOn(tasks.named("shadowJar"))
-    doLast {
+    packagingVerification(
+        laneLabel = "Sponge",
+        product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
+        acceptance = null,
+    ) { product, _ ->
         val shadow = tasks.named<ShadowJar>("shadowJar").get()
         val plain = tasks.named<Jar>("jar").get()
-        val jar = shadow.archiveFile.get().asFile
-        val entries = ZipFile(jar).use { zf -> zf.entries().asSequence().map { it.name }.toList() }
-
-        fun must(cond: Boolean, msg: String) {
-            if (!cond) throw GradleException("Sponge 打包校验失败：$msg")
-        }
-        must(plain.archiveFile.get().asFile != jar, "普通 jar 与最终 shadowJar 输出路径冲突")
+        must(plain.archiveFile.get().asFile != product.file, "普通 jar 与最终 shadowJar 输出路径冲突")
         must(!shadow.isPreserveFileTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
         must(shadow.isReproducibleFileOrder, "最终产品未启用可复现文件顺序")
-        must(entries.contains("top/wcpe/mc/mpmt/core/domain/Mpmt.class"), "核心类未 shade 进插件 jar")
-        must(entries.contains("top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class"), "platform-spi 未 shade 进插件 jar")
-        must(entries.contains("top/wcpe/mc/mpmt/platform/sponge/MpmtSpongePlugin.class"), "缺少插件主类")
-        must(entries.any { it.startsWith("top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/") }, "snakeyaml 未 relocate 到 libs.*")
-        must(entries.none { it.startsWith("org/yaml/snakeyaml/") }, "snakeyaml 原包名残留")
-        must(entries.none { it.startsWith("META-INF/maven/org.yaml/") }, "snakeyaml Maven 元数据残留")
-        must(entries.contains("META-INF/sponge_plugins.json"), "缺少 META-INF/sponge_plugins.json")
-        must(entries.contains("META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap"), "缺少 SPI services 声明")
-        must(entries.none { it.startsWith("org/spongepowered/api/") }, "误把 SpongeAPI 打入插件 jar（应由服务端提供）")
+        mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "核心类未 shade 进插件 jar")
+        mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "platform-spi 未 shade 进插件 jar")
+        mustContain(product, "top/wcpe/mc/mpmt/platform/sponge/MpmtSpongePlugin.class", "缺少插件主类")
+        mustContainPrefix(product, "top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/", "snakeyaml 未 relocate 到 libs.*")
+        mustNotBundle(product, listOf("org/yaml/snakeyaml/"), "snakeyaml 原包名残留")
+        mustNotBundle(product, listOf("META-INF/maven/org.yaml/"), "snakeyaml Maven 元数据残留")
+        mustContain(product, "META-INF/sponge_plugins.json", "缺少 META-INF/sponge_plugins.json")
+        mustContain(product, "META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap", "缺少 SPI services 声明")
+        mustNotBundle(product, listOf("org/spongepowered/api/"), "误把 SpongeAPI 打入插件 jar（应由服务端提供）")
     }
 }
 

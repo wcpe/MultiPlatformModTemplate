@@ -13,13 +13,15 @@ import org.gradle.api.provider.Provider
  */
 fun Task.packagingVerification(
     laneLabel: String,
-    mcVersion: String,
+    mcVersion: String = "",
     product: Provider<RegularFile>,
     acceptance: Provider<RegularFile>? = null,
     checks: PackagingAssertions.(product: JarView, acceptance: JarView?) -> Unit,
 ) {
     inputs.property("laneLabel", laneLabel)
-    inputs.property("mcVersion", mcVersion)
+    if (mcVersion.isNotEmpty()) {
+        inputs.property("mcVersion", mcVersion)
+    }
     inputs.file(product).withPropertyName("productJar")
     acceptance?.let { inputs.file(it).withPropertyName("acceptanceJar") }
 
@@ -29,14 +31,4 @@ fun Task.packagingVerification(
         val acceptanceJar = acceptance?.let { JarView(it.get().asFile) }
         assertions.checks(productJar, acceptanceJar)
     }
-}
-
-/** 便捷重载：车道只有一个产物时（如 Sponge 插件 jar）只传 product。 */
-fun Task.packagingVerification(
-    laneLabel: String,
-    mcVersion: String,
-    product: Provider<RegularFile>,
-    checks: PackagingAssertions.(product: JarView) -> Unit,
-) {
-    packagingVerification(laneLabel, mcVersion, product, null) { jar, _ -> checks(jar) }
 }
