@@ -1,3 +1,4 @@
+import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.github.spotbugs.snom.Confidence
 import com.github.spotbugs.snom.Effort
@@ -12,8 +13,6 @@ import org.gradle.api.plugins.quality.PmdExtension
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
 import java.security.MessageDigest
-import java.util.zip.ZipFile
-import buildconventions.packagingVerification
 
 // platform-forge（L3）：根构建普通子模块，仅应用 arch-loom（top.wcpe.loom，ADR-0007）。
 // 打包链路（ADR-0012）：shade platform-spi + core + relocate snakeyaml 进 mod jar，再经 remapJar remap 到

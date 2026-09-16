@@ -1,3 +1,4 @@
+import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.github.spotbugs.snom.Confidence
 import com.github.spotbugs.snom.Effort
@@ -10,8 +11,6 @@ import org.gradle.api.plugins.quality.PmdExtension
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.spongepowered.gradle.plugin.config.PluginLoaders
 import org.spongepowered.plugin.metadata.model.PluginDependency
-import java.util.zip.ZipFile
-import buildconventions.packagingVerification
 
 // platform-sponge（L3）：根构建子模块，应用 SpongeGradle（ADR-0007，隔离加载器专属插件）。
 // 锚点 MC 1.20.1 / SpongeAPI 11.0.0（SpongeVanilla）。Sponge 为纯服务端平台（无客户端插件 API）：
