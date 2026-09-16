@@ -2,8 +2,8 @@ import buildconventions.NeoForgeLaneExtension
 
 // NeoForge 1.20.2 车道（根构建子模块）：common + server + client 分目录 → mpmt-neoforge-1.20.2-<version>.jar。
 // 不可变契约：产物名与路径、打包链路（shade 共享核心 + relocate snakeyaml，ADR-0012）、remapJar 恒等重映射
-// （NeoForge 运行期用官方 Mojmap、无 SRG）、mods.toml 的 Mixin 声明（内置、无 refmap）、真服报告路径与判定强度
-// （ADR-0014）；锚点 MC 1.20.2（NeoForge 无 1.20.1，PRD §7）。
+// （NeoForge 运行期用官方 Mojmap、无 SRG）、mods.toml 的 javafml/依赖区间声明（本车道无 Mixin，故无 mixin 条目）、
+// 真服报告路径与判定强度（ADR-0014）；锚点 MC 1.20.2（NeoForge 无 1.20.1，PRD §7）。
 // loader 层（依赖接线、dev run、mods.toml 展开、打包、验收接入与门禁）由 build-conventions.neoforge 承担（ADR-0027）。
 plugins {
     id("build-conventions.quality")
