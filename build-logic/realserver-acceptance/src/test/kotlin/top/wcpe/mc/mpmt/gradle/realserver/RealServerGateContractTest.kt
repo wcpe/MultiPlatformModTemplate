@@ -200,17 +200,28 @@ class RealServerGateContractTest {
     }
 
     @Test
-    fun `Forge 26_2 与真服编排接入静态质量门`() {
+    fun `Forge 26_2 接入静态质量门且装配单一真源`() {
         val forgeBuild = readRootFile("platform/forge/26.2/build.gradle.kts")
+        val qualityPlugin =
+            readRootFile("build-logic/build-conventions/src/main/kotlin/buildconventions/QualityConventionPlugin.kt")
         val acceptanceBuild = readRootFile("build-logic/realserver-acceptance/build.gradle.kts")
 
-        assertTrue(forgeBuild.contains("com.github.spotbugs"))
-        assertTrue(forgeBuild.contains("apply(plugin = \"checkstyle\")"))
-        assertTrue(forgeBuild.contains("apply(plugin = \"pmd\")"))
-        assertTrue(forgeBuild.contains("findsecbugs-plugin"))
-        assertTrue(forgeBuild.contains("val staticQualityTasks"))
+        // 车道侧：只声明"接入质量门 + 本车道偏离项"，工具链装配不再重复
+        assertTrue(forgeBuild.contains("id(\"build-conventions.quality\")"))
+        assertTrue(forgeBuild.contains("pmdToolVersion.set(\"7.16.0\")"))
+        assertTrue(forgeBuild.contains("spotbugsToolVersion.set(\"4.9.8\")"))
+        assertFalse(forgeBuild.contains("apply(plugin = \"checkstyle\")"))
+        assertFalse(forgeBuild.contains("findsecbugs-plugin"))
+        // 静态质量任务仍挂在车道门禁上，且不得与 check/verifyPackaging 成环
+        assertTrue(forgeBuild.contains("staticQualityTasks"))
         assertFalse(forgeBuild.contains("dependsOn(check, verifyPackaging)"))
         assertFalse(forgeBuild.contains("dependsOn(\"check\", \"verifyPackaging\")"))
+        // 装配单一真源：工具链、安全插件与覆盖率底线在约定插件内
+        assertTrue(qualityPlugin.contains("project.pluginManager.apply(\"checkstyle\")"))
+        assertTrue(qualityPlugin.contains("project.pluginManager.apply(\"pmd\")"))
+        assertTrue(qualityPlugin.contains("project.pluginManager.apply(\"com.github.spotbugs\")"))
+        assertTrue(qualityPlugin.contains("findsecbugs-plugin"))
+        assertTrue(qualityPlugin.contains("\"0.70\""))
         assertTrue(acceptanceBuild.contains("org.jlleitschuh.gradle.ktlint"))
         assertTrue(acceptanceBuild.contains("io.gitlab.arturbosch.detekt"))
         assertTrue(acceptanceBuild.contains("org.jetbrains.kotlinx.kover"))

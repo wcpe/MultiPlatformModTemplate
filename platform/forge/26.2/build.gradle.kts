@@ -1,17 +1,9 @@
 import buildconventions.acceptanceReportFrom
-import com.github.spotbugs.snom.Confidence
-import com.github.spotbugs.snom.Effort
-import com.github.spotbugs.snom.SpotBugsExtension
-import com.github.spotbugs.snom.SpotBugsTask
 import org.gradle.api.GradleException
 import org.gradle.api.JavaVersion
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.file.FileCollection
-import org.gradle.api.plugins.quality.Checkstyle
-import org.gradle.api.plugins.quality.CheckstyleExtension
-import org.gradle.api.plugins.quality.Pmd
-import org.gradle.api.plugins.quality.PmdExtension
 import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.SourceSet
@@ -21,7 +13,6 @@ import org.gradle.api.tasks.testing.Test
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
-import org.gradle.testing.jacoco.tasks.JacocoReport
 import java.io.DataInputStream
 import java.net.Socket
 import java.util.concurrent.TimeUnit
@@ -217,54 +208,14 @@ val acceptanceJar =
     }
 
 val realServerHostRequested = gradle.startParameter.taskNames.any { it.endsWith("runRealServerAcceptanceHost") }
+// 质量工具链：装配由 build-conventions.quality 插件承担，此处只声明本车道的偏离项
+// （PMD 规则集需要 7.16；SpotBugs 需更高版本以解析新版 classfile；分析 JVM 与本车道目标一致）。
+quality {
+    pmdToolVersion.set("7.16.0")
+    spotbugsToolVersion.set("4.9.8")
+    analysisJavaVersion.set(25)
+}
 
-// 独立车道复用仓库统一的静态质量规则；不依赖或回调根 Gradle。
-apply(plugin = "checkstyle")
-configure<CheckstyleExtension> {
-    toolVersion = "10.17.0"
-    configFile = rootProject.file("config/checkstyle/checkstyle.xml")
-    isIgnoreFailures = false
-    maxWarnings = 0
-}
-apply(plugin = "pmd")
-configure<PmdExtension> {
-    toolVersion = "7.16.0"
-    isConsoleOutput = true
-    ruleSetConfig = resources.text.fromFile(rootProject.file("config/pmd/ruleset.xml"))
-    ruleSets = emptyList()
-    isIgnoreFailures = false
-}
-apply(plugin = "jacoco")
-tasks.withType<JacocoReport>().configureEach {
-    reports {
-        xml.required.set(true)
-        html.required.set(true)
-    }
-}
-configure<SpotBugsExtension> {
-    toolVersion.set("4.9.8")
-    ignoreFailures.set(false)
-    effort.set(Effort.valueOf("MAX"))
-    reportLevel.set(Confidence.valueOf("MEDIUM"))
-    excludeFilter.set(rootProject.file("config/spotbugs/exclude.xml"))
-}
-dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
-// lombok.config 由根构建 subprojects{} 统一登记为编译输入（ADR-0026），此处不再重复。
-val analysisLauncher =
-    extensions.getByType(JavaToolchainService::class.java).launcherFor {
-        languageVersion.set(JavaLanguageVersion.of(25))
-    }
-tasks.withType<Checkstyle>().configureEach {
-    javaLauncher.set(analysisLauncher)
-}
-tasks.withType<Pmd>().configureEach {
-    javaLauncher.set(analysisLauncher)
-}
-tasks.withType<SpotBugsTask>().configureEach {
-    if (name != "spotbugsMain") {
-        ignoreFailures = true
-    }
-}
 val staticQualityTasks =
     listOf(
         "checkstyleMain",

@@ -1,16 +1,7 @@
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import com.github.spotbugs.snom.Confidence
-import com.github.spotbugs.snom.Effort
-import com.github.spotbugs.snom.SpotBugsExtension
-import com.github.spotbugs.snom.SpotBugsTask
 import net.fabricmc.loom.task.RemapJarTask
-import org.gradle.api.plugins.quality.Checkstyle
-import org.gradle.api.plugins.quality.CheckstyleExtension
-import org.gradle.api.plugins.quality.Pmd
-import org.gradle.api.plugins.quality.PmdExtension
 import org.gradle.api.tasks.JavaExec
-import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
 import java.security.MessageDigest
 
@@ -64,68 +55,9 @@ repositories {
     mavenCentral()
     maven("https://maven.fabricmc.net/") { name = "Fabric" }
 }
-
-// ============================================================================
-// 静态分析 / 质量工具链装配（严格门禁，static-analysis.md）——根构建子模块直接 apply。
-// 共享规则集在仓库根 config/，故经 rootProject 引用 config/*；
-// .editorconfig / lombok.config 在仓库根，ktlint / Lombok 自动向上查找，无需额外配置。
-// 违规即失败构建（isIgnoreFailures=false），与根构建口径一致。
-// ============================================================================
-// 样式审查：Checkstyle（共享裁剪规则集）
-apply(plugin = "checkstyle")
-configure<CheckstyleExtension> {
-    toolVersion = "10.17.0"
-    configFile = rootProject.file("config/checkstyle/checkstyle.xml")
-    isIgnoreFailures = false
-    maxWarnings = 0
-}
-// 代码异味 / 源码规则：PMD（共享裁剪规则集）
-apply(plugin = "pmd")
-configure<PmdExtension> {
-    toolVersion = "7.0.0"
-    isConsoleOutput = true
-    ruleSetConfig = resources.text.fromFile(rootProject.file("config/pmd/ruleset.xml"))
-    ruleSets = emptyList()
-    isIgnoreFailures = false
-}
-// 测试覆盖率：JaCoCo（仅报告，不设覆盖率底线门禁）。平台胶水单元测试少、靠 realserver 验收，
-// 故只产出 xml/html 报告，不并入 check、不加 jacocoTestCoverageVerification。
-apply(plugin = "jacoco")
-tasks.withType(org.gradle.testing.jacoco.tasks.JacocoReport::class.java).configureEach {
-    reports {
-        xml.required.set(true)
-        html.required.set(true)
-    }
-}
-// 缺陷检测（字节码）+ 安全审查：SpotBugs + FindSecBugs（挂在 SpotBugs 上）
-configure<SpotBugsExtension> {
-    ignoreFailures.set(false)
-    effort.set(Effort.MAX)
-    // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
-    reportLevel.set(Confidence.MEDIUM)
-    excludeFilter.set(rootProject.file("config/spotbugs/exclude.xml"))
-}
-dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
-// lombok.config 由根构建 subprojects{} 统一登记为编译输入（ADR-0026），此处不再重复。
-// 分析任务固定与目标车道一致的 JDK 启动器（1.20→17，1.21→21）。
-// SpotBugs worker 用守护 JVM，无 javaLauncher 属性、不设。
-val analysisToolchains = extensions.getByType(JavaToolchainService::class.java)
-val analysisLauncher =
-    analysisToolchains.launcherFor {
-        languageVersion.set(JavaLanguageVersion.of(targetJavaVersion))
-    }
-tasks.withType(Checkstyle::class.java).configureEach {
-    javaLauncher.set(analysisLauncher)
-}
-tasks.withType(Pmd::class.java).configureEach {
-    javaLauncher.set(analysisLauncher)
-}
-// 仅生产码（spotbugsMain）严格门禁；test / gametest 等非 main 源集宽松
-// （测试与验收 harness 常含 mock/反射等 SpotBugs 噪声，安全/缺陷分析重在生产码）。
-tasks.withType(SpotBugsTask::class.java).configureEach {
-    if (name != "spotbugsMain") {
-        ignoreFailures = true
-    }
+// 质量工具链：装配由 build-conventions.quality 插件承担；本车道仅偏离分析 JVM（跟随本车道目标）
+quality {
+    analysisJavaVersion.set(targetJavaVersion)
 }
 
 // 专用配置：需 shade 进产物并 relocate 的内容（core + 第三方运行期依赖），不参与 Loom remap
