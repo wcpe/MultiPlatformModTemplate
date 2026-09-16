@@ -4,8 +4,6 @@ import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
-import java.io.IOException
-import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.zip.ZipFile
@@ -27,17 +25,8 @@ val paperRuntimeSizeBytes = 61_744_713L
 val paperRuntimeSha256 = "36fee4f3a7020eb2e2d6f8d70d849beaf0f024d86f09302b9ccf2d96f266127e"
 val apiCoordinate = "io.papermc.paper:paper-api:26.2.build.72-beta"
 val apiSha256 = "ff4dd8b88beb95e990a900f587da3644d44345ce2bc6e8a11b851f6dfb98742b"
-
-// 冻结 paper-api 不入库（`.gitignore` 忽略 `*.jar`）：由坐标推出 Paper Maven 直链，
-// 缺失时交给 downloadApiSnapshot 取回并核 SHA-256，干净克隆无需手工放置。
-val apiUrl =
-    run {
-        val (apiGroup, apiArtifact, apiRevision) = apiCoordinate.split(":")
-        "https://repo.papermc.io/repository/maven-public/" +
-            "${apiGroup.replace('.', '/')}/$apiArtifact/$apiRevision/$apiArtifact-$apiRevision.jar"
-    }
 val compilerJavaVersion = 25 // 读 paper-api major 69
-val targetJavaVersion = 21 // 产物字节码：Shadow 8 仅支持到 major 65
+val targetJavaVersion = 25 // paper-api 元数据要求 JVM 25，产物目标随之为 25
 val apiVersion = "26.2"
 val productChannel = "mpmt:main"
 val acceptanceChannel = "mpmt-test:acceptance"
@@ -100,10 +89,15 @@ tasks.named<JavaCompile>(acceptance.compileJavaTaskName) {
     dependsOn(generateAcceptanceChannelId)
 }
 
-// paper-api 26.2 的 Gradle 元数据要求运行 JVM≥25；根 Gradle 8.10.2 不能以 25 启动，
-// Shadow 8 也不能 relocate major 69。故采用受控本地 jar + SHA 冻结，compileOnly 绕过 metadata。
-val paperApiJar = layout.projectDirectory.file("libs/paper-api-26.2.build.72-beta.jar")
-val paperApiFiles = files(paperApiJar)
+// paper-api 26.2 的 Gradle 元数据要求 JVM 25：产物目标同为 25（见 targetJavaVersion），
+// 故可直接按普通坐标解析。冻结语义由 apiVerification 配置 + SHA-256 校验任务承担，
+// 与 bukkit 1.12.2 / 1.20.1 / 1.21.1 三车道保持一致，不再需要本地 libs jar。
+val apiVerification =
+    configurations.create("apiVerification") {
+        isCanBeConsumed = false
+        isCanBeResolved = true
+        isTransitive = false
+    }
 
 acceptance.compileClasspath += mainSourceSet.output + mainSourceSet.compileClasspath
 acceptance.runtimeClasspath += mainSourceSet.output + mainSourceSet.runtimeClasspath
@@ -111,9 +105,10 @@ acceptance.runtimeClasspath += mainSourceSet.output + mainSourceSet.runtimeClass
 dependencies {
     implementation(project(":platform:bukkit:common"))
     implementation(project(":platform:bukkit:modern"))
-    // 本地冻结 paper-api 无 Gradle 元数据传递；补齐编译期 adventure 等（不入产物）
+    add(apiVerification.name, apiCoordinate)
+    // 显式钉住编译期 adventure / guava / gson 版本（Paper 元数据亦会传递，这里避免解析漂移；均不入产物）
     compileOnly(platform("net.kyori:adventure-bom:5.2.0"))
-    compileOnly(paperApiFiles)
+    compileOnly(apiCoordinate)
     compileOnly("net.kyori:adventure-api")
     compileOnly("net.kyori:adventure-key")
     compileOnly("net.kyori:adventure-text-minimessage")
@@ -125,14 +120,14 @@ dependencies {
     compileOnly("com.google.code.gson:gson:2.14.0")
     compileOnly("org.jetbrains:annotations:26.0.2")
     testImplementation(platform("net.kyori:adventure-bom:5.2.0"))
-    testImplementation(paperApiFiles)
+    testImplementation(apiCoordinate)
     testImplementation("net.kyori:adventure-api")
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     add(acceptance.compileOnlyConfigurationName, platform("net.kyori:adventure-bom:5.2.0"))
-    add(acceptance.compileOnlyConfigurationName, paperApiFiles)
+    add(acceptance.compileOnlyConfigurationName, apiCoordinate)
     add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-api")
     add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-key")
     add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-minimessage")
@@ -159,7 +154,7 @@ tasks.withType<JavaCompile>().configureEach {
         },
     )
     options.encoding = "UTF-8"
-    // 产物发 21 字节码，避免 Shadow 8 在 relocate 时撞 major 69
+    // 产物与 paper-api 26.2 的运行时要求一致：Java 25 字节码
     options.release.set(targetJavaVersion)
 }
 
@@ -261,50 +256,11 @@ fun sha256(file: File): String {
     return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
 }
 
-val downloadApiSnapshot by tasks.registering {
-    group = "verification"
-    description = "冻结 paper-api 缺失时从 Paper Maven 下载并核对 SHA-256"
-    val artifact = paperApiJar.asFile
-    outputs.file(paperApiJar)
-    onlyIf { !artifact.isFile && !gradle.startParameter.isOffline }
-    doLast {
-        artifact.parentFile.mkdirs()
-        logger.lifecycle("下载冻结 paper-api：$apiUrl")
-        try {
-            val connection = URI(apiUrl).toURL().openConnection()
-            connection.connectTimeout = 30_000
-            connection.readTimeout = 300_000
-            connection.getInputStream().use { input ->
-                artifact.outputStream().use { output -> input.copyTo(output) }
-            }
-        } catch (e: IOException) {
-            artifact.delete()
-            throw GradleException(
-                "冻结 paper-api 下载失败：$apiUrl（离线或网络不可达时请手工放到 libs/ 并核对 SHA-256）",
-                e,
-            )
-        }
-        val actual = sha256(artifact)
-        if (actual != apiSha256) {
-            artifact.delete()
-            throw GradleException("冻结 paper-api 校验失败：expected=$apiSha256, actual=$actual")
-        }
-        logger.lifecycle("冻结 paper-api 已就位：${artifact.name} $actual")
-    }
-}
-
 val verifyApiSnapshotFreeze by tasks.registering {
     group = "verification"
-    description = "验证 Bukkit $minecraftVersion 冻结 paper-api 本地 jar 与 SHA-256 一致"
-    dependsOn(downloadApiSnapshot)
+    description = "验证 Bukkit $minecraftVersion API JAR 与冻结 SHA-256 一致"
     doLast {
-        val artifact = paperApiJar.asFile
-        if (!artifact.isFile) {
-            throw GradleException(
-                "缺少冻结 paper-api：" + artifact + "；自动下载未生效（离线或下载失败），" +
-                    "请从 Paper Maven 下载 " + apiCoordinate + " 放到 libs/ 并核对 SHA-256",
-            )
-        }
+        val artifact = apiVerification.singleFile
         val actual = sha256(artifact)
         if (actual != apiSha256) {
             throw GradleException(

@@ -15,6 +15,7 @@
 - **零 JDK 依赖的一键初始化脚本（FR-17）**：新增仓库根 `init.sh`，用 bash + perl 完成换名（文本替换、源码包目录搬迁、Service 描述符重命名），**不需要 JDK 或 Gradle 配置成功**，解决"必须先装好 JDK 25 并让全量构建配置通过才能换名"的鸡生蛋问题；支持交互式、`--dry-run` 预览、`--rewrite-channels`，换名后提示删除自身。换名入口收敛为 `init.sh` 单一实现，原 `renameScaffold` Gradle 任务及其 `gradle/scaffold-rename.gradle.kts` 已删除。
 
 ### 变更
+- **Bukkit 26.2 车道依赖与产物目标对齐 Java 25**：paper-api 26.2 的 Gradle 元数据要求 JVM 25，而车道原先发 21 字节码，只能把 API 当本地冻结 jar 按文件消费（该 jar 被 `.gitignore` 排除，干净克隆必须手工放置）；现产物目标改为 25，依赖回到 `io.papermc.paper:paper-api:26.2.build.72-beta` 普通坐标，冻结语义改由 `apiVerification` 配置 + SHA-256 校验任务承担（与 bukkit 1.12.2 / 1.20.1 / 1.21.1 三车道同款），删除 `downloadApiSnapshot` 与本地 `libs/` jar 消费。产物字节随之变化，26.2 需重跑一轮 REALSERVER262 真服验收。
 - **脚手架换名入口收敛**：删除 Gradle 任务 `renameScaffold` 与 `gradle/scaffold-rename.gradle.kts`（根构建不再 `apply(from = ...)`），换名只保留 `init.sh` 一个实现，避免两份实现语义漂移；`docs/OPERATIONS.md`、`tools/README.md`、`README.md`、上手指南同步改为 `./init.sh`。
 - **真服门命名去里程碑编号**：插件 `p3-r7-report-gate` 更名 `realserver-report-gate`；任务 `runP3R7Build` / `runP3R7RealServerAcceptance` / `runP3R7Gate` / `verifyP3R7ReportsStrict` 分别更名 `buildRealServerArtifacts262` / `runRealServerAcceptance262` / `runRealServerGate262` / `verifyRealServerReportsStrict`；验收矩阵值 `R7` 更名 `REALSERVER262`（报告 `MATRIX` 行与 `server-report-realserver262.txt` 随之变化，旧 R7 报告不再被新门接受）。
 - **验收矩阵与门禁命名去编号**：矩阵值 `R1`–`R4` 合并为 `STANDARD`，`R5` 更名 `HYBRID`，`R6` 更名 `SCHEDULER`（报告 `MATRIX` 行与 `server-report-*.txt` 文件名随之变化，旧值报告不再被接受）；任务 `runP2RealServerAcceptance` 更名 `runVersionMatrixRealServerAcceptance`，历史别名 `runP2StrictCheck` 删除；`P1ScenarioMatrix` 更名 `DefaultScenarioMatrix`，默认 P1 轨改称默认轨。
@@ -47,7 +48,7 @@
 - **跨版本质量门禁**：欢迎包断言按协议发送顺序读取，补齐 Bukkit 1.12 调度适配器测试并清理 Fabric GameTest 无用导入。
 
 ### 交付状态
-- 当前候选提交以冻结制品重建的 Paper、Fabric、Forge 26.2 同轮 `p3-r7-1787686232087` 已通过 `:runRealServerGate262`，并依 ADR-0023 完成 FR-16 的最终自动化验收。FR-17 尚无远端 `v0.3.0` tag / GitHub Release；三项在该发布完成前均保持开发中。
+- 26.2 车道改为 Java 25 产物目标后，产物字节已变，故以本机同轮 `t25-round-1789559672`（Paper、Fabric、Forge 26.2 各一份 REALSERVER262 报告）重跑真服验收，并通过 `:runRealServerGate262`（含 `:verifyRealServerReportsStrict`），依 ADR-0023 维持 FR-16 的最终自动化验收。FR-17 尚无远端 `v0.3.0` tag / GitHub Release；三项在该发布完成前均保持开发中。
 
 ## [0.2.0] - 2026-07-26
 
