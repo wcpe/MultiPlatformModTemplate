@@ -189,9 +189,12 @@ sponge {
     }
 }
 
-// SpongeGradle 把元数据写到 build/generated/sponge/plugin；须并入 jar（processResources 默认不带）
+// SpongeGradle 把元数据写到 build/generated/sponge/plugin；须并入 jar（processResources 默认不带）。
+// from(layout.buildDirectory.dir(...)) 只是路径 Provider，不带任务依赖，故必须显式 dependsOn——
+// 否则 writePluginMetadata 不进任务图，干净克隆（无历史构建产物）下必缺 META-INF/sponge_plugins.json。
 val spongeGeneratedMetadata = layout.buildDirectory.dir("generated/sponge/plugin")
 tasks.named<ProcessResources>("processResources") {
+    dependsOn("writePluginMetadata")
     from(spongeGeneratedMetadata)
 }
 tasks.named<Jar>("jar") {
