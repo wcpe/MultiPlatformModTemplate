@@ -7,6 +7,7 @@ import org.gradle.language.jvm.tasks.ProcessResources
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.zip.ZipFile
+import buildconventions.packagingVerification
 
 // Bukkit 26.2 独立产品工程：common + modern + v26_2 → mpmt-bukkit-26.2-*.jar
 
@@ -250,87 +251,34 @@ val verifyPackaging by tasks.registering {
     group = "verification"
     description = "校验 Bukkit $minecraftVersion 产品/验收产物"
     dependsOn(tasks.named("shadowJar"), acceptanceJar)
-    doLast {
-        val product = tasks.named<ShadowJar>("shadowJar").get().archiveFile.get().asFile
-        val acceptanceFile = acceptanceJar.get().archiveFile.get().asFile
+    packagingVerification(
+        laneLabel = "Bukkit",
+        mcVersion = minecraftVersion,
+        product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
+        acceptance = acceptanceJar.flatMap { it.archiveFile },
+    ) { product, acceptance ->
+        val acceptanceFile = acceptance ?: error("缺少验收产物输入")
         val adapterService =
-            "META-INF/services/top.wcpe.mc.mpmt.platform.bukkit.version.BukkitVersionAdapter"
-
-        fun entries(file: File): Set<String> =
-            ZipFile(file).use { zip -> zip.entries().asSequence().map { it.name }.toSet() }
-
-        fun entryText(file: File, name: String): String =
-            ZipFile(file).use { zip ->
-                val entry = zip.getEntry(name) ?: throw GradleException("${file.name} 缺少 $name")
-                zip.getInputStream(entry).use { input ->
-                    String(input.readBytes(), StandardCharsets.UTF_8)
-                }
-            }
-
-        fun must(condition: Boolean, message: String) {
-            if (!condition) throw GradleException("Bukkit 打包校验失败：$message")
-        }
-
-        val productEntries = entries(product)
-        val acceptanceEntries = entries(acceptanceFile)
-        val productMetadata = entryText(product, "plugin.yml")
-        val acceptanceMetadata = entryText(acceptanceFile, "plugin.yml")
-
-        must(product.name.contains(minecraftVersion), "产品产物名未包含 MC 版本")
-        must(acceptanceFile.name.contains(minecraftVersion), "验收产物名未包含 MC 版本")
-        must(productEntries.contains(adapterClassPath), "产品缺少选中的 L4 适配器")
-        must(
-            productEntries.count {
-                it.endsWith("BukkitVersionAdapter.class") &&
-                    !it.endsWith("ModernBukkitVersionAdapter.class") &&
-                    it != "top/wcpe/mc/mpmt/platform/bukkit/version/BukkitVersionAdapter.class"
-            } == 1,
-            "产品包含零个或多个 L4 适配器",
-        )
-        must(
-            entryText(product, adapterService).trim() == adapterClass,
-            "产品 adapter services 与目标不符",
-        )
-        must(productEntries.contains("top/wcpe/mc/mpmt/core/domain/Mpmt.class"), "产品未 shade 核心")
-        must(productEntries.contains("top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class"), "产品未 shade SPI")
-        must(productEntries.contains("top/wcpe/mc/mpmt/platform/bukkit/MpmtBukkitPlugin.class"), "产品缺少入口")
-        must(
-            productEntries.contains(
-                "top/wcpe/mc/mpmt/platform/bukkit/capability/FoliaSchedulerPort.class",
-            ),
-            "现代产品缺少 Folia 调度类",
-        )
-        must(
-            productEntries.none { it.startsWith("top/wcpe/mc/mpmt/platform/bukkit/acceptance/") },
-            "产品混入 acceptance",
-        )
-        must(
-            acceptanceEntries.contains(
-                "top/wcpe/mc/mpmt/platform/bukkit/acceptance/MpmtBukkitAcceptancePlugin.class",
-            ),
-            "验收缺少入口",
-        )
-        must(
-            productEntries.none { it.startsWith("org/bukkit/") || it.startsWith("io/papermc/") },
-            "产品误打入 Bukkit/Paper API",
-        )
-        must(
-            productEntries.any { it.startsWith("top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/") },
-            "产品 snakeyaml 未 relocate",
-        )
-        must(productMetadata.contains("main: top.wcpe.mc.mpmt.platform.bukkit.MpmtBukkitPlugin"), "产品 metadata 入口错误")
-        must(productMetadata.contains("folia-supported: true"), "现代产品缺少 folia 字段")
-        must(productMetadata.contains("api-version: '$apiVersion'"), "产品 api-version 错误")
-        must(acceptanceMetadata.contains("MpmtBukkitAcceptancePlugin"), "验收 metadata 入口错误")
-        must(
-            productEntries.contains(
-                "META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap",
-            ),
-            "缺少 PlatformBootstrap services",
-        )
-        logger.lifecycle(
-            "Bukkit $minecraftVersion 打包校验通过：产品=${product.name}，验收=${acceptanceFile.name}",
-        )
+        "META-INF/services/top.wcpe.mc.mpmt.platform.bukkit.version.BukkitVersionAdapter"
+        must(product.file.name.contains(minecraftVersion), "产品产物名未包含 MC 版本")
+        must(acceptanceFile.file.name.contains(minecraftVersion), "验收产物名未包含 MC 版本")
+        mustContain(product, adapterClassPath, "产品缺少选中的 L4 适配器")
+        must(product.entries.count { it.endsWith("BukkitVersionAdapter.class") && !it.endsWith("ModernBukkitVersionAdapter.class") && it != "top/wcpe/mc/mpmt/platform/bukkit/version/BukkitVersionAdapter.class" } == 1, "产品包含零个或多个 L4 适配器")
+        mustServiceEquals(product, adapterService, adapterClass, "产品 adapter services 与目标不符")
+        mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "产品未 shade 核心")
+        mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "产品未 shade SPI")
+        mustContain(product, "top/wcpe/mc/mpmt/platform/bukkit/MpmtBukkitPlugin.class", "产品缺少入口")
+        mustContain(product, "top/wcpe/mc/mpmt/platform/bukkit/capability/FoliaSchedulerPort.class", "现代产品缺少 Folia 调度类")
+        mustNotBundle(product, listOf("top/wcpe/mc/mpmt/platform/bukkit/acceptance/"), "产品混入 acceptance")
+        mustContain(acceptanceFile, "top/wcpe/mc/mpmt/platform/bukkit/acceptance/MpmtBukkitAcceptancePlugin.class", "验收缺少入口")
+        mustNotBundle(product, listOf("org/bukkit/", "io/papermc/"), "产品误打入 Bukkit/Paper API")
+        mustContainPrefix(product, "top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/", "产品 snakeyaml 未 relocate")
+        mustMetadataContains(product, "plugin.yml", "main: top.wcpe.mc.mpmt.platform.bukkit.MpmtBukkitPlugin", "产品 metadata 入口错误")
+        mustMetadataContains(product, "plugin.yml", "folia-supported: true", "现代产品缺少 folia 字段")
+        mustMetadataContains(product, "plugin.yml", "api-version: '$apiVersion'", "产品 api-version 错误")
+        mustMetadataContains(acceptanceFile, "plugin.yml", "MpmtBukkitAcceptancePlugin", "验收 metadata 入口错误")
+        mustContain(product, "META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap", "缺少 PlatformBootstrap services")
+        log("Bukkit $minecraftVersion 打包校验通过：产品=${product.file.name}，验收=${acceptanceFile.file.name}")
     }
 }
 
