@@ -4,12 +4,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTest;
-import top.wcpe.mc.mpmt.acceptance.report.P1ScenarioMatrix;
+import top.wcpe.mc.mpmt.acceptance.report.DefaultScenarioMatrix;
 import top.wcpe.mc.mpmt.platform.fabric.gametest.sim.SimScenarioCatalog;
 
 /**
- * Fabric realserver P1 场景目录：13 项进程内回环 + {@code real-round-trip} 客户端联调。
- * 顺序必须与 {@link P1ScenarioMatrix#requiredFor(String)} 的 fabric 清单一致。
+ * Fabric realserver 默认轨场景目录：13 项进程内回环 + {@code real-round-trip} 客户端联调。
+ * 顺序必须与 {@link DefaultScenarioMatrix#requiredFor(String)} 的 fabric 清单一致。
  */
 public final class RealServerScenarioCatalog {
 
@@ -35,10 +35,10 @@ public final class RealServerScenarioCatalog {
 
     /** 与矩阵对账；不一致则失败快，避免静默漏验。 */
     public static void assertMatchesMatrix() {
-        List<String> required = P1ScenarioMatrix.requiredFor("fabric");
+        List<String> required = DefaultScenarioMatrix.requiredFor("fabric");
         if (!required.equals(scenarioIds())) {
             throw new IllegalStateException(
-                    "Fabric realserver 场景目录与 P1 矩阵不一致：catalog="
+                    "Fabric realserver 场景目录与默认轨清单不一致：catalog="
                             + scenarioIds()
                             + " matrix="
                             + required);

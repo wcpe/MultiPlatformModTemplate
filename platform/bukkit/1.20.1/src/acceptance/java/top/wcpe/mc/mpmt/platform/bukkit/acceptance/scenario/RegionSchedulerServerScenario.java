@@ -5,8 +5,8 @@ import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.platform.bukkit.acceptance.BukkitServerGameTestContext;
 import top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.FoliaSchedulerScenarioSupport.PlayerTarget;
 
-/** R6：从在线客户端取得世界坐标，并经产品实际区域调度入口执行任务。 */
-public final class RegionSchedulerServerScenario extends R6ServerScenario {
+/** SCHEDULER：从在线客户端取得世界坐标，并经产品实际区域调度入口执行任务。 */
+public final class RegionSchedulerServerScenario extends SchedulerServerScenario {
 
     @Override
     public String id() {
@@ -14,7 +14,7 @@ public final class RegionSchedulerServerScenario extends R6ServerScenario {
     }
 
     @Override
-    protected void runR6(ServerGameTestContext context) {
+    protected void runScheduler(ServerGameTestContext context) {
         awaitClientReady(CLIENT_READY_TIMEOUT_MS);
         BukkitServerGameTestContext bukkit = bukkit(context);
         FoliaSchedulerScenarioSupport.assertFoliaScheduler(context);

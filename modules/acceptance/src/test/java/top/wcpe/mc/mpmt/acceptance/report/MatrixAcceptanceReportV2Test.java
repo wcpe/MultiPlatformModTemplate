@@ -45,21 +45,21 @@ class MatrixAcceptanceReportV2Test {
     }
 
     @Test
-    @DisplayName("R1–R7 视为矩阵模式激活")
+    @DisplayName("STANDARD/HYBRID/SCHEDULER 与 REALSERVER262 视为矩阵模式激活")
     void 矩阵模式探测() {
         assertFalse(MatrixAcceptanceReportV2.matrixModeActive());
-        System.setProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY, "R1");
+        System.setProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY, "STANDARD");
         assertTrue(MatrixAcceptanceReportV2.matrixModeActive());
-        System.setProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY, "R7");
+        System.setProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY, "REALSERVER262");
         assertTrue(MatrixAcceptanceReportV2.matrixModeActive());
         System.setProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY, "bukkit");
         assertFalse(MatrixAcceptanceReportV2.matrixModeActive());
     }
 
     @Test
-    @DisplayName("R7 完整启动属性通过矩阵校验")
-    void r7启动属性校验() throws IOException {
-        installValidProperties("R7");
+    @DisplayName("REALSERVER262 完整启动属性通过矩阵校验")
+    void realserver262启动属性校验() throws IOException {
+        installValidProperties("REALSERVER262");
 
         assertDoesNotThrow(MatrixAcceptanceReportV2::validateRequiredProperties);
     }
@@ -67,7 +67,7 @@ class MatrixAcceptanceReportV2Test {
     @Test
     @DisplayName("缺必填属性时启动校验失败")
     void 缺属性拒绝() {
-        System.setProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY, "R1");
+        System.setProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY, "STANDARD");
         assertThrows(
                 IllegalArgumentException.class,
                 MatrixAcceptanceReportV2::validateRequiredProperties);
@@ -114,7 +114,7 @@ class MatrixAcceptanceReportV2Test {
     }
 
     private void installValidProperties() throws IOException {
-        installValidProperties("R1");
+        installValidProperties("STANDARD");
     }
 
     private void installValidProperties(String matrix) throws IOException {

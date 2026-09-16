@@ -8,7 +8,7 @@ import top.wcpe.mc.mpmt.platform.forge.MpmtForgeMod;
 import top.wcpe.mc.mpmt.platform.forge.hud.ForgeHudSnapshot;
 import top.wcpe.mc.mpmt.protocol.packet.HudKind;
 
-/** R5 客户端 required scenario 验证器注册表。 */
+/** HYBRID 客户端 required scenario 验证器注册表。 */
 final class ForgeVerificationRegistry {
 
     private static final String EXPECTED_HUD_TEXT = "验收HUD";

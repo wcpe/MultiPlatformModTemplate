@@ -184,18 +184,18 @@ public class MpmtBukkitPlugin extends JavaPlugin {
         return schedulerPort;
     }
 
-    /** 当前活跃平台 id（验收 R5 断言唯一绑定）。 */
+    /** 当前活跃平台 id（验收 HYBRID 断言唯一绑定）。 */
     public String activePlatformId() {
         return PlatformProvider.get().platformId();
     }
 
-    /** 产品 FeatureGate 是否启用 Forge+Bukkit 融合服能力（验收 R5）。 */
+    /** 产品 FeatureGate 是否启用 Forge+Bukkit 融合服能力（验收 HYBRID）。 */
     public boolean isHybridForgeBukkit() {
         return PlatformProvider.get().featureGate().supports(Capability.HYBRID_FORGE_BUKKIT);
     }
 
     /**
-     * 调度端口实现类全名（验收 R6 断言 Folia 选型）。
+     * 调度端口实现类全名（验收 SCHEDULER 断言 Folia 选型）。
      *
      * <p>验收 jar 与产品 jar 分装（ADR-0014），跨插件类加载器不可直接强转 {@link SchedulerPort}，
      * 故暴露类名与下方 primitive 调度入口供反射桥调用。
@@ -204,12 +204,12 @@ public class MpmtBukkitPlugin extends JavaPlugin {
         return schedulerPort().getClass().getName();
     }
 
-    /** 经产品实际调度端口执行全局任务（验收 R6）。 */
+    /** 经产品实际调度端口执行全局任务（验收 SCHEDULER）。 */
     public void runGlobalSchedulerTask(Runnable task) {
         schedulerPort().runGlobal(Objects.requireNonNull(task, "task 不能为空"));
     }
 
-    /** 经产品实际实体调度入口执行任务（验收 R6）。 */
+    /** 经产品实际实体调度入口执行任务（验收 SCHEDULER）。 */
     public void runEntitySchedulerTask(UUID entityId, Runnable task) {
         schedulerPort()
                 .runForEntity(
@@ -217,7 +217,7 @@ public class MpmtBukkitPlugin extends JavaPlugin {
                         Objects.requireNonNull(task, "task 不能为空"));
     }
 
-    /** 经产品实际区域调度入口执行任务（验收 R6）。 */
+    /** 经产品实际区域调度入口执行任务（验收 SCHEDULER）。 */
     public void runLocationSchedulerTask(String worldId, int x, int z, Runnable task) {
         schedulerPort()
                 .runForLocation(

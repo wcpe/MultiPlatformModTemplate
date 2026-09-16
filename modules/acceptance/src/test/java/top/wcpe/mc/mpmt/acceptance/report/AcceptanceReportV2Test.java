@@ -42,7 +42,7 @@ class AcceptanceReportV2Test {
 
         assertTrue(text.startsWith("SERVER-GAMETEST-REPORT v2\n"), text);
         assertTrue(text.contains("RUN_ID\trun-1\n"), text);
-        assertTrue(text.contains("MATRIX\tR1\n"), text);
+        assertTrue(text.contains("MATRIX\tSTANDARD\n"), text);
         assertTrue(text.contains("START_EPOCH_MS\t1000\n"), text);
         assertTrue(text.contains("SERVER_JAVA\t21\tC:/Java 21/bin/java.exe\n"), text);
         assertTrue(text.contains("CLIENT_JAVA\t21\tC:/Java 21/bin/javaw.exe\n"), text);
@@ -83,7 +83,7 @@ class AcceptanceReportV2Test {
                 () -> AcceptanceReportV2Parser.parse(valid.replace("RUN_ID\trun-1\n", "")));
         assertThrows(
                 AcceptanceReportValidationException.class,
-                () -> AcceptanceReportV2Parser.parse(valid.replace("MATRIX\tR1\n", "MATRIX\tR1\nMATRIX\tR1\n")));
+                () -> AcceptanceReportV2Parser.parse(valid.replace("MATRIX\tSTANDARD\n", "MATRIX\tSTANDARD\nMATRIX\tSTANDARD\n")));
         assertThrows(
                 AcceptanceReportValidationException.class,
                 () -> AcceptanceReportV2Parser.parse(valid + "TRAILING\n"));
@@ -99,7 +99,7 @@ class AcceptanceReportV2Test {
                 new ReportScenario("product-handshake", ScenarioStatus.PASS, 1L, "通过")));
         AcceptanceReportV2 report = AcceptanceReportV2.create(
                 "run-1",
-                "R1",
+                "STANDARD",
                 1000L,
                 new JavaRuntimeInfo(21, "C:/server/java.exe"),
                 new JavaRuntimeInfo(21, "C:/client/java.exe"),
@@ -127,7 +127,7 @@ class AcceptanceReportV2Test {
                 new ReportArtifact("client-acceptance", CLIENT_HASH)));
         AcceptanceReportV2Expectation expectation = new AcceptanceReportV2Expectation(
                 "run-1",
-                "R1",
+                "STANDARD",
                 1000L,
                 new JavaRuntimeInfo(21, "C:/server/java.exe"),
                 new JavaRuntimeInfo(21, "C:/client/java.exe"),
@@ -194,7 +194,7 @@ class AcceptanceReportV2Test {
             List<ReportArtifact> artifacts, List<ReportScenario> scenarios) {
         return AcceptanceReportV2.create(
                 "run-1",
-                "R1",
+                "STANDARD",
                 1000L,
                 new JavaRuntimeInfo(21, "C:/server/java.exe"),
                 new JavaRuntimeInfo(21, "C:/client/java.exe"),
@@ -211,7 +211,7 @@ class AcceptanceReportV2Test {
                 new ReportScenario("optional-capability", ScenarioStatus.SKIP, 0L, "未启用"));
         return AcceptanceReportV2.create(
                 "run-1",
-                "R1",
+                "STANDARD",
                 1000L,
                 new JavaRuntimeInfo(21, "C:/Java 21/bin/java.exe"),
                 new JavaRuntimeInfo(21, "C:/Java 21/bin/javaw.exe"),

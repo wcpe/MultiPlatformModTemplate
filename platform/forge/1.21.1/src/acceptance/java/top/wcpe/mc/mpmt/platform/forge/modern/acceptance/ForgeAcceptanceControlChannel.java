@@ -57,7 +57,10 @@ public final class ForgeAcceptanceControlChannel {
     }
 
     public void onDisconnected(ServerPlayer player) {
-        if (clientPlayer == player) {
+        // 引用同一性判定：只清理"当前记录的那个客户端"，故用 == 而非 equals（PMD 误报）
+        @SuppressWarnings("PMD.CompareObjectsWithEquals")
+        boolean isCurrentClient = clientPlayer == player;
+        if (isCurrentClient) {
             clientPlayer = null;
             client.failAllPending("客户端断开");
         }

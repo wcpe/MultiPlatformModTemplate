@@ -28,12 +28,12 @@ import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
 import top.wcpe.mc.mpmt.acceptance.report.AcceptanceReport;
 import top.wcpe.mc.mpmt.acceptance.report.MatrixAcceptanceReportV2;
 import top.wcpe.mc.mpmt.acceptance.report.MatrixScenarioCatalog;
-import top.wcpe.mc.mpmt.acceptance.report.P1ScenarioMatrix;
+import top.wcpe.mc.mpmt.acceptance.report.DefaultScenarioMatrix;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioResult;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioStatus;
 import top.wcpe.mc.mpmt.platform.forge.acceptance.client.ForgeAcceptanceClientInit;
 import top.wcpe.mc.mpmt.platform.forge.acceptance.scenario.ForgeRealRoundTripServerScenario;
-import top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeP1Simulation;
+import top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeDefaultSimulation;
 
 /**
  * Forge realserver 验收驱动 mod（仅验收运行期用，非产品 mod，ADR-0014）：仅当 {@code -Dmpmt.acceptance=true}
@@ -42,8 +42,8 @@ import top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeP1Simulation;
  * <p>双轨：
  *
  * <ul>
- *   <li><b>P1（默认）</b>：13 项进程内回环 + {@code real-round-trip}。
- *   <li><b>矩阵 R1–R6</b>：{@code -Dmpmt.acceptance.matrix=Rn} 时经 ServiceLoader 跑 SPI 产品场景并装配严格
+ *   <li><b>默认轨</b>：13 项进程内回环 + {@code real-round-trip}。
+ *   <li><b>矩阵轨</b>：{@code -Dmpmt.acceptance.matrix=矩阵值} 时经 ServiceLoader 跑 SPI 产品场景并装配严格
  *       v2（排除 real-round-trip）。
  * </ul>
  */
@@ -95,7 +95,7 @@ public final class MpmtForgeAcceptanceMod {
         LOGGER.info(
                 matrixMode
                         ? "realserver Forge 验收驱动已激活（矩阵 {}）"
-                        : "realserver Forge 验收驱动已激活，待服务端启动（P1 REAL_REQUIRED）",
+                        : "realserver Forge 验收驱动已激活，待服务端启动（默认轨 REAL_REQUIRED）",
                 System.getProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY));
     }
 
@@ -125,10 +125,10 @@ public final class MpmtForgeAcceptanceMod {
         ServerScenario roundTrip = new ForgeRealRoundTripServerScenario();
         roundTrip.bindClient(channel.client());
         Thread driver =
-                new Thread(() -> runP1AndReport(server, roundTrip), "mpmt-forge-acceptance-driver");
+                new Thread(() -> runDefaultAndReport(server, roundTrip), "mpmt-forge-acceptance-driver");
         driver.setDaemon(true);
         driver.start();
-        Thread watchdog = new Thread(() -> watchdogP1(deadline), "mpmt-forge-acceptance-watchdog");
+        Thread watchdog = new Thread(() -> watchdogDefault(deadline), "mpmt-forge-acceptance-watchdog");
         watchdog.setDaemon(true);
         watchdog.start();
         LOGGER.info("realserver Forge 验收驱动已就绪（13 回环 + real-round-trip 等客户端）");
@@ -159,19 +159,19 @@ public final class MpmtForgeAcceptanceMod {
         return registry;
     }
 
-    private void runP1AndReport(MinecraftServer server, ServerScenario roundTrip) {
+    private void runDefaultAndReport(MinecraftServer server, ServerScenario roundTrip) {
         try {
-            List<ScenarioResult> results = new ArrayList<>(ForgeP1Simulation.runLoopbackCore());
+            List<ScenarioResult> results = new ArrayList<>(ForgeDefaultSimulation.runLoopbackCore());
             List<ServerGameTest> live = Collections.singletonList(roundTrip);
             results.addAll(
                     ServerGameTestRunner.runAll(
                             live, test -> new ForgeServerGameTestContext(server)));
-            List<String> scenarios = P1ScenarioMatrix.requiredFor(PLATFORM);
+            List<String> scenarios = DefaultScenarioMatrix.requiredFor(PLATFORM);
             assertCatalogMatches(scenarios, results);
-            String report = AcceptanceReport.render(ForgeP1Simulation.metadata(PLATFORM), results);
+            String report = AcceptanceReport.render(ForgeDefaultSimulation.metadata(PLATFORM), results);
             finishOnce(server, report);
         } catch (Throwable throwable) {
-            LOGGER.error("P1 验收驱动失败：{}", throwable.getMessage());
+            LOGGER.error("默认轨验收驱动失败：{}", throwable.getMessage());
             List<ScenarioResult> fallback =
                     Collections.singletonList(
                             new ScenarioResult(
@@ -209,11 +209,11 @@ public final class MpmtForgeAcceptanceMod {
         }
         if (!required.equals(actual)) {
             throw new IllegalStateException(
-                    "Forge realserver 场景与 P1 矩阵不一致：actual=" + actual + " matrix=" + required);
+                    "Forge realserver 场景与默认轨清单不一致：actual=" + actual + " matrix=" + required);
         }
     }
 
-    private void watchdogP1(long deadlineMs) {
+    private void watchdogDefault(long deadlineMs) {
         try {
             Thread.sleep(deadlineMs);
         } catch (InterruptedException e) {

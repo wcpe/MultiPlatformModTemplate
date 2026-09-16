@@ -224,7 +224,7 @@ tasks.named<Test>("test") {
 
 val acceptanceContractTest by tasks.registering(Test::class) {
     group = "verification"
-    description = "运行 Bukkit acceptance v2 与完整 P1 场景契约测试"
+    description = "运行 Bukkit acceptance v2 与完整默认轨场景契约测试"
     testClassesDirs = acceptanceTest.output.classesDirs
     classpath = acceptanceTest.runtimeClasspath
     useJUnitPlatform()
@@ -371,19 +371,19 @@ tasks.named("check") {
 }
 
 val bukkitReportFile = layout.buildDirectory.file("acceptance/server-report.txt")
-// R6 矩阵报告默认旁路文件；-Pmpmt.acceptance.matrix=R6 时门禁读此路径
-val r6ReportFile = layout.buildDirectory.file("acceptance/server-report-r6.txt")
+// SCHEDULER 矩阵报告默认旁路文件；-Pmpmt.acceptance.matrix=SCHEDULER 时门禁读此路径
+val schedulerReportFile = layout.buildDirectory.file("acceptance/server-report-scheduler.txt")
 val acceptanceMatrix =
     providers.gradleProperty("mpmt.acceptance.matrix").orElse("")
 val autoHost =
     providers.gradleProperty("mpmt.realserver.autoHost").map { it == "true" }.orElse(false)
 
 mpmtRealServerAcceptance {
-    // Folia R6 与 Paper 默认报告分离，避免 P1 全量报告冒充矩阵 R6
+    // Folia（SCHEDULER）与 Paper 默认报告分离，避免默认轨全量报告冒充矩阵报告
     reportFile.set(
         acceptanceMatrix.map { matrixId ->
-            if (matrixId.equals("R6", ignoreCase = true)) {
-                r6ReportFile.get()
+            if (matrixId.equals("SCHEDULER", ignoreCase = true)) {
+                schedulerReportFile.get()
             } else {
                 bukkitReportFile.get()
             }
@@ -407,7 +407,7 @@ tasks.named("runRealServerAcceptance") {
     description =
         "Bukkit $minecraftVersion realserver 门禁" +
         "（-Pmpmt.realserver.autoHost=true 时接线 PaperHostService；" +
-        "-Pmpmt.acceptance.matrix=R6 时读 server-report-r6.txt）"
+        "-Pmpmt.acceptance.matrix=SCHEDULER 时读 server-report-scheduler.txt）"
     dependsOn(tasks.named("shadowJar"), acceptanceJar, "verifyMpmtAcceptanceReport")
 }
 

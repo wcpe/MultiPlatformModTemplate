@@ -2,7 +2,7 @@ package top.wcpe.mc.mpmt.platform.fabric.gametest.client.verifier;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import top.wcpe.mc.mpmt.acceptance.report.P1ScenarioMatrix;
+import top.wcpe.mc.mpmt.acceptance.report.DefaultScenarioMatrix;
 import top.wcpe.mc.mpmt.platform.fabric.capability.FabricHudRenderer;
 import top.wcpe.mc.mpmt.platform.fabric.gametest.client.ClientVerifier;
 import top.wcpe.mc.mpmt.platform.fabric.gametest.client.RealServerClientContext;
@@ -17,7 +17,7 @@ import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 public final class RealRoundTripClientVerifier implements ClientVerifier {
 
     private static final String SCENARIO_ID =
-            P1ScenarioMatrix.REAL_ROUND_TRIP.substring(P1ScenarioMatrix.REAL_ROUND_TRIP.indexOf('/') + 1);
+            DefaultScenarioMatrix.REAL_ROUND_TRIP.substring(DefaultScenarioMatrix.REAL_ROUND_TRIP.indexOf('/') + 1);
 
     @Override
     public String scenarioId() {

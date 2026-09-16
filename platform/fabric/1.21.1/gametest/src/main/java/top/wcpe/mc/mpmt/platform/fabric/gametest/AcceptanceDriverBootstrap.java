@@ -21,7 +21,7 @@ import top.wcpe.mc.mpmt.acceptance.report.AcceptanceReport;
 import top.wcpe.mc.mpmt.acceptance.report.AcceptanceReportMetadata;
 import top.wcpe.mc.mpmt.acceptance.report.MatrixAcceptanceReportV2;
 import top.wcpe.mc.mpmt.acceptance.report.MatrixScenarioCatalog;
-import top.wcpe.mc.mpmt.acceptance.report.P1ScenarioMatrix;
+import top.wcpe.mc.mpmt.acceptance.report.DefaultScenarioMatrix;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioResult;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioStatus;
 import top.wcpe.mc.mpmt.platform.fabric.gametest.scenario.RealServerScenarioCatalog;
@@ -29,7 +29,7 @@ import top.wcpe.mc.mpmt.platform.fabric.gametest.scenario.RealServerScenarioCata
 /**
  * Fabric realserver 验收驱动引导。
  *
- * <p>双轨：默认 P1 REAL_REQUIRED（14 项）；声明 {@code -Dmpmt.acceptance.matrix=Rn} 时经 SPI 跑产品场景并装配严格 v2。
+ * <p>双轨：默认轨 REAL_REQUIRED（14 项）；声明 {@code -Dmpmt.acceptance.matrix=矩阵值} 时经 SPI 跑产品场景并装配严格 v2。
  */
 public final class AcceptanceDriverBootstrap {
 
@@ -70,7 +70,7 @@ public final class AcceptanceDriverBootstrap {
                     "realserver 验收驱动已激活（矩阵 {}）",
                     System.getProperty(MatrixAcceptanceReportV2.MATRIX_PROPERTY));
         } else {
-            LOGGER.info("realserver 验收驱动已激活，待服务端启动（P1 REAL_REQUIRED + v2 报告）");
+            LOGGER.info("realserver 验收驱动已激活，待服务端启动（默认轨 REAL_REQUIRED + v2 报告）");
         }
         ServerLifecycleEvents.SERVER_STARTED.register(AcceptanceDriverBootstrap::onServerStarted);
     }
@@ -118,12 +118,12 @@ public final class AcceptanceDriverBootstrap {
         }
 
         Thread driver =
-                new Thread(() -> runP1AndReport(server, tests, finished), "mpmt-acceptance-driver");
+                new Thread(() -> runDefaultAndReport(server, tests, finished), "mpmt-acceptance-driver");
         driver.setDaemon(true);
         driver.start();
         Thread watchdog =
                 new Thread(
-                        () -> watchdogP1(server, finished, deadlineMs), "mpmt-acceptance-watchdog");
+                        () -> watchdogDefault(server, finished, deadlineMs), "mpmt-acceptance-watchdog");
         watchdog.setDaemon(true);
         watchdog.start();
     }
@@ -147,11 +147,11 @@ public final class AcceptanceDriverBootstrap {
         return registry;
     }
 
-    private static void runP1AndReport(
+    private static void runDefaultAndReport(
             MinecraftServer server, List<ServerGameTest> tests, AtomicBoolean finished) {
         List<ScenarioResult> results =
                 ServerGameTestRunner.runAll(tests, test -> new FabricServerGameTestContext(server));
-        List<String> scenarios = P1ScenarioMatrix.requiredFor(PLATFORM);
+        List<String> scenarios = DefaultScenarioMatrix.requiredFor(PLATFORM);
         String report = AcceptanceReport.render(metadata(scenarios), results);
         finishOnce(server, finished, report);
     }
@@ -199,7 +199,7 @@ public final class AcceptanceDriverBootstrap {
         return value;
     }
 
-    private static void watchdogP1(
+    private static void watchdogDefault(
             MinecraftServer server, AtomicBoolean finished, long deadlineMs) {
         try {
             Thread.sleep(deadlineMs);

@@ -4,7 +4,7 @@ import java.util.List;
 import net.minecraft.server.level.ServerPlayer;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
-import top.wcpe.mc.mpmt.acceptance.report.P1ScenarioMatrix;
+import top.wcpe.mc.mpmt.acceptance.report.DefaultScenarioMatrix;
 import top.wcpe.mc.mpmt.platform.fabric.gametest.FabricServerGameTestContext;
 import top.wcpe.mc.mpmt.platform.fabric.net.FabricConnectionHandle;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricNetworkBindings;
@@ -15,7 +15,7 @@ import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 
 /**
  * realserver 收尾场景：经产品 L4 网络发 ACTIONBAR HUD，客户端断言渲染，证真实网络往返。
- * id 对齐 {@link P1ScenarioMatrix#REAL_ROUND_TRIP}。
+ * id 对齐 {@link DefaultScenarioMatrix#REAL_ROUND_TRIP}。
  */
 public final class RealRoundTripServerScenario extends ServerScenario {
 
@@ -32,8 +32,8 @@ public final class RealRoundTripServerScenario extends ServerScenario {
 
     @Override
     public String id() {
-        return P1ScenarioMatrix.REAL_ROUND_TRIP.substring(
-                P1ScenarioMatrix.REAL_ROUND_TRIP.indexOf('/') + 1);
+        return DefaultScenarioMatrix.REAL_ROUND_TRIP.substring(
+                DefaultScenarioMatrix.REAL_ROUND_TRIP.indexOf('/') + 1);
     }
 
     @Override

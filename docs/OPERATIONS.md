@@ -1,7 +1,9 @@
 # 运维手册：MultiPlatformModTemplate
 
 > 物理布局：`core/` · `platform/<loader>/{api,版本}/` · `modules/`。  
-> Gradle 工程名保持稳定；`-p` 与 `projectDir` 指向收纳后的路径。
+> Gradle 工程名保持稳定（车道工程名带加载器前缀，如 `:platform:fabric:fabric-1.20.1`）；车道目录仍为 `platform/<loader>/<版本>`，由根 `settings.gradle.kts` 的 `projectDir` 映射。
+
+> **入口统一为根构建**：全部平台车道已是根构建普通子模块（ADR-0026），**不存在**车道自有 wrapper / 车道 `settings.gradle.kts` / `-p <车道目录>` 的独立调用方式。所有 Gradle 调用都在仓库根执行，且**根构建须以 JDK 25 守护运行**（26.2 两条车道在配置期硬校验，ADR-0026 决策 4）。
 
 ## 1. 构建
 
@@ -18,44 +20,44 @@
 ./gradlew --no-daemon :platform:bukkit:1.21.1:shadowJar
 ./gradlew --no-daemon :platform:bukkit:26.2:shadowJar # Java 25
 
-# Fabric / Forge / Sponge（-p 用物理路径）
-./gradlew -p platform/fabric/1.20.1 --no-daemon remapJar
-./gradlew -p platform/fabric/1.21.1 --no-daemon remapJar
-./gradlew -p platform/forge/1.20.1 --no-daemon reobfShadowJar
-./gradlew -p platform/sponge/1.20.1 --no-daemon shadowJar
+# Fabric / Forge / Sponge（平台车道均为根子模块，用绝对工程路径）
+./gradlew --no-daemon :platform:fabric:fabric-1.20.1:remapJar
+./gradlew --no-daemon :platform:fabric:fabric-1.21.1:remapJar
+./gradlew --no-daemon :platform:sponge:sponge-1.20.1:shadowJar
+./gradlew --no-daemon :platform:forge:forge-1.20.1:reobfShadowJar
 
 # 聚合可发布 jar → build/dist/{bukkit,fabric,forge,neoforge,sponge}/
 ./gradlew --no-daemon :collectReleaseArtifacts
 ```
 
-26.2 是第三期在制车道，根 wrapper 已固定为 Gradle **9.6.1**，三个车道均需要 Java 25：
+`./gradlew :buildAll` 是全量入口：构建全部子模块、执行发布产物结构门并聚合 `build/dist`（等价于全车道构建 + `:collectReleaseArtifacts`）。以下按车道展开的细项命令只在需要单车道制品时使用。
+
+26.2 是第三期在制车道，根 wrapper 固定为 Gradle **9.6.1**，三条车道（Bukkit / Fabric / Forge）都是根构建子模块，均须以 **JDK 25 守护**运行根构建（26.2 两条 loom 车道在配置期硬校验守护 JVM；ADR-0025 / ADR-0026）：
 
 ```bash
-# 根先准备受控内部 JAR，再委托 Fabric 26.2 includeBuild
-./gradlew --no-daemon :buildFabric262
+# 26.2 三车道统一构建门（Paper/Fabric/Forge 产物）
+./gradlew --no-daemon :buildRealServerArtifacts262
 
-# Forge 26.2 必须在物理目录使用自有 wrapper；根构建不得嵌套调用它
-./platform/forge/26.2/gradlew --no-daemon packageArtifacts
+# 或单独构建 Fabric 26.2 / Forge 26.2 车道
+./gradlew --no-daemon :platform:fabric:fabric-26.2:build
+./gradlew --no-daemon :platform:forge:forge-26.2:packageArtifacts
 ```
 
-NeoForge 1.20.2 是独立 Gradle 8.14.5 车道；根 Gradle 9 只准备受控内部 JAR 并校验已生成的产物 / 报告，既不能用 `-p` 形式调用，也不会嵌套执行其 wrapper：
+NeoForge 1.20.2 已随 ADR-0025 迁移至 `top.wcpe.loom`（arch-loom 的 neoForge 配置，运行期 Mojmap 恒等 remap），并随 ADR-0026 成为根构建子模块（Gradle 统一 9.6.1）；核心经项目依赖直接消费，不再有"根先准备受控内部 JAR 再校验文件"的中间层：
 
 ```bash
-# 在仓库根准备 NeoForge 受控内部 JAR
-./gradlew --no-daemon :prepareNeoForge1202Inputs
-
-cd platform/neoforge/1.20.2
-./gradlew --no-daemon packageArtifacts
-cd ../../..
+# 在仓库根构建 NeoForge 车道
+./gradlew --no-daemon :platform:neoforge:neoforge-1.20.2:packageArtifacts
 ```
 
-Forge 跨代（自有 launcher，目录在 `platform/forge/`，禁止从根嵌套 gradlew）：
+Forge 跨代（目录在 `platform/forge/`；全部车道为根构建子模块，Gradle 统一 9.6.1，构建插件统一 `top.wcpe.loom` —— 1.12.2 走 legacy 链路、26.2 走无混淆 no-remap 链路；构建守护 JVM 须 ≥25）：
 
-| MC | 目录 | JDK / Gradle |
+| MC | 目录 | 工程路径 / JDK |
 |---|---|---|
-| 1.21.1 | `platform/forge/1.21.1/` | Java 21 + 8.12.1 |
-| 1.12.2 | `platform/forge/1.12.2/` | Java 8 + 5.6.4（**client-only**） |
-| 26.2 | `platform/forge/26.2/` | Java 25 + 9.6.1 + ForgeGradle 7.0.31 |
+| 1.20.1 | `platform/forge/1.20.1/` | `:platform:forge:forge-1.20.1`：根 Gradle 9.6.1（守护 JVM ≥25）构建，任务 `./gradlew :platform:forge:forge-1.20.1:reobfShadowJar`；编译工具链 Java 17 |
+| 1.21.1 | `platform/forge/1.21.1/` | `:platform:forge:forge-1.21.1`：同一根 Gradle 9.6.1（守护 JVM ≥25）；编译工具链 Java 21 |
+| 1.12.2 | `platform/forge/1.12.2/` | `:platform:forge:forge-1.12.2`：同一根 Gradle 9.6.1（守护 JVM ≥25）；编译工具链 Java 8（**client-only**，任务 `./gradlew :platform:forge:forge-1.12.2:prepareClientCompanionArtifacts`） |
+| 26.2 | `platform/forge/26.2/` | `:platform:forge:forge-26.2`：同一根 Gradle 9.6.1（守护 JVM 必须 ≥25），`top.wcpe.loom-no-remap` + `loom.platform=forge` 无混淆管线（ADR-0025） |
 
 ## 2. 平台 API 模块
 
@@ -74,79 +76,78 @@ Forge 跨代（自有 launcher，目录在 `platform/forge/`，禁止从根嵌�
 ```bash
 ./gradlew :listRealServerLanes
 ./gradlew :verifyVersionMatrixBuild
-# P2 核心矩阵门（FR-12）：不含 NeoForge / Sponge / 26.2；等价别名 :runP2StrictCheck
+# 版本矩阵门（FR-12）：不含 NeoForge / Sponge / 26.2
 ./gradlew :runVersionMatrixGate
 ```
 
-> **FR-12 已交付@v0.2.0**：R1–R6 合规矩阵 v2 + 用户第二期实机确认已齐；`:runVersionMatrixGate` 仍是 P2 报告门入口（只读权威报告，不代替真服实跑），**不能验证 26.2/R7**。
+> **FR-12 已交付@v0.2.0**：R1–R6 合规矩阵 v2 + 用户第二期实机确认已齐；`:runVersionMatrixGate` 仍是 P2 报告门入口（只读权威报告，不代替真服实跑），**不能验证 26.2 / REALSERVER262**。
 
 ```bash
 # 全 lane（含 NeoForge / Sponge 与 26.2）另用：
 ./gradlew :runRealServerAcceptance
-# Folia R6 报告路径：-P mpmt.acceptance.matrix=R6 时读 server-report-r6.txt
-./gradlew :runRealServerAcceptanceFolia -P mpmt.acceptance.matrix=R6
+# Folia SCHEDULER 报告路径：-P mpmt.acceptance.matrix=SCHEDULER 时读 server-report-scheduler.txt
+./gradlew :runRealServerAcceptanceFolia -P mpmt.acceptance.matrix=SCHEDULER
 ```
 
 请使用 **绝对路径** `:task`，避免无 `:` 时匹配到子工程同名 `runRealServerAcceptance`。
 
-P3 / 26.2 R7 三车道：
+P3 / 26.2 REALSERVER262 三车道（原 `:runP3R7Gate` 与矩阵值 `R7` 已更名）：
 
 ```bash
-# 构建门：Paper 26.2、Fabric 26.2，以及已由 Forge 自有 wrapper 生成的双 JAR
-./gradlew :runP3R7Build
+# 构建门：Paper 26.2、Fabric 26.2 与 Forge 26.2 的产物（全部为根子模块任务）
+./gradlew :buildRealServerArtifacts262
 
-# 三车道以同一轮标识写出 R7 权威报告后，才运行报告聚合门
-./gradlew :runP3R7RealServerAcceptance \
-  -P mpmt.acceptance.matrix=R7 \
+# 三车道以同一轮标识写出 REALSERVER262 权威报告后，才运行报告聚合门
+./gradlew :runRealServerAcceptance262 \
+  -P mpmt.acceptance.matrix=REALSERVER262 \
   -P mpmt.acceptance.runId=<同一轮-run-id> \
   -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒> \
   -P mpmt.acceptance.forge.serverRuntime=<本轮实际-Forge-服务端-JAR-绝对路径>
-./gradlew :runP3R7Gate \
-  -P mpmt.acceptance.matrix=R7 \
+./gradlew :runRealServerGate262 \
+  -P mpmt.acceptance.matrix=REALSERVER262 \
   -P mpmt.acceptance.runId=<同一轮-run-id> \
   -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒> \
   -P mpmt.acceptance.forge.serverRuntime=<本轮实际-Forge-服务端-JAR-绝对路径>
 
-# Forge 真服的独立操作说明（在 platform/forge/26.2 下执行）
-./platform/forge/26.2/gradlew --no-daemon printRealServerAcceptanceRecipe
+# Forge 26.2 真服的独立操作说明（仍在仓库根执行根任务）
+./gradlew --no-daemon :platform:forge:forge-26.2:printRealServerAcceptanceRecipe
 ```
 
-R7 必须为 Paper、Fabric、Forge 三车道各提供一份属于**同一轮**的 `SERVER-GAMETEST-REPORT v2`，含 `MATRIX R7`、`RUN_ID`、本轮开始毫秒、五个制品 role 的实际 SHA-256、`product-handshake` / `product-roundtrip` / `client-hud` 各一次 PASS、匹配的 `TOTAL` 与唯一末行 `RESULT PASS`。根门会拒绝旧报告、重复记录、额外失败/错误场景与制品漂移；依 ADR-0023，P3 / FR-16 的该严格门即为最终自动化验收。
+REALSERVER262 必须为 Paper、Fabric、Forge 三车道各提供一份属于**同一轮**的 `SERVER-GAMETEST-REPORT v2`，含 `MATRIX REALSERVER262`、`RUN_ID`、本轮开始毫秒、五个制品 role 的实际 SHA-256、`product-handshake` / `product-roundtrip` / `client-hud` 各一次 PASS、匹配的 `TOTAL` 与唯一末行 `RESULT PASS`。根门会拒绝旧报告、重复记录、额外失败/错误场景与制品漂移；依 ADR-0023，P3 / FR-16 的该严格门即为最终自动化验收。
 
-Paper 26.2 宿主 + Fabric 26.2 客户端伴侣（R7）：
+Paper 26.2 宿主 + Fabric 26.2 客户端伴侣（REALSERVER262）：
 
 ```bash
 # 终端 A：先起 Paper；两个占位值必须原样传给终端 B。
 ./gradlew :platform:bukkit:26.2:ensurePaperRealServerHost \
   -P mpmt.realserver.autoHost=true \
   -P mpmt.realserver.waitForReport=true \
-  -P mpmt.acceptance.matrix=R7 \
+  -P mpmt.acceptance.matrix=REALSERVER262 \
   -P mpmt.acceptance.runId=<同一轮-run-id> \
   -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
 
-# 终端 B：确认 25599 已监听后运行 Fabric 客户端伴侣。
-./gradlew -p platform/fabric/26.2 runAcceptanceClient \
+# 终端 B：确认 25599 已监听后运行 Fabric 26.2 客户端伴侣（根子模块任务）。
+./gradlew :platform:fabric:fabric-26.2:runAcceptanceClient \
   -P mpmt.acceptance.server=127.0.0.1:25599 \
-  -P mpmt.acceptance.matrix=R7 \
+  -P mpmt.acceptance.matrix=REALSERVER262 \
   -P mpmt.acceptance.runId=<同一轮-run-id> \
   -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒>
 ```
 
-P3 Paper 自动宿主只下载 `https://fill-data.papermc.io` 的冻结 build 71，缓存与新下载均核对 `paper-26.2-71.jar` 的 61,744,713 字节和 SHA-256 `36fee4f3a7020eb2e2d6f8d70d849beaf0f024d86f09302b9ccf2d96f266127e`；不跟随 `latest`。其他历史 Bukkit 自动宿主未声明冻结值时保持既有下载行为。该组合会由 Paper 车道产出当前 R7 报告；Fabric 与 Forge 各自的服务端车道仍须另行产出相同轮次的报告，才能运行根聚合门。
+P3 Paper 自动宿主只下载 `https://fill-data.papermc.io` 的冻结 build 71，缓存与新下载均核对 `paper-26.2-71.jar` 的 61,744,713 字节和 SHA-256 `36fee4f3a7020eb2e2d6f8d70d849beaf0f024d86f09302b9ccf2d96f266127e`；不跟随 `latest`。其他历史 Bukkit 自动宿主未声明冻结值时保持既有下载行为。该组合会由 Paper 车道产出当前 REALSERVER262 报告；Fabric 与 Forge 各自的服务端车道仍须另行产出相同轮次的报告，才能运行根聚合门。
 
-Forge 1.21.1 专用服（独立 launcher）：
+Forge 1.21.1 专用服（独立 launcher，车道已是根子模块，命令仍在仓库根执行）：
 
 ```bash
-cd platform/forge/1.21.1
-./gradlew --no-daemon printRealServerAcceptanceRecipe
-# 起服 + 客户端伴侣 + ./gradlew verifyAcceptanceReport
+./gradlew --no-daemon :platform:forge:forge-1.21.1:printRealServerAcceptanceRecipe
+# 起服 + 客户端伴侣（:platform:forge:forge-1.21.1:runAcceptanceClient）+ ./gradlew :platform:forge:forge-1.21.1:verifyAcceptanceReport
 ```
 
-Forge 1.12.2：**禁止** Forge 服务端 mod；真服走 CatServer R5：
+Forge 1.12.2：**禁止** Forge 服务端 mod；真服走 CatServer HYBRID：
 
 ```bash
 ./gradlew :runRealServerAcceptanceCatServer
-# 客户端伴侣：./platform/forge/1.12.2/gradlew --no-daemon prepareClientCompanionArtifacts
+# 客户端伴侣：./gradlew :platform:forge:forge-1.12.2:prepareClientCompanionArtifacts
 ```
 
 ## 4. 脚手架换名
@@ -161,3 +162,11 @@ Forge 1.12.2：**禁止** Forge 服务端 mod；真服走 CatServer R5：
 ```
 
 见 [`../tools/README.md`](../tools/README.md)。纯 kts，无需 python。
+
+## 5. GitHub Actions
+
+`ci.yml` 会在 pull request、`main`/`dev` 推送和手动触发时，在 Ubuntu Hosted Runner 固定构建 `mc-testkit` `v0.5.1` 到 Maven Local；随后以 **JDK 25 守护**执行单一根构建的 `:buildAll`（Java 8 / 17 / 21 / 25 均显式安装，8/17/21 供 toolchain 解析），最后校验 E2E harness 与 bot 模板。成功的默认分支运行保存 `build/dist`，任意结果均保存测试与静态分析诊断。
+
+`release.yml` 只可由维护者手动触发，并且输入必须是已经推送、与 `VERSION` 一致的 `vX.Y.Z` 附注 tag。它会冷构建 13 个产品 jar 后创建 GitHub Release；不会创建 tag、不会发布 Maven 制品。需要强制人工审批时，在仓库设置中创建 `release` Environment 并添加保护规则。
+
+CI 只验证可复现构建与静态质量，不能运行或替代 `:runRealServerGate262`、`runRealServerAcceptance` 等本机真服门。P3 26.2 真服门的权威仍是 ADR-0023 所定义的同轮 Gradle 报告。

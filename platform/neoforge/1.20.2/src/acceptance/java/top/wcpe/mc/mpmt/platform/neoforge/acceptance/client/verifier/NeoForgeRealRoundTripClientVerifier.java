@@ -2,7 +2,7 @@ package top.wcpe.mc.mpmt.platform.neoforge.acceptance.client.verifier;
 
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
-import top.wcpe.mc.mpmt.acceptance.report.P1ScenarioMatrix;
+import top.wcpe.mc.mpmt.acceptance.report.DefaultScenarioMatrix;
 import top.wcpe.mc.mpmt.platform.neoforge.acceptance.client.ClientVerifier;
 import top.wcpe.mc.mpmt.platform.neoforge.acceptance.client.RealServerClientContext;
 import top.wcpe.mc.mpmt.platform.neoforge.acceptance.client.VerifyOutcome;
@@ -20,7 +20,7 @@ import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 public final class NeoForgeRealRoundTripClientVerifier implements ClientVerifier {
 
     private static final String SCENARIO_ID =
-            P1ScenarioMatrix.REAL_ROUND_TRIP.substring(P1ScenarioMatrix.REAL_ROUND_TRIP.indexOf('/') + 1);
+            DefaultScenarioMatrix.REAL_ROUND_TRIP.substring(DefaultScenarioMatrix.REAL_ROUND_TRIP.indexOf('/') + 1);
 
     @Override
     public String scenarioId() {

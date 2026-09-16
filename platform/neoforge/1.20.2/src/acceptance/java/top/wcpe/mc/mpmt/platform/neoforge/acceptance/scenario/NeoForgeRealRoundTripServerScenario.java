@@ -4,7 +4,7 @@ import java.util.List;
 import net.minecraft.server.level.ServerPlayer;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
-import top.wcpe.mc.mpmt.acceptance.report.P1ScenarioMatrix;
+import top.wcpe.mc.mpmt.acceptance.report.DefaultScenarioMatrix;
 import top.wcpe.mc.mpmt.platform.neoforge.MpmtNeoForgeMod;
 import top.wcpe.mc.mpmt.platform.neoforge.acceptance.NeoForgeServerGameTestContext;
 import top.wcpe.mc.mpmt.protocol.PacketCodec;
@@ -13,7 +13,7 @@ import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 
 /**
  * NeoForge realserver 第 14 项：程序化客户端在线时经产品通道发 ACTIONBAR HUD，客户端断言渲染。
- * id 对齐 {@link P1ScenarioMatrix#REAL_ROUND_TRIP}；前 13 项由进程内回环覆盖。
+ * id 对齐 {@link DefaultScenarioMatrix#REAL_ROUND_TRIP}；前 13 项由进程内回环覆盖。
  */
 public final class NeoForgeRealRoundTripServerScenario extends ServerScenario {
 
@@ -30,7 +30,7 @@ public final class NeoForgeRealRoundTripServerScenario extends ServerScenario {
 
     @Override
     public String id() {
-        return P1ScenarioMatrix.REAL_ROUND_TRIP.substring(P1ScenarioMatrix.REAL_ROUND_TRIP.indexOf('/') + 1);
+        return DefaultScenarioMatrix.REAL_ROUND_TRIP.substring(DefaultScenarioMatrix.REAL_ROUND_TRIP.indexOf('/') + 1);
     }
 
     @Override

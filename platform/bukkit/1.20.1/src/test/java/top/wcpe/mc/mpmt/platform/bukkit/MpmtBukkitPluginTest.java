@@ -44,7 +44,7 @@ class MpmtBukkitPluginTest {
                 "机器码管理命令应声明权限");
         assertTrue(PlatformProvider.isBooted(), "平台应已装配");
         assertEquals("bukkit", PlatformProvider.get().platformId());
-        // 验收产品入口（R5/R6 反射桥）：活跃平台与融合服门控
+        // 验收产品入口（HYBRID/SCHEDULER 反射桥）：活跃平台与融合服门控
         assertEquals("bukkit", plugin.activePlatformId());
         assertFalse(plugin.isHybridForgeBukkit());
         assertNotNull(plugin.schedulerPortClassName());

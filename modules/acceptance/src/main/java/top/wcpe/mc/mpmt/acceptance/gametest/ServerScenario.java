@@ -18,7 +18,7 @@ public abstract class ServerScenario implements ServerGameTest {
      *
      * <p>realserver 客户端冷启动（资源重载 + TitleScreen/quickPlay）在慢机上常超过 3 分钟；
      * Forge 1.12.2 冷启动另含音效/材质图集，实测可到约 11 分钟。首场景若仅等 360s 会在
-     * R5 CatServer 上「等客户端连入超时」。与 p2 DEADLINE_MS（≥20 分钟）对齐，默认 15 分钟。
+     * HYBRID CatServer 上「等客户端连入超时」。与真服看门狗 DEADLINE_MS（≥20 分钟）对齐，默认 15 分钟。
      */
     public static final long DEFAULT_CLIENT_READY_TIMEOUT_MS = 900_000L;
     /** 默认单步客户端验证超时（毫秒）。 */

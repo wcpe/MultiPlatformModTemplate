@@ -42,55 +42,43 @@ public final class Forge121ContractMain {
                 "Minecraft 版本未冻结为 1.21.1");
         require("1.21.1-52.1.0".equals(System.getProperty("mpmt.test.forgeVersion")),
                 "Forge 版本未冻结为 1.21.1-52.1.0");
-        require("6.0.54".equals(System.getProperty("mpmt.test.forgeGradleVersion")),
-                "ForgeGradle 版本未冻结为 6.0.54");
-        require("8.12.1".equals(System.getProperty("mpmt.test.gradleVersion")),
-                "Gradle 版本未冻结为 8.12.1");
+        require("1.17.1".equals(System.getProperty("mpmt.test.loomVersion")),
+                "WCPE Loom 版本未冻结为 1.17.1");
+        require("9.6.1".equals(System.getProperty("mpmt.test.gradleVersion")),
+                "Gradle 版本未冻结为 9.6.1");
         require(Runtime.version().feature() == 21, "契约测试必须运行于 Java 21");
     }
 
     private static void verifyIndependentBuild(Path repositoryRoot, Path projectDir)
             throws IOException {
-        String settings = read(projectDir.resolve("settings.gradle.kts"));
         String build = read(projectDir.resolve("build.gradle"));
-        String wrapper = read(projectDir.resolve("gradle/wrapper/gradle-wrapper.properties"));
-        // 收纳后独立 launcher 位于 platform/forge/1.21.1，不再经过旧 platform-forge 根包装脚本
-        String unixLauncher = read(projectDir.resolve("gradlew"));
-        String windowsLauncher = read(projectDir.resolve("gradlew.bat"));
-        // 收纳后允许 settings 反向 includeBuild 根工程做依赖替换；
-        // 构建期仍以本地 shared JAR 校验为准，禁止嵌套根 launcher。
-        require(settings.contains("includeBuild(\"../../..\")")
-                        || settings.contains("includeBuild('../../..')"),
-                "settings 须反向 includeBuild 仓库根以替换共享坐标");
-        require(build.contains("reobf = false"), "独立车道必须关闭 reobf");
+        String rootSettings = read(repositoryRoot.resolve("settings.gradle.kts"));
+        // ADR-0026：车道为根构建子模块——不再持有独立 settings / 自有 wrapper / 反向 includeBuild
+        require(!Files.exists(projectDir.resolve("settings.gradle.kts")),
+                "子模块车道不得再持有独立 settings");
+        require(!Files.exists(projectDir.resolve("gradlew")),
+                "子模块车道不得再持有自有 wrapper");
+        require(!build.contains("includeBuild"), "子模块车道不得复合加载根构建");
+        // ADR-0025：构建插件统一 top.wcpe.loom，版本在根 settings 单点 pin
+        require(build.contains("id 'top.wcpe.loom'"), "构建插件必须为 top.wcpe.loom（WCPE Loom）");
+        require(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.1"),
+                "根 settings 未冻结 top.wcpe.loom 1.17.1");
+        require(build.contains("officialMojangMappings()"), "映射必须为 Mojang 官方映射");
         require(build.contains("options.release = 21"), "Java 编译目标必须为 21");
-        require(build.contains("productSharedModules"), "产品必须本地消费共享产品核心");
-        require(build.contains("sharedJars.each(verifySharedJar)"), "配置期必须校验共享 JAR");
-        require(build.contains("sharedModuleArchives"),
-                "共享 JAR 必须显式映射 Gradle 产物名");
-        require(build.contains("${archive}-${repositoryVersion}.jar"),
-                "共享 JAR 版本必须跟随仓库 VERSION");
-        require(!build.contains("-0.1.0.jar"), "共享 JAR 路径不得固定为 0.1.0");
+        // ADR-0026 决策 6：共享核心经同根构建项目产物消费，不再按 build/libs 路径硬编码
+        require(build.contains("moduleJar("), "共享模块必须经同根构建项目产物消费");
+        require(!build.contains("sharedJars"), "不得再按 build/libs 路径硬编码共享 JAR");
         String acceptanceToml = read(projectDir.resolve("src/acceptance/resources/META-INF/mods.toml"));
         require(acceptanceToml.contains("versionRange=\"[${version},)\""),
                 "验收 mod 对产品的版本约束必须跟随构建版本");
-        require(build.contains("独立车道不会 includeBuild 根工程"),
-                "共享 JAR 校验文案须声明不依赖根 launcher 复合构建");
         require(build.contains("runAcceptanceServer")
                         && build.contains("runAcceptanceClient")
                         && build.contains("runRealServerAcceptance"),
                 "缺少要求的验收运行入口");
         require(build.contains("mpmt.acceptance.artifact.server-runtime"),
                 "真实服务端运行文件必须由调用方显式传入");
-        require(wrapper.contains("gradle-8.12.1-bin.zip"), "wrapper 版本必须为 8.12.1");
-        // 收纳后 wrapper 使用 validateDistributionUrl=true；不再硬编码历史 distributionSha256Sum
-        require(wrapper.contains("validateDistributionUrl=true")
-                        || wrapper.contains("distributionSha256Sum"),
-                "wrapper 须启用发行包校验（validateDistributionUrl 或 distributionSha256Sum）");
         require(projectDir.endsWith(Paths.get("platform", "forge", "1.21.1")),
-                "独立车道工程目录必须为 platform/forge/1.21.1");
-        require(unixLauncher.contains("JAVA_HOME"), "Unix 启动脚本未强制 JAVA_HOME");
-        require(windowsLauncher.contains("JAVA_HOME"), "Windows 启动脚本未强制 JAVA_HOME");
+                "车道工程目录必须为 platform/forge/1.21.1");
     }
 
     private static void verifyNetworkSources(Path projectDir) throws IOException {

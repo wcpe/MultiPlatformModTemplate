@@ -30,7 +30,7 @@
 - **L0–L2 严格编译为 Java 8 字节码**（`sourceCompatibility = 8`），不得使用 Java 9+ 语法 / API——须以 `javac --release 8` 或 animal-sniffer **强制**（仅锁 sourceCompatibility 不够，依据 ADR-0004）；Lombok 仅用于 L0/L1 Java 模块。
 - 平台胶水（L3/L4）按各 loader 最低 JDK 编译，但仍依赖 Java 8 核心。
 - 第三方运行期依赖（snakeyaml/gson 等）**统一 relocate 到 `top.wcpe.mc.mpmt.libs.*`**；core 打进各 loader 产物的方式逐平台明确、core 不被 remap（依据 ADR-0012）。
-- 构建为自定义 Gradle 复合 / 独立车道（Kotlin DSL）：核心与 Bukkit 家族为根构建常规模块，Fabric/Loom、Forge/ForgeGradle、Sponge/SpongeGradle 经 `includeBuild` 隔离；NeoForge 1.20.2 固定为 Gradle 8.14.5 自有 wrapper + 根预构建受控 JAR，根 Gradle 9 只校验其已生成产物 / 报告——**禁止把这些 loader 插件塞进同一构建，禁止根嵌套 NeoForge wrapper 或 NeoForge 反向 include 根工程**（依据 ADR-0007）。**不引入 Architectury** 或与之冲突的统包框架；换构建框架 = 架构决策，走新 ADR。
+- 构建为**单一根构建 + 平台子模块**（Kotlin DSL / Groovy）：核心、Bukkit 家族与**全部加载器平台**（fabric / forge / neoforge / sponge）均为根构建子模块，构建插件统一为 `top.wcpe.loom` 1.17.1（WCPE Loom，ADR-0025）、Gradle 全车道 9.6.1——**禁止**把平台车道做成独立构建 / 自有 wrapper / 反向 `includeBuild`（ADR-0026）；`build-logic/realserver-acceptance` 作为 **Gradle 插件工程**经 `pluginManagement` 的 includeBuild 引入，不属平台隔离，**不得**删除。**不引入 Architectury 统包框架** 或与之冲突的统包框架（`top.wcpe.loom` 为 architectury-loom fork 的**单车道构建插件**，经 ADR-0025 采纳，不在此限）；换构建框架 = 架构决策，走新 ADR。
 
 ## 5. 跨端协议单一真源（依据 ADR-0006）
 - 协议包定义 / 字节布局 / 版本号**只在 `protocol` 一处权威定义**，客户端与服务端共用，禁止双源各自定义。
@@ -38,4 +38,4 @@
 - 序列化不得依赖平台类型；底层收发只经 `TransportPort`。
 
 ## 红线（出现即停止并先确认）
-L0/L1 出现平台或 MC 版本 import · 公共层硬编码平台/版本 if-else · 绕过 SPI/ServiceLoader 直连平台 · `PlatformProvider` 承载可变业务状态 · L0–L2 用 Java 9+ 特性或破坏 Java 8 兼容 · 把 Loom/ForgeGradle/NeoGradle/SpongeGradle 塞进同一构建 · 为 Folia/Paper 各拆独立构建/模块 · 我方多入口在同进程同时激活（融合服上既激活 Bukkit 又激活 Forge）· 在本脚手架自建命令框架或引入 TabooLib，或把命令执行逻辑写进 L3 平台层（应：各平台原生命令框架、入口 L3、执行逻辑抽到共享，见 ADR-0009）· 在共享层硬编码绝对路径而非经 DataDirectoryPort（见 ADR-0010）· 功能域间直接依赖或任何循环依赖（应经 EventBus 解耦，见 ADR-0011）· 用平台事件系统替代自有 EventBus 作域间总线 · 无归属 `runSync` 在 Folia 碰世界/实体态（应经 runForEntity/Location/Global，见 ADR-0013）· 第三方依赖未 relocate 直接打包（Bukkit 必类冲突，见 ADR-0012）· 引入 Architectury/重型 DI 作默认机制 · 协议双源定义或去掉版本协商 · 静默违背任一已接受 ADR。
+L0/L1 出现平台或 MC 版本 import · 公共层硬编码平台/版本 if-else · 绕过 SPI/ServiceLoader 直连平台 · `PlatformProvider` 承载可变业务状态 · L0–L2 用 Java 9+ 特性或破坏 Java 8 兼容 · 把平台车道做成独立构建 / 自有 wrapper / 反向 includeBuild（应：根构建子模块，见 ADR-0026）· 移除 `build-logic/realserver-acceptance` 的 pluginManagement includeBuild（插件工程必需）· 开启 Gradle isolated projects（loom 平台属性会静默失效，见 ADR-0026）· 为 Folia/Paper 各拆独立构建/模块 · 我方多入口在同进程同时激活（融合服上既激活 Bukkit 又激活 Forge）· 在本脚手架自建命令框架或引入 TabooLib，或把命令执行逻辑写进 L3 平台层（应：各平台原生命令框架、入口 L3、执行逻辑抽到共享，见 ADR-0009）· 在共享层硬编码绝对路径而非经 DataDirectoryPort（见 ADR-0010）· 功能域间直接依赖或任何循环依赖（应经 EventBus 解耦，见 ADR-0011）· 用平台事件系统替代自有 EventBus 作域间总线 · 无归属 `runSync` 在 Folia 碰世界/实体态（应经 runForEntity/Location/Global，见 ADR-0013）· 第三方依赖未 relocate 直接打包（Bukkit 必类冲突，见 ADR-0012）· 引入 Architectury/重型 DI 作默认机制 · 协议双源定义或去掉版本协商 · 静默违背任一已接受 ADR。

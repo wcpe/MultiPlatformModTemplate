@@ -367,7 +367,18 @@ tasks.named("build") {
     dependsOn(tasks.named("shadowJar"), acceptance.classesTaskName, verifyPackaging, verifyApiSnapshotFreeze)
 }
 
-val acceptanceMatrix = providers.gradleProperty("mpmt.acceptance.matrix").orElse("")
+// 26.2 车道没有"默认轨"：其唯一有效矩阵即 REALSERVER262（见 PlatformLane.BUKKIT_262.defaultMatrix）。
+// 因此在本轮上下文（带 -Pmpmt.acceptance.runId）下若未显式声明矩阵，就按 REALSERVER262 解析报告——
+// 使跨 lane 聚合门（只有一个全局矩阵值，无法逐 lane 区分）也能正确定位本车道的报告；
+// 不带 runId 时保持原有"默认轨"行为，不改变独立调用语义。
+val acceptanceMatrix =
+    providers
+        .gradleProperty("mpmt.acceptance.matrix")
+        .orElse(
+            providers.gradleProperty("mpmt.acceptance.runId").flatMap { runId ->
+                if (runId.isBlank()) providers.provider { "" } else providers.provider { "REALSERVER262" }
+            },
+        )
 val bukkitReportFile =
     acceptanceMatrix.flatMap { matrix ->
         val reportName = if (matrix.isBlank()) "server-report.txt" else "server-report-${matrix.lowercase()}.txt"

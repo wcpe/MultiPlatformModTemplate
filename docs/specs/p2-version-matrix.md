@@ -13,7 +13,7 @@ P2 沿版本轴把已在 1.20.1 证明的 L4、跨端协议与 realserver 验收
 ### 1.2 目标
 
 1. 证明 1.21.1 与 1.12.2 都能经 L4 复用既有 L0–L2 与产品协议 payload。
-2. 用确定的 launcher / Gradle / ForgeGradle / JDK 映射隔离三条 Forge 构建车道。
+2. 用确定的 launcher / Gradle / ForgeGradle / JDK 映射隔离三条 Forge 构建车道（该"按版本物理隔离"形态已由 [ADR-0025](../adr/0025-wcpe-loom-toolchain-unification.md) / [ADR-0026](../adr/0026-single-build-subproject-unification.md) 取代，保留原文以记录 P2 目标）。
 3. 用唯一脚本入口串行验证 P2 核心矩阵与受影响的 1.20.1 基线。
 4. 用 golden vectors 和 `SERVER-GAMETEST-REPORT v2` 防止“控制通道绿但产品链路未验证”与旧报告误放行。
 
@@ -55,6 +55,8 @@ P2 有效矩阵**不是笛卡尔积**：
 
 ### 4.1 Forge 唯一映射
 
+> **已被取代（本表保留为 P2 交付时的冻结记录）**：本节"按版本隔离的 Forge 工具链"由 [ADR-0025](../adr/0025-wcpe-loom-toolchain-unification.md) 收敛为统一 `top.wcpe.loom` 1.17.1 + Gradle 9.6.1，并由 [ADR-0026](../adr/0026-single-build-subproject-unification.md) 统一为**根构建子模块**（无 launcher / Gradle / ForgeGradle 的按版本物理隔离，各车道 Java 目标版本仍由 toolchain 隔离）。下表描述的是 P2 当时的事实，不是当前构建形态；当前形态见 [`../OPERATIONS.md`](../OPERATIONS.md) §1。
+
 | MC | launcher | Gradle | ForgeGradle | Forge | JDK |
 |---|---|---|---|---|---|
 | 1.20.1 | `./gradlew -p platform-forge-1.20.1` | 8.10.2 | 6.0.54 | `1.20.1-47.4.2` | Java 17 |
@@ -64,6 +66,8 @@ P2 有效矩阵**不是笛卡尔积**：
 每次配置只加载目标版本的 **唯一** ForgeGradle / userdev。禁止一次配置混多代 FG；禁止用根 `./gradlew -p platform-forge-1.20.1` 构建 1.21.1。1.12.2 不加入根 `includeBuild`，只产客户端产品/验收伴侣。
 
 ### 4.2 其它车道
+
+> 本节各条同为 P2 交付时的车道形态；`includeBuild` / `-p` 形式的调用已由 [ADR-0026](../adr/0026-single-build-subproject-unification.md) 取消（全部车道为根构建子模块，命令一律在仓库根用绝对工程路径），Java 目标版本与串行约束继续有效。
 
 - **废除** `-P mpmt.minecraftVersion`：Bukkit 用 `:platform-bukkit:server-x.y.z`；Fabric 用 `platform-fabric-1.20.1` / `1.21.1` 独立 includeBuild。
 - 1.21.1 产品编译与 realserver 使用 Java 21；1.12.2 使用 Java 8；Folia 1.20.1 使用 Java 17。
@@ -240,6 +244,8 @@ R5 启动后必须同时证明：
 9. 文档同步。
 
 ## 11. 验收标准
+
+> 本节为 **P2 交付时**的验收标准（已交付@v0.2.0），保留为历史记录。其中涉及 `launcher` / 按版本 ForgeGradle 隔离与 `includeBuild` 的条款已由 [ADR-0025](../adr/0025-wcpe-loom-toolchain-unification.md) / [ADR-0026](../adr/0026-single-build-subproject-unification.md) 取代；**报告契约（`SERVER-GAMETEST-REPORT v2`）、golden vectors、`runVersionMatrixGate` 唯一聚合入口与串行约束继续有效**。
 
 - 有效矩阵与 §2 完全一致，不存在 1.12.2 Fabric、Folia 1.21.1 或 CatServer Forge 服务端产品格子。
 - 冻结版本、来源标识、SHA 与 §3 一致；CatServer SHA 已在首次受控获取后冻结。

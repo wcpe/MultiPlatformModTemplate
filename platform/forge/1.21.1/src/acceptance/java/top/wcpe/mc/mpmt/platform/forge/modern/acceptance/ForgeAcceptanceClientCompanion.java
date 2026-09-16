@@ -28,18 +28,19 @@ import top.wcpe.mc.mpmt.acceptance.report.JavaRuntimeInfo;
 import top.wcpe.mc.mpmt.core.client.ClientNetworkFeature;
 import top.wcpe.mc.mpmt.platform.forge.modern.client.ForgeClientEvents;
 import top.wcpe.mc.mpmt.platform.forge.modern.client.ForgeHudSnapshot;
-import top.wcpe.mc.mpmt.protocol.PacketIds;
 import top.wcpe.mc.mpmt.protocol.packet.HudKind;
-import top.wcpe.mc.mpmt.protocol.packet.PingPacket;
-import top.wcpe.mc.mpmt.protocol.packet.PongPacket;
 
 /**
  * Forge 客户端验收伴侣：程序化连服兜底 + 控制通道步骤断言。
  *
  * <p>1.21 FG dev 的 {@code --quickPlayMultiplayer} 不可靠（常被 AccessibilityOnboarding 挡住），
  * 故在任意非世界屏幕上发起一次自连（与 1.20.1 Forge 伴侣一致）。
+ *
+ * <p>静态可变状态只由客户端 tick 事件线程（单线程）读写，故 @SuppressWarnings 关闭
+ * NonThreadSafeSingleton（与 Forge 26.2 伴侣同口径）。
  */
 @Mod.EventBusSubscriber(modid = MpmtForge121AcceptanceMod.MOD_ID, value = Dist.CLIENT)
+@SuppressWarnings("PMD.NonThreadSafeSingleton")
 public final class ForgeAcceptanceClientCompanion {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("mpmt-acceptance");

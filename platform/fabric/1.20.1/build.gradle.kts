@@ -9,33 +9,27 @@ import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.plugins.quality.Pmd
 import org.gradle.api.plugins.quality.PmdExtension
 import org.gradle.api.tasks.JavaExec
-import org.gradle.api.tasks.PathSensitivity
-import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
 import java.security.MessageDigest
 import java.util.zip.ZipFile
 
-// platform-fabric-1.20.1（L3）：MC 1.20.1 独立构建；common/server/client 分目录，Loom 根打包。
+// platform-fabric-1.20.1（L3）：根构建子模块（ADR-0026）；MC 1.20.1，common/server/client 分目录，Loom 根打包。
 // 关键链路（ADR-0012）：core 纯 Java 经 shadow shade 进产物（不被 remap），snakeyaml relocate；
 // remapJar 消费 shadowJar 产物产出最终 remapped mod jar。映射用 Mojang 官方（ADR-0016）。
 
 plugins {
-    id("fabric-loom") version "1.17-wcpe-4"
+    id("top.wcpe.loom")
     id("com.gradleup.shadow") version "8.3.11"
-    // 静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
+    // 静态分析 / 质量工具链由根构建 subprojects{} 统一提供（含 spotbugs/ktlint/detekt/kover，见 ADR-0026）。
+    // 车道内重复声明会分裂插件类加载器并破坏 loom 清单服务，故此处不再声明。
+    // 历史说明：静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
     // 核心 Gradle 插件经 apply(plugin=...) 接入（见下方装配块）；外部插件在此带版本直接 apply。
-    id("com.github.spotbugs") version "6.0.26"
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
-    id("io.gitlab.arturbosch.detekt") version "1.23.7"
-    id("org.jetbrains.kotlinx.kover") version "0.8.3"
 }
 
-// 坐标与版本：独立 includeBuild 需自行设定（版本唯一来源仍为根 VERSION 文件）
 group = "top.wcpe.mc.mpmt"
-version = rootProject.file("../../../VERSION").readText().trim()
 
-// 本构建仅服务 MC 1.20.1（每版本独立 includeBuild，废除 -P 选型）
+// 本子模块仅服务 MC 1.20.1（每版本一个子模块，废除 -P 选型）
 val mcVersion = "1.20.1"
 val loaderVersion = "0.16.5"
 val fabricApiVersion = "0.92.2+1.20.1"
@@ -45,15 +39,15 @@ val unselectedL4Name = "v1_21"
 val loaderDependency = loaderVersion
 val fabricApiDependency = fabricApiVersion
 val snakeyamlVersion = "2.2"
-// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经 includeBuild 依赖替换消费
-val platformApiCoordinate = "top.wcpe.mc.mpmt:fabric-api:$version"
-val spiCoordinate = "top.wcpe.mc.mpmt:spi:$version"
+// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经同根构建项目依赖消费
+val platformApiCoordinate = project(":platform:fabric:fabric-api")
+val spiCoordinate = project(":core:spi")
 // 依赖 core-server（服务端网络装配特性 ServerNetworkFeature；经 api 传递 protocol + core-runtime）
-val serverCoordinate = "top.wcpe.mc.mpmt:server:$version"
+val serverCoordinate = project(":core:server")
 // 依赖 core-client（客户端网络装配特性 ClientNetworkFeature + 弱标识提供者）
-val clientCoordinate = "top.wcpe.mc.mpmt:client:$version"
+val clientCoordinate = project(":core:client")
 // realserver 验收 harness 平台无关核心（仅 gametest 接入层用，不入产品 jar，ADR-0014）
-val acceptanceCoordinate = "top.wcpe.mc.mpmt:acceptance:$version"
+val acceptanceCoordinate = project(":modules:acceptance")
 
 base {
     // 最终产物名同时标识平台与 MC 目标，避免跨车道串扰
@@ -71,8 +65,8 @@ repositories {
 }
 
 // ============================================================================
-// 静态分析 / 质量工具链装配（严格门禁，static-analysis.md）——本独立 includeBuild 单工程直接 apply。
-// includeBuild 的 rootProject 即本目录，共享规则集在仓库根 config/，故引用 ../config/*；
+// 静态分析 / 质量工具链装配（严格门禁，static-analysis.md）——根构建子模块直接 apply。
+// 共享规则集在仓库根 config/，故经 rootProject 引用 config/*；
 // .editorconfig / lombok.config 在仓库根，ktlint / Lombok 自动向上查找，无需额外配置。
 // 违规即失败构建（isIgnoreFailures=false），与根构建口径一致。
 // ============================================================================
@@ -80,7 +74,7 @@ repositories {
 apply(plugin = "checkstyle")
 configure<CheckstyleExtension> {
     toolVersion = "10.17.0"
-    configFile = rootProject.file("../../../config/checkstyle/checkstyle.xml")
+    configFile = rootProject.file("config/checkstyle/checkstyle.xml")
     isIgnoreFailures = false
     maxWarnings = 0
 }
@@ -89,7 +83,7 @@ apply(plugin = "pmd")
 configure<PmdExtension> {
     toolVersion = "7.0.0"
     isConsoleOutput = true
-    ruleSetConfig = resources.text.fromFile(rootProject.file("../../../config/pmd/ruleset.xml"))
+    ruleSetConfig = resources.text.fromFile(rootProject.file("config/pmd/ruleset.xml"))
     ruleSets = emptyList()
     isIgnoreFailures = false
 }
@@ -108,16 +102,10 @@ configure<SpotBugsExtension> {
     effort.set(Effort.MAX)
     // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
     reportLevel.set(Confidence.MEDIUM)
-    excludeFilter.set(rootProject.file("../../../config/spotbugs/exclude.xml"))
+    excludeFilter.set(rootProject.file("config/spotbugs/exclude.xml"))
 }
 dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
-// 把 lombok.config 登记为编译输入：其改动须失效编译缓存（否则缓存会服旧的、缺 @Generated 的类，
-// 导致 SpotBugs/JaCoCo 仍对 Lombok 生成代码误报）。lombok.config 在仓库根，故引用 ../lombok.config。
-tasks.withType(JavaCompile::class.java).configureEach {
-    inputs.file(rootProject.file("../../../lombok.config"))
-        .withPropertyName("lombokConfig")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-}
+// lombok.config 由根构建 subprojects{} 统一登记为编译输入（ADR-0026），此处不再重复。
 // 分析任务固定与目标车道一致的 JDK 启动器（1.20→17，1.21→21）。
 // SpotBugs worker 用守护 JVM，无 javaLauncher 属性、不设。
 val analysisToolchains = extensions.getByType(JavaToolchainService::class.java)
@@ -407,11 +395,11 @@ val realRequiredScenarios =
         "acceptance/real-round-trip",
     )
 
-// realserver 验收门禁：严格校验 acceptance v2 + P1 REAL_REQUIRED 全 PASS（ADR-0014）。
+// realserver 验收门禁：严格校验 acceptance v2 + 默认轨 REAL_REQUIRED 全 PASS（ADR-0014）。
 // 实跑：① runAcceptanceServer ② runAcceptanceClient（须显示）③ 本任务读报告。
 tasks.register("runRealServerAcceptance") {
     group = "verification"
-    description = "严格校验 Fabric realserver acceptance v2 报告与完整 P1 REAL_REQUIRED"
+    description = "严格校验 Fabric realserver acceptance v2 报告与完整默认轨 REAL_REQUIRED"
     doLast {
         val report = acceptanceReportFile.get().asFile
         if (!report.exists()) {
@@ -456,10 +444,10 @@ tasks.register("runRealServerAcceptance") {
             }
         val scenarios = scenarioLines.associateBy { it.split(' ', limit = 3)[1] }
         if (scenarios.size != scenarioLines.size || scenarios.keys != realRequiredScenarios.toSet()) {
-            throw GradleException("[realserver] 实际场景与 P1 REAL_REQUIRED 不一致：${scenarios.keys}")
+            throw GradleException("[realserver] 实际场景与默认轨 REAL_REQUIRED 不一致：${scenarios.keys}")
         }
         if (scenarioLines.any { !it.startsWith("PASS ") }) {
-            throw GradleException("[realserver] P1 场景存在非 PASS 结果")
+            throw GradleException("[realserver] 默认轨场景存在非 PASS 结果")
         }
         logger.lifecycle(
             "[realserver] 验收通过 ✓ acceptance v2，${realRequiredScenarios.size} 项 REAL_REQUIRED 全部 PASS",
@@ -485,10 +473,10 @@ val simRequiredScenarios =
         "acceptance/integrated-loopback",
     )
 
-// 模拟服 GameTest 一键门禁：起 headless 服跑完整 P1 回环场景，并严格校验 acceptance v2 元数据与场景清单。
+// 模拟服 GameTest 一键门禁：起 headless 服跑完整默认轨回环场景，并严格校验 acceptance v2 元数据与场景清单。
 tasks.register("runSimNetworkAcceptance") {
     group = "verification"
-    description = "起 headless 服跑完整 P1 模拟服场景并严格校验 acceptance v2 报告"
+    description = "起 headless 服跑完整默认轨模拟服场景并严格校验 acceptance v2 报告"
     dependsOn("runSimNetworkTest")
     doLast {
         val report = simReportFile.get().asFile
@@ -529,12 +517,12 @@ tasks.register("runSimNetworkAcceptance") {
         val scenarioLines = lines.filter { it.startsWith("PASS ") || it.startsWith("FAIL ") || it.startsWith("ERROR ") || it.startsWith("SKIP ") }
         val scenarios = scenarioLines.associateBy { it.split(' ', limit = 3)[1] }
         if (scenarios.size != scenarioLines.size || scenarios.keys != simRequiredScenarios.toSet()) {
-            throw GradleException("[sim] 实际场景与 P1 清单不一致：${scenarios.keys}")
+            throw GradleException("[sim] 实际场景与默认轨清单不一致：${scenarios.keys}")
         }
         if (scenarioLines.any { !it.startsWith("PASS ") }) {
-            throw GradleException("[sim] P1 场景存在非 PASS 结果")
+            throw GradleException("[sim] 默认轨场景存在非 PASS 结果")
         }
-        logger.lifecycle("[sim] 模拟服 GameTest 通过：acceptance v2，${simRequiredScenarios.size} 项 P1 场景全部 PASS")
+        logger.lifecycle("[sim] 模拟服 GameTest 通过：acceptance v2，${simRequiredScenarios.size} 项默认轨场景全部 PASS")
     }
 }
 

@@ -17,7 +17,7 @@ FR-12 要把 1.20.1 锚点扩展到 1.21.1 与 1.12.2，FR-25 同期要求 CatSe
 ## 决策
 
 1. **有效矩阵非笛卡尔积**：1.21.1 只覆盖 Paper/Fabric/Forge；1.12.2 只覆盖 Bukkit/CatServer 与 Forge 客户端；Folia 固定为 1.20.1 回归。Sponge、NeoForge、26.2 不属于 P2。
-2. **Forge 工具链按版本物理隔离**：1.20.1、1.21.1、1.12.2 各有唯一 launcher/Gradle/ForgeGradle/Forge/JDK 映射；一次配置只加载目标版本对应的 ForgeGradle 与 userdev。legacy 构建不加入根 `includeBuild`，只产客户端。
+2. ~~**Forge 工具链按版本物理隔离**：1.20.1、1.21.1、1.12.2 各有唯一 launcher/Gradle/ForgeGradle/Forge/JDK 映射；一次配置只加载目标版本对应的 ForgeGradle 与 userdev。legacy 构建不加入根 `includeBuild`，只产客户端。~~ **【已被 [ADR-0025](0025-wcpe-loom-toolchain-unification.md) 部分取代、并由 [ADR-0026](0026-single-build-subproject-unification.md) 完全取代】**：构建插件统一为 `top.wcpe.loom` 后，各版本车道同处根构建、共用同一插件与 Gradle 9.6.1，不再有"每版本唯一 launcher / 独立构建"；**Java 目标版本仍逐车道隔离（由 toolchain 承担）**。
 3. **L4 负责版本差异**：Bukkit/Fabric/Forge 现代构建按 `mpmt.minecraftVersion` 选择 L4；新旧通道注册、CustomPayload 与 Mixin 目标差异不得进入 L0–L2，产品 payload 字节保持一致。
 4. **1.12 通道与产品/验收隔离固定**：产品通道与验收通道各自由对应 jar 独占，产品 jar 不携带验收控制逻辑；控制通道成功不能代替产品场景。
 5. **线缆兼容由人工锁定 golden vectors 裁决**：先从基线生成，再由各版本 L4 对裸 payload 做逐字节回归；平台外层通道包装可不同。

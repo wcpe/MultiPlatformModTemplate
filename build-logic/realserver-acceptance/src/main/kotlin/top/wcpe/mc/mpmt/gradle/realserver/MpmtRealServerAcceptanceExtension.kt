@@ -26,7 +26,7 @@ abstract class MpmtRealServerAcceptanceExtension {
      */
     abstract val serverTaskName: Property<String>
 
-    /** 验收矩阵 id（R1–R6 或空=P1 默认轨）。 */
+    /** 验收矩阵 id（STANDARD/HYBRID/SCHEDULER/REALSERVER262 或空=默认轨）。 */
     abstract val matrix: Property<String>
 
     /**

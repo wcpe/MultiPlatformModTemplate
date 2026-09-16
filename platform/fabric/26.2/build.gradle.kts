@@ -9,8 +9,6 @@ import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.plugins.quality.Pmd
 import org.gradle.api.plugins.quality.PmdExtension
 import org.gradle.api.tasks.JavaExec
-import org.gradle.api.tasks.PathSensitivity
-import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
 import java.net.InetSocketAddress
@@ -19,26 +17,22 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
 
-// platform-fabric-26.2（L3）：MC 26.2 独立构建；common/server/client 分目录，Loom 根打包。
+// platform-fabric-26.2（L3）：根构建子模块（ADR-0026）；MC 26.2，common/server/client 分目录，Loom 根打包。
 // 关键链路（ADR-0012）：core 纯 Java 经 shadow shade 进产物，snakeyaml relocate；
 // MC 26.1+ 使用 Mojang 无混淆原始命名，shadowJar 直接产出权威产品 jar（ADR-0022）。
 
 plugins {
-    id("net.fabricmc.fabric-loom") version "1.17-wcpe-4"
+    id("top.wcpe.loom-no-remap")
     id("com.gradleup.shadow") version "8.3.11"
-    // 静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
+    // 静态分析 / 质量工具链由根构建 subprojects{} 统一提供（含 spotbugs/ktlint/detekt/kover，见 ADR-0026）。
+    // 车道内重复声明会分裂插件类加载器并破坏 loom 清单服务，故此处不再声明。
+    // 历史说明：静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
     // 核心 Gradle 插件经 apply(plugin=...) 接入（见下方装配块）；外部插件在此带版本直接 apply。
-    id("com.github.spotbugs") version "6.0.26"
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
-    id("io.gitlab.arturbosch.detekt") version "1.23.7"
-    id("org.jetbrains.kotlinx.kover") version "0.8.3"
 }
 
-// 坐标与版本：独立 includeBuild 需自行设定（版本唯一来源仍为根 VERSION 文件）
 group = "top.wcpe.mc.mpmt"
-version = rootProject.file("../../../VERSION").readText().trim()
 
-// 本构建仅服务 MC 26.2（每版本独立 includeBuild，废除 -P 选型）
+// 本子模块仅服务 MC 26.2（每版本一个子模块，废除 -P 选型）
 val mcVersion = "26.2"
 val loaderVersion = "0.19.3"
 val fabricApiVersion = "0.155.2+26.2"
@@ -49,25 +43,24 @@ val unselectedL4Name = "v1_21"
 val loaderDependency = loaderVersion
 val fabricApiDependency = fabricApiVersion
 val snakeyamlVersion = "2.2"
-// 复合构建不能让被包含的 Fabric 工程再反向 include 根工程；否则会形成根→Fabric→根
-// 的循环，并在 Loom 配置期把内部坐标错误地交给远程仓库解析。根工程先产出这些受控 JAR，
-// 本车道只按文件消费，避免嵌套 Gradle 调用和陈旧 mavenLocal 输入。
-val repositoryRoot = rootProject.file("../../..").canonicalFile
 
-fun internalJar(modulePath: String, archiveName: String) =
-    files(File(repositoryRoot, "$modulePath/build/libs/$archiveName-$version.jar"))
+// 受控内部 JAR 一律经各子模块 jar 任务产物消费：不再按 build/libs 文件路径硬编码（文件输入、
+// 不引入传递依赖），构建顺序由 Gradle 任务依赖保证（ADR-0026），无需文件存在性校验任务。
+// 用 withType<Jar>().matching 惰性取任务：named("jar") 会在本项目先于生产者配置时立即抛
+// UnknownTaskException（子模块按路径序配置），故不可用。
+fun moduleJar(projectPath: String): FileCollection =
+    files(project(projectPath).tasks.withType<Jar>().matching { it.name == "jar" })
 
-val domainJar = internalJar("core/domain", "domain")
-val runtimeJar = internalJar("core/runtime", "runtime")
-val protocolJar = internalJar("core/protocol", "protocol")
-val spiJar = internalJar("core/spi", "spi")
-val serverJar = internalJar("core/server", "server")
-val clientJar = internalJar("core/client", "client")
-val fabricApiJar = internalJar("platform/fabric/fabric-api", "fabric-api")
-val acceptanceJar = internalJar("modules/acceptance", "acceptance")
+val domainJar = moduleJar(":core:domain")
+val runtimeJar = moduleJar(":core:runtime")
+val protocolJar = moduleJar(":core:protocol")
+val spiJar = moduleJar(":core:spi")
+val serverJar = moduleJar(":core:server")
+val clientJar = moduleJar(":core:client")
+val fabricApiJar = moduleJar(":platform:fabric:fabric-api")
+val acceptanceJar = moduleJar(":modules:acceptance")
 val productInternalJars: List<FileCollection> =
     listOf(domainJar, runtimeJar, protocolJar, spiJar, serverJar, clientJar, fabricApiJar)
-val requiredInternalJars: List<FileCollection> = productInternalJars + listOf(acceptanceJar)
 
 base {
     // 最终产物名同时标识平台与 MC 目标，避免跨车道串扰
@@ -85,8 +78,8 @@ repositories {
 }
 
 // ============================================================================
-// 静态分析 / 质量工具链装配（严格门禁，static-analysis.md）——本独立 includeBuild 单工程直接 apply。
-// includeBuild 的 rootProject 即本目录，共享规则集在仓库根 config/，故引用 ../config/*；
+// 静态分析 / 质量工具链装配（严格门禁，static-analysis.md）——根构建子模块直接 apply。
+// 共享规则集在仓库根 config/，故经 rootProject 引用 config/*；
 // .editorconfig / lombok.config 在仓库根，ktlint / Lombok 自动向上查找，无需额外配置。
 // 违规即失败构建（isIgnoreFailures=false），与根构建口径一致。
 // ============================================================================
@@ -94,7 +87,7 @@ repositories {
 apply(plugin = "checkstyle")
 configure<CheckstyleExtension> {
     toolVersion = "10.17.0"
-    configFile = rootProject.file("../../../config/checkstyle/checkstyle.xml")
+    configFile = rootProject.file("config/checkstyle/checkstyle.xml")
     isIgnoreFailures = false
     maxWarnings = 0
 }
@@ -103,7 +96,7 @@ apply(plugin = "pmd")
 configure<PmdExtension> {
     toolVersion = "7.16.0"
     isConsoleOutput = true
-    ruleSetConfig = resources.text.fromFile(rootProject.file("../../../config/pmd/ruleset.xml"))
+    ruleSetConfig = resources.text.fromFile(rootProject.file("config/pmd/ruleset.xml"))
     ruleSets = emptyList()
     isIgnoreFailures = false
 }
@@ -123,16 +116,10 @@ configure<SpotBugsExtension> {
     effort.set(Effort.MAX)
     // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
     reportLevel.set(Confidence.MEDIUM)
-    excludeFilter.set(rootProject.file("../../../config/spotbugs/exclude.xml"))
+    excludeFilter.set(rootProject.file("config/spotbugs/exclude.xml"))
 }
 dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
-// 把 lombok.config 登记为编译输入：其改动须失效编译缓存（否则缓存会服旧的、缺 @Generated 的类，
-// 导致 SpotBugs/JaCoCo 仍对 Lombok 生成代码误报）。lombok.config 在仓库根，故引用 ../lombok.config。
-tasks.withType(JavaCompile::class.java).configureEach {
-    inputs.file(rootProject.file("../../../lombok.config"))
-        .withPropertyName("lombokConfig")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-}
+// lombok.config 由根构建 subprojects{} 统一登记为编译输入（ADR-0026），此处不再重复。
 // 分析任务固定与目标车道一致的 JDK 启动器（26.2→25）。
 // SpotBugs worker 用守护 JVM，无 javaLauncher 属性、不设。
 val analysisToolchains = extensions.getByType(JavaToolchainService::class.java)
@@ -278,24 +265,6 @@ fun requiredMatrixProperty(matrixId: String, name: String): String {
     return value
 }
 
-val verifyInternalJars by tasks.registering {
-    group = "verification"
-    description = "校验 Fabric $mcVersion 受控内部 JAR 输入已由根工程准备"
-    doLast {
-        val missing = requiredInternalJars.flatMap { it.files }.filterNot(File::isFile)
-        if (missing.isNotEmpty()) {
-            val paths = missing.joinToString(System.lineSeparator()) { "  - ${it.absolutePath}" }
-            throw GradleException(
-                "缺少 Fabric $mcVersion 内部 JAR 输入：${System.lineSeparator()}$paths${System.lineSeparator()}" +
-                    "请先在仓库根运行 ./gradlew :prepareFabric262Inputs；不要在本工程反向 includeBuild 或嵌套调用 Gradle。",
-            )
-        }
-    }
-}
-tasks.withType<JavaCompile>().configureEach {
-    dependsOn(verifyInternalJars)
-}
-
 fun matrixJavaExecutable(): File {
     val javaHome =
         System.getenv("MPMT_JAVA25_HOME")
@@ -377,7 +346,7 @@ tasks.named<JavaExec>("runSimNetworkTest") {
 }
 
 // realserver v2 报告元数据：与模拟服同一套绑定（commit / 版本 / 产品 jar SHA）。
-// 矩阵轨（-Pmpmt.acceptance.matrix=Rn）：注入 runId/startEpoch/javaExecutable/五类制品，供 MatrixAcceptanceReportV2。
+// 矩阵轨（-Pmpmt.acceptance.matrix 声明矩阵值）：注入 runId/startEpoch/javaExecutable/五类制品，供 MatrixAcceptanceReportV2。
 tasks.named<JavaExec>("runAcceptanceServer") {
     dependsOn(tasks.named("shadowJar"), "gametestClasses")
     doFirst { configureAcceptanceServer(this as JavaExec) }
@@ -578,13 +547,18 @@ fun prepareAcceptanceServerProperties() {
     propertiesFile.writeText(updatedLines.joinToString(System.lineSeparator()) + System.lineSeparator())
 }
 
-tasks.register("runFabricR7Acceptance") {
+tasks.register("runFabricRealServer262Acceptance") {
     group = "verification"
-    description = "单 Gradle 编排 Fabric 26.2 R7 服务端与客户端验收"
-    dependsOn(tasks.named("shadowJar"), "gametestClasses")
+    description = "单 Gradle 编排 Fabric 26.2 REALSERVER262 服务端与客户端验收"
+    // 本任务用 ProcessBuilder 直接拉起 run 任务的命令行，绕过了 Gradle 的任务图，
+    // 因此必须显式依赖 loom 的 generateDLIConfig：它写出 dev-launch-injector 的 launch.cfg，
+    // 缺该文件时 dev 启动不会注入任何 mod（表现为服务端/客户端只加载 fabricloader+minecraft，
+    // 验收场景永不执行 → 超时无报告）。车道改成根子模块后工程路径变化会换掉 loom 工程缓存目录，
+    // 旧的遗留 launch.cfg 不再命中，故此处必须显式声明。
+    dependsOn(tasks.named("shadowJar"), "gametestClasses", "generateDLIConfig")
     doLast {
-        val matrixId = requiredMatrixProperty("R7", "mpmt.acceptance.matrix")
-        if (matrixId != "R7") throw GradleException("该任务仅支持 MATRIX R7：$matrixId")
+        val matrixId = requiredMatrixProperty("REALSERVER262", "mpmt.acceptance.matrix")
+        if (matrixId != "REALSERVER262") throw GradleException("该任务仅支持 MATRIX REALSERVER262：$matrixId")
         val runId = requiredMatrixProperty(matrixId, "mpmt.acceptance.runId")
         requiredMatrixProperty(matrixId, "mpmt.acceptance.startEpochMs")
         val report = matrixReportFile(matrixId)
@@ -597,19 +571,19 @@ tasks.register("runFabricR7Acceptance") {
         var server: Process? = null
         var client: Process? = null
         try {
-            server = launchAcceptanceProcess(serverTask, File(logDir, "r7-server.log"), file("run"))
-            awaitAcceptancePort(server, File(logDir, "r7-server.log"), 25571)
-            client = launchAcceptanceProcess(clientTask, File(logDir, "r7-client.log"), file("run-client"))
+            server = launchAcceptanceProcess(serverTask, File(logDir, "realserver262-server.log"), file("run"))
+            awaitAcceptancePort(server, File(logDir, "realserver262-server.log"), 25571)
+            client = launchAcceptanceProcess(clientTask, File(logDir, "realserver262-client.log"), file("run-client"))
             val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(660_000)
             while (System.nanoTime() < deadline) {
                 if (report.isFile && report.readText().contains("RUN_ID\t$runId")) break
                 Thread.sleep(500)
             }
             if (!report.isFile || !report.readText().contains("RUN_ID\t$runId")) {
-                throw GradleException("[realserver] R7 未在截止前生成当前运行报告：${report.absolutePath}")
+                throw GradleException("[realserver] REALSERVER262 未在截止前生成当前运行报告：${report.absolutePath}")
             }
             verifyMatrixReport(report, matrixId)
-            logger.lifecycle("[realserver] Fabric 26.2 R7 报告 PASS：${report.absolutePath}")
+            logger.lifecycle("[realserver] Fabric 26.2 REALSERVER262 报告 PASS：${report.absolutePath}")
         } finally {
             stopAcceptanceProcess(client)
             stopAcceptanceProcess(server)
@@ -617,20 +591,22 @@ tasks.register("runFabricR7Acceptance") {
     }
 }
 
-// realserver 验收门禁：严格校验 acceptance v2 + P1 REAL_REQUIRED 全 PASS（ADR-0014）。
+// realserver 验收门禁：严格校验 acceptance v2 + 默认轨 REAL_REQUIRED 全 PASS（ADR-0014）。
 // 实跑：① runAcceptanceServer ② runAcceptanceClient（须显示）③ 本任务读报告。
 tasks.register("runRealServerAcceptance") {
     group = "verification"
     description =
-        "严格校验 Fabric realserver acceptance v2 报告（默认 P1；-Pmpmt.acceptance.matrix=Rn 时校验 MATRIX + 公共三场景 + RESULT PASS）"
+        "严格校验 Fabric realserver acceptance v2 报告（本车道仅有 REALSERVER262 轨，未显式 -Pmpmt.acceptance.matrix 时按该轨校验）"
     doLast {
-        val matrixId = (project.findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
-        val report =
-            if (matrixId.isNotEmpty()) {
-                matrixReportFile(matrixId)
-            } else {
-                acceptanceReportFile.get().asFile
-            }
+        // 26.2 车道没有"默认轨"：其唯一有效矩阵即 REALSERVER262（见 PlatformLane.FABRIC_262.defaultMatrix）。
+        // 因此在本轮上下文（带 -Pmpmt.acceptance.runId）下若未显式声明矩阵，就按 REALSERVER262 校验——
+        // 这样跨 lane 聚合门（只有一个全局矩阵值，无法逐 lane 区分）也能正确定位本车道的报告。
+        // 不带 runId 时保持原有"默认轨"行为，不改变独立调用语义。
+        val explicitMatrix = (project.findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
+        val haveRoundContext =
+            !(project.findProperty("mpmt.acceptance.runId") as String?)?.trim().isNullOrEmpty()
+        val matrixId = explicitMatrix.ifEmpty { if (haveRoundContext) "REALSERVER262" else "" }
+        val report = if (matrixId.isEmpty()) acceptanceReportFile.get().asFile else matrixReportFile(matrixId)
         if (!report.exists()) {
             throw GradleException(
                 "未找到验收报告（先跑 runAcceptanceServer + runAcceptanceClient）：${report.absolutePath}",
@@ -678,10 +654,10 @@ tasks.register("runRealServerAcceptance") {
             }
         val scenarios = scenarioLines.associateBy { it.split(' ', limit = 3)[1] }
         if (scenarios.size != scenarioLines.size || scenarios.keys != realRequiredScenarios.toSet()) {
-            throw GradleException("[realserver] 实际场景与 P1 REAL_REQUIRED 不一致：${scenarios.keys}")
+            throw GradleException("[realserver] 实际场景与默认轨 REAL_REQUIRED 不一致：${scenarios.keys}")
         }
         if (scenarioLines.any { !it.startsWith("PASS ") }) {
-            throw GradleException("[realserver] P1 场景存在非 PASS 结果")
+            throw GradleException("[realserver] 默认轨场景存在非 PASS 结果")
         }
         logger.lifecycle(
             "[realserver] 验收通过 ✓ acceptance v2，${realRequiredScenarios.size} 项 REAL_REQUIRED 全部 PASS",
@@ -707,10 +683,10 @@ val simRequiredScenarios =
         "acceptance/integrated-loopback",
     )
 
-// 模拟服 GameTest 一键门禁：起 headless 服跑完整 P1 回环场景，并严格校验 acceptance v2 元数据与场景清单。
+// 模拟服 GameTest 一键门禁：起 headless 服跑完整默认轨回环场景，并严格校验 acceptance v2 元数据与场景清单。
 tasks.register("runSimNetworkAcceptance") {
     group = "verification"
-    description = "起 headless 服跑完整 P1 模拟服场景并严格校验 acceptance v2 报告"
+    description = "起 headless 服跑完整默认轨模拟服场景并严格校验 acceptance v2 报告"
     dependsOn("runSimNetworkTest")
     doLast {
         val report = simReportFile.get().asFile
@@ -751,12 +727,12 @@ tasks.register("runSimNetworkAcceptance") {
         val scenarioLines = lines.filter { it.startsWith("PASS ") || it.startsWith("FAIL ") || it.startsWith("ERROR ") || it.startsWith("SKIP ") }
         val scenarios = scenarioLines.associateBy { it.split(' ', limit = 3)[1] }
         if (scenarios.size != scenarioLines.size || scenarios.keys != simRequiredScenarios.toSet()) {
-            throw GradleException("[sim] 实际场景与 P1 清单不一致：${scenarios.keys}")
+            throw GradleException("[sim] 实际场景与默认轨清单不一致：${scenarios.keys}")
         }
         if (scenarioLines.any { !it.startsWith("PASS ") }) {
-            throw GradleException("[sim] P1 场景存在非 PASS 结果")
+            throw GradleException("[sim] 默认轨场景存在非 PASS 结果")
         }
-        logger.lifecycle("[sim] 模拟服 GameTest 通过：acceptance v2，${simRequiredScenarios.size} 项 P1 场景全部 PASS")
+        logger.lifecycle("[sim] 模拟服 GameTest 通过：acceptance v2，${simRequiredScenarios.size} 项默认轨场景全部 PASS")
     }
 }
 

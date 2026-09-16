@@ -9,10 +9,10 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * R1–R7 矩阵 required 场景清单（单一真源）。
+ * 矩阵 required 场景清单（STANDARD/HYBRID/SCHEDULER/REALSERVER262）（单一真源）。
  *
  * <p>与 {@link AcceptanceReportV2Expectation} / 严格校验器对齐；各平台矩阵轨 SPI 装载须经
- * {@link #allowsInMatrix(String, String)} 过滤，避免把 P1 smoke / real-round-trip 混进矩阵报告。
+ * {@link #allowsInMatrix(String, String)} 过滤，避免把默认轨 smoke / real-round-trip 混进矩阵报告。
  */
 public final class MatrixScenarioCatalog {
 
@@ -42,12 +42,9 @@ public final class MatrixScenarioCatalog {
 
     private static Map<String, List<String>> create() {
         Map<String, List<String>> map = new HashMap<>();
-        map.put("R1", COMMON);
-        map.put("R2", COMMON);
-        map.put("R3", COMMON);
-        map.put("R4", COMMON);
+        map.put("STANDARD", COMMON);
         map.put(
-                "R5",
+                "HYBRID",
                 withAdditional(
                         COMMON,
                         "forge-client-optional",
@@ -55,9 +52,9 @@ public final class MatrixScenarioCatalog {
                         "hybrid-forge-bukkit",
                         "server-forge-product-absent"));
         map.put(
-                "R6",
+                "SCHEDULER",
                 withAdditional(COMMON, "global-scheduler", "region-scheduler", "entity-scheduler"));
-        map.put("R7", COMMON);
+        map.put("REALSERVER262", COMMON);
         return Collections.unmodifiableMap(map);
     }
 

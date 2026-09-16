@@ -22,11 +22,11 @@ import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
 import top.wcpe.mc.mpmt.acceptance.report.AcceptanceReport;
 import top.wcpe.mc.mpmt.acceptance.report.MatrixAcceptanceReportV2;
 import top.wcpe.mc.mpmt.acceptance.report.MatrixScenarioCatalog;
-import top.wcpe.mc.mpmt.acceptance.report.P1ScenarioMatrix;
+import top.wcpe.mc.mpmt.acceptance.report.DefaultScenarioMatrix;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioResult;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioStatus;
 import top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario.BukkitRealRoundTripServerScenario;
-import top.wcpe.mc.mpmt.platform.bukkit.acceptance.sim.BukkitP1Simulation;
+import top.wcpe.mc.mpmt.platform.bukkit.acceptance.sim.BukkitDefaultSimulation;
 
 /**
  * Bukkit realserver 验收驱动插件（仅验收运行期用，非产品插件，ADR-0014）：仅当 {@code -Dmpmt.acceptance=true}
@@ -35,8 +35,8 @@ import top.wcpe.mc.mpmt.platform.bukkit.acceptance.sim.BukkitP1Simulation;
  * <p>双轨：
  *
  * <ul>
- *   <li><b>P1（默认）</b>：13 项进程内回环 + {@code real-round-trip}，输出 tip 既有 acceptance 报告。
- *   <li><b>矩阵 R1–R6</b>：声明 {@code -Dmpmt.acceptance.matrix=Rn} 时，经 ServiceLoader 仅装载
+ *   <li><b>默认轨</b>：13 项进程内回环 + {@code real-round-trip}，输出 tip 既有 acceptance 报告。
+ *   <li><b>矩阵轨</b>：声明 {@code -Dmpmt.acceptance.matrix=矩阵值} 时，经 ServiceLoader 仅装载
  *       {@link MatrixScenarioCatalog} required 场景并装配严格 v2 报告。
  * </ul>
  *
@@ -67,12 +67,12 @@ public final class MpmtBukkitAcceptancePlugin extends JavaPlugin implements List
         if (matrixMode) {
             enableMatrixMode();
         } else {
-            enableP1Mode();
+            enableDefaultMode();
         }
     }
 
-    /** P1：保留 tip 既有 13 回环 + real-round-trip。 */
-    private void enableP1Mode() {
+    /** 默认轨：保留 tip 既有 13 回环 + real-round-trip。 */
+    private void enableDefaultMode() {
         getServer().getMessenger().registerOutgoingPluginChannel(this, PRODUCT_CHANNEL);
         channel = new BukkitAcceptanceControlChannel(this);
         channel.register();
@@ -82,13 +82,13 @@ public final class MpmtBukkitAcceptancePlugin extends JavaPlugin implements List
         roundTrip.bindClient(channel.client());
 
         long deadline = deadlineMs();
-        Thread driver = new Thread(() -> runP1AndReport(roundTrip), "mpmt-bukkit-acceptance-driver");
+        Thread driver = new Thread(() -> runDefaultAndReport(roundTrip), "mpmt-bukkit-acceptance-driver");
         driver.setDaemon(true);
         driver.start();
-        Thread watchdog = new Thread(() -> watchdogP1(deadline), "mpmt-bukkit-acceptance-watchdog");
+        Thread watchdog = new Thread(() -> watchdogDefault(deadline), "mpmt-bukkit-acceptance-watchdog");
         watchdog.setDaemon(true);
         watchdog.start();
-        getLogger().info("realserver Bukkit 验收驱动已激活（P1：13 回环 + real-round-trip）");
+        getLogger().info("realserver Bukkit 验收驱动已激活（默认轨：13 回环 + real-round-trip）");
     }
 
     /** 矩阵：ServiceLoader 场景 + 严格 v2 元数据/制品校验。 */
@@ -130,7 +130,7 @@ public final class MpmtBukkitAcceptancePlugin extends JavaPlugin implements List
         ServerGameTestRegistry registry = new ServerGameTestRegistry();
         for (ServerScenario scenario :
                 ServiceLoader.load(ServerScenario.class, getClass().getClassLoader())) {
-            // 仅装载本矩阵 required；P1 real-round-trip / 他矩阵专属场景不进本轮报告
+            // 仅装载本矩阵 required；默认轨 real-round-trip / 他矩阵专属场景不进本轮报告
             if (!MatrixScenarioCatalog.allowsInMatrix(matrix, scenario.id())) {
                 continue;
             }
@@ -155,20 +155,20 @@ public final class MpmtBukkitAcceptancePlugin extends JavaPlugin implements List
         watchdog.start();
     }
 
-    private void runP1AndReport(ServerScenario roundTrip) {
+    private void runDefaultAndReport(ServerScenario roundTrip) {
         try {
-            List<ScenarioResult> results = new ArrayList<>(BukkitP1Simulation.runLoopbackCore());
+            List<ScenarioResult> results = new ArrayList<>(BukkitDefaultSimulation.runLoopbackCore());
             List<ServerGameTest> live = Collections.singletonList(roundTrip);
             results.addAll(
                     ServerGameTestRunner.runAll(
                             live, test -> new BukkitServerGameTestContext(this)));
             String platform = System.getProperty(PLATFORM_PROPERTY, "bukkit");
-            List<String> scenarios = P1ScenarioMatrix.requiredFor(platform);
+            List<String> scenarios = DefaultScenarioMatrix.requiredFor(platform);
             assertCatalogMatches(scenarios, results);
-            String report = AcceptanceReport.render(BukkitP1Simulation.metadata(platform), results);
+            String report = AcceptanceReport.render(BukkitDefaultSimulation.metadata(platform), results);
             finishOnce(report);
         } catch (Throwable throwable) {
-            getLogger().severe("P1 验收驱动失败：" + throwable.getMessage());
+            getLogger().severe("默认轨验收驱动失败：" + throwable.getMessage());
             List<ScenarioResult> fallback =
                     Collections.singletonList(
                             new ScenarioResult(
@@ -203,11 +203,11 @@ public final class MpmtBukkitAcceptancePlugin extends JavaPlugin implements List
         }
         if (!required.equals(actual)) {
             throw new IllegalStateException(
-                    "Bukkit realserver 场景与 P1 矩阵不一致：actual=" + actual + " matrix=" + required);
+                    "Bukkit realserver 场景与默认轨清单不一致：actual=" + actual + " matrix=" + required);
         }
     }
 
-    private void watchdogP1(long deadlineMs) {
+    private void watchdogDefault(long deadlineMs) {
         try {
             Thread.sleep(deadlineMs);
         } catch (InterruptedException e) {

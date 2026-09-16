@@ -3,64 +3,47 @@ import com.github.spotbugs.snom.Confidence
 import com.github.spotbugs.snom.Effort
 import com.github.spotbugs.snom.SpotBugsExtension
 import com.github.spotbugs.snom.SpotBugsTask
+import net.fabricmc.loom.task.RemapJarTask
+import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 import org.gradle.api.plugins.quality.Checkstyle
 import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.plugins.quality.Pmd
 import org.gradle.api.plugins.quality.PmdExtension
-import org.gradle.api.tasks.PathSensitivity
-import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
-import org.spongepowered.asm.gradle.plugins.MixinExtension
 import java.security.MessageDigest
 import java.util.zip.ZipFile
 
-// platform-forge（L3）：独立 includeBuild，仅应用 ForgeGradle（ADR-0007）。
-// 打包链路（ADR-0012）：shade platform-spi + core + relocate snakeyaml 进 mod jar，再 reobf 到 SRG 供真实 Forge 运行。
-// 映射用官方（ADR-0016）。core/snakeyaml 为纯 Java、无 MC 引用，reobf 不改写之。
+// platform-forge（L3）：根构建普通子模块，仅应用 arch-loom（top.wcpe.loom，ADR-0007）。
+// 打包链路（ADR-0012）：shade platform-spi + core + relocate snakeyaml 进 mod jar，再经 remapJar remap 到
+// SRG 供真实 Forge 运行。映射用官方（ADR-0016）。core/snakeyaml 为纯 Java、无 MC 引用，remap 不改写之。
 // Mixin（ADR-0018）：Forge 端裸 CustomPayload 收包经 Mixin 拦截原版 handleCustomPayload 路由到我方 receiver，
-// 打通 Forge↔Forge 与 Forge↔Bukkit。MixinGradle 无 Plugin-Portal marker，经 buildscript classpath + apply 应用。
-
-buildscript {
-    repositories {
-        maven("https://repo.spongepowered.org/repository/maven-public/")
-        mavenCentral()
-    }
-    dependencies {
-        classpath("org.spongepowered:mixingradle:0.7.+")
-    }
-}
+// 打通 Forge↔Forge 与 Forge↔Bukkit。Mixin AP 由 arch-loom 内建提供（useLegacyMixinAp + add 注册 main 源集），
+// 取代旧 MixinGradle（buildscript classpath + apply）。
 
 plugins {
     java
-    id("net.minecraftforge.gradle") version "6.0.54"
-    id("com.gradleup.shadow") version "8.3.3"
-    // 静态分析 / 质量工具链（严格门禁，static-analysis.md）——与根构建同一套，共享 ../config 规则集。
+    id("top.wcpe.loom")
+    // 8.3.11：修复 RelocatorRemapper.mapValue 与 loom 依赖树上新 ASM（visitLdcInsn 传 Type）的不兼容
+    id("com.gradleup.shadow") version "8.3.11"
+    // 静态分析 / 质量工具链由根构建 subprojects{} 统一提供（含 spotbugs/ktlint/detekt/kover，见 ADR-0026）。
+    // 车道内重复声明会分裂插件类加载器并破坏 loom 清单服务，故此处不再声明。
+    // 历史说明：静态分析 / 质量工具链（严格门禁，static-analysis.md）——与根构建同一套，共享 ../config 规则集。
     // 核心 Gradle 插件（checkstyle/pmd/jacoco）直接 apply；外部分析插件经 plugins{} 声明。
-    id("com.github.spotbugs") version "6.0.26"
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
-    id("io.gitlab.arturbosch.detekt") version "1.23.7"
-    id("org.jetbrains.kotlinx.kover") version "0.8.3"
     checkstyle
     pmd
     jacoco
 }
 
-// MixinGradle 无 Plugin-Portal marker，只能经 buildscript classpath + 命令式 apply 应用（ADR-0018）
-apply(plugin = "org.spongepowered.mixin")
-
-group = "top.wcpe.mc.mpmt"
-version = file("../../../VERSION").readText().trim()
-
 val forgeVersion = "1.20.1-47.4.2"
 val snakeyamlVersion = "2.2"
-// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经 includeBuild 依赖替换消费
-val platformApiCoordinate = "top.wcpe.mc.mpmt:forge-api:$version"
-val spiCoordinate = "top.wcpe.mc.mpmt:spi:$version"
+// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经根构建项目依赖消费
+val platformApiProject = project(":platform:forge:forge-api")
+val spiProject = project(":core:spi")
 // 服务端公共网络特性（经 api 传递 protocol + core-runtime），各平台注入 TransportPort 后复用同一份装配
-val serverCoordinate = "top.wcpe.mc.mpmt:server:$version"
+val serverProject = project(":core:server")
 // 客户端公共网络特性（握手、心跳与重同步），仅复用仓库现有第一方模块
-val clientCoordinate = "top.wcpe.mc.mpmt:client:$version"
+val clientProject = project(":core:client")
 
 base {
     archivesName.set("mpmt-forge-1.20.1")
@@ -73,7 +56,7 @@ java {
     }
 }
 
-// 单版本构建内：common / server / client 分目录（服客分离）；FG 仅挂本根
+// 单版本构建内：common / server / client 分目录（服客分离）；loom 仅挂本根
 sourceSets.named("main") {
     java.setSrcDirs(
         listOf(
@@ -88,23 +71,31 @@ sourceSets.named("test") {
     java.setSrcDirs(listOf("common/src/test/java"))
 }
 
-// MixinGradle 扩展（ADR-0018）：声明 main 源集→refmap 映射 + 配置名。config(...) 会把配置名写进 reobf jar 的
-// MixinConfigs 清单属性、并注入 dev run（runClient/runServer）。命令式 apply 不合成 mixin{} 访问器，故用 configure。
-configure<MixinExtension> {
-    add(sourceSets["main"], "mpmt.refmap.json")
-    config("mpmt.mixins.json")
-}
-
-minecraft {
-    // 官方映射（ADR-0016：1.20.1 有官方映射）
-    mappings("official", "1.20.1")
-
-    // realserver 验收用客户端运行配置：FG 负责装好 MC 客户端 + 原生 + 资源（headless 可渲染，同 Loom）。
-    // 不声明 mods{} dev 源（dev 源会撞 FG6/FML 不暴露 core 的 classpath 墙）；改把 reobf 后的 shaded jar
-    // （core 在 jar 内）放进 run-client/mods/，让 FML 当真实 jar mod 加载，绕过 dev classpath 墙。
+// ============================================================================
+// loom 配置：Mixin AP + Forge mixin 配置 + dev run（替代 FG minecraft{} 与 MixinGradle）
+// ============================================================================
+loom {
+    // Mixin（ADR-0018）：显式启用 legacy Mixin AP（arch-loom 1.13 默认关闭，而 Forge 生产期需要 compile 期
+    // refmap：Mojmap→SRG，dev↔dev 运行期再经 disableRefMap 直解 Mojmap 名——静态 remap 会把注解值写成 SRG，
+    // 破坏 dev run）；注册 main 源集并固定 refmap 名，等价旧 MixinGradle 的 add(...)。
+    mixin {
+        useLegacyMixinAp.set(true)
+        add(sourceSets["main"], "mpmt.refmap.json")
+    }
+    // dev run 需要知道本 mod 的 mixin 配置；同时 loom 会把配置名写进 jar 清单 MixinConfigs 属性，
+    // 等价旧 MixinGradle 的 config(...)。
+    forge {
+        mixinConfigs("mpmt.mixins.json")
+    }
     runs {
-        create("client") {
-            workingDirectory(project.file("run-client"))
+        // loom 已为 forge 预建默认 client/server 运行配置（client()/server() 模板已应用），这里只做等价移植。
+        // realserver 验收用客户端运行配置：loom 负责 dev MC 客户端 + 原生 + 资源（headless 可渲染，同 FG）。
+        // 不声明 loom.mods dev 源（MOD_CLASSES 留空、FML 不注入 dev 源集，与 FG 不声明 mods{} 等价；
+        // dev 源会撞 FML 不暴露 core 的 classpath 墙）；改把 remap 后的 shaded jar（core 在 jar 内）
+        // 放进 run-client/mods/，让 FML 当真实 jar mod 加载，绕过 dev classpath 墙。
+        getByName("client") {
+            configName = "Forge Client"
+            runDir("run-client")
             property("forge.logging.console.level", "info")
             // 激活验收客户端伴侣（Dist.CLIENT）：伴侣到主菜单后程序化连入本机服务端
             // （Forge dev 客户端不可靠处理 --quickPlayMultiplayer，故由伴侣自连）。
@@ -115,19 +106,21 @@ minecraft {
                 (project.findProperty("mpmt.acceptance.server") as String?) ?: "127.0.0.1:25566",
             )
             // dev↔dev 为 Mojmap 运行期，而 mods/ 内 jar 带的是生产 refmap（Mojmap→SRG）；jar 经 mods/ 加载、未走
-            // FG dev 源集的 refmap 回映射注入，故 dev 关闭 refmap、直接按注解里的 Mojmap 名解析（ADR-0018）。
+            // dev 源集的 refmap 回映射注入，故 dev 关闭 refmap、直接按注解里的 Mojmap 名解析（ADR-0018）。
             // 生产（真实 Forge 服，SRG 运行期）不经本 run 配置、照常用 refmap，不受影响。
             property("mixin.env.disableRefMap", "true")
         }
-        // realserver 验收用服务端运行配置（dev 服）：与客户端同为 FG dev / Mojmap，使 FML 握手 dev↔dev 兼容
+        // realserver 验收用服务端运行配置（dev 服）：与客户端同为 dev / Mojmap，使 FML 握手 dev↔dev 兼容
         // （dev 客户端连真实生产服会握手不通）。同样从 run-server/mods 加载 shaded jar，绕过 dev classpath 墙。
-        create("server") {
-            workingDirectory(project.file("run-server"))
+        // loom 默认附加 --nogui 程序参数（headless，验收不受影响）。
+        getByName("server") {
+            configName = "Forge Server"
+            runDir("run-server")
             property("forge.logging.console.level", "info")
             property("mpmt.acceptance", "true")
             property("mpmt.acceptance.report", project.file("run-server/acceptance-report.txt").absolutePath)
             property("mpmt.acceptance.deadlineMs", "660000")
-            // v2 元数据：commit 配置期取 git；productJar 供驱动算 SHA（FG run 任务配置期可能尚不存在，勿用 afterEvaluate 绑 runServer）
+            // v2 元数据：commit 配置期取 git；productJar 供驱动算 SHA（remapJar 无 classifier 产物，即最终产品 jar）
             property(
                 "mpmt.acceptance.commit",
                 providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim(),
@@ -153,36 +146,47 @@ minecraft {
 
 repositories {
     mavenCentral()
-    // Mixin 注解处理器（processor 分类器 fat-jar）来源（ADR-0018）
-    maven("https://repo.spongepowered.org/repository/maven-public/")
 }
 
-// 专用配置：需 shade 进产物并 relocate 的内容（core/spi + 第三方运行期依赖），不参与 reobf
+// EGT defaults 同款：loom 声明的 Forge maven 仓库默认元数据源仅 pom，补 artifact() 兜底，
+// 避免 net.minecraftforge:forge 的 userdev 分类器产物解析异常
+repositories.find { it.name == "Forge" }?.let { repo ->
+    (repo as? MavenArtifactRepository)?.metadataSources {
+        mavenPom()
+        artifact()
+        ignoreGradleMetadataRedirection()
+    }
+}
+
+// 专用配置：需 shade 进产物并 relocate 的内容（core/spi + 第三方运行期依赖），不参与 remap
 val shadowBundle: Configuration by configurations.creating
 
 dependencies {
-    minecraft("net.minecraftforge:forge:$forgeVersion")
+    // FG 单坐标拆分（arch-loom）：原版 MC + 官方 Mojang 映射（ADR-0016）+ Forge（arch-loom forge 配置，
+    // 由其解析 userdev 并产出 patched MC dev jar）
+    minecraft("com.mojang:minecraft:1.20.1")
+    mappings(loom.officialMojangMappings())
+    "forge"("net.minecraftforge:forge:$forgeVersion")
 
     // 共享核心（platform-spi + 传递的 core-runtime/core-domain）：纯 Java、shade 进 mod jar
-    implementation(platformApiCoordinate)
-    implementation(spiCoordinate)
-    shadowBundle(platformApiCoordinate)
-    shadowBundle(spiCoordinate)
+    implementation(platformApiProject)
+    implementation(spiProject)
+    shadowBundle(platformApiProject)
+    shadowBundle(spiProject)
     // 服务端公共网络特性（FR-19）：纯 Java、shade 进 mod jar（传递 protocol）
-    implementation(serverCoordinate)
-    shadowBundle(serverCoordinate)
+    implementation(serverProject)
+    shadowBundle(serverProject)
     // 客户端公共网络特性（FR-22/FR-28）：纯 Java、shade 进同一产品 jar
-    implementation(clientCoordinate)
-    shadowBundle(clientCoordinate)
+    implementation(clientProject)
+    shadowBundle(clientProject)
     // 第三方运行期依赖：shade 并 relocate（ADR-0012）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
-    // Mixin 注解处理器：编译期生成 refmap（Mojmap→SRG）供生产期解析；0.8.5 = Forge 47.x 内置 Mixin 版本（ADR-0018）
-    annotationProcessor("org.spongepowered:mixin:0.8.5:processor")
+    // Mixin 注解处理器由 arch-loom 内建提供（loom.mixin.useLegacyMixinAp），无需手工挂 0.8.5:processor
 
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
-    testImplementation("top.wcpe.mc.mpmt:acceptance:$version")
+    testImplementation(project(":modules:acceptance"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -194,43 +198,58 @@ tasks.processResources {
     }
 }
 
-tasks.named<Jar>("jar") {
-    archiveClassifier.set("dev")
-}
-
-// 最终 mod jar = shadowJar（shade core/spi + relocate snakeyaml），随后 reobf 到 SRG
+// 打包链路：shadowJar（shade core/spi + relocate snakeyaml，产物名 -dev-shadow）→ remapJar（named → SRG，
+// arch-loom 承担 FG reobf 的 forge 生产命名，产出无 classifier 的最终产品 jar）
 tasks.named<ShadowJar>("shadowJar") {
-    archiveClassifier.set("")
+    archiveClassifier.set("dev-shadow")
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
     configurations = listOf(shadowBundle)
     relocate("org.yaml.snakeyaml", "top.wcpe.mc.mpmt.libs.org.yaml.snakeyaml")
     exclude("META-INF/maven/**")
+    // Forge 生产期 Mixin 配置发现清单属性（旧 MixinGradle 自动写入，迁移后手工补齐；remapJar 保留清单）
+    manifest {
+        attributes("MixinConfigs" to "mpmt.mixins.json")
+    }
     // shadow 改配置不刷新缓存指纹，令其确定性重跑、不缓存（与其它平台一致）
     outputs.upToDateWhen { false }
     outputs.cacheIf { false }
 }
 
-// 对 shadowJar 产物原地 reobf（named → SRG），生成 reobfShadowJar
-reobf {
-    create("shadowJar")
+// remapJar 改吃 shadowJar 产物，使 core / 第三方随之进入最终 SRG 产物（target namespace 由 arch-loom
+// 按 forge 1.20.1 生产运行期解析为 SRG）
+tasks.named<RemapJarTask>("remapJar") {
+    dependsOn(tasks.named("shadowJar"))
+    inputFile.set(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
+    archiveClassifier.set("")
+}
+
+// 根门禁契约适配：根 collectReleaseArtifacts 依赖 includedBuild 任务 :reobfShadowJar，并按 FG 时代输出路径
+// build/reobfShadowJar/output.jar 收集发布制品；内容即 remapJar 的 SRG 产品 jar。
+val reobfShadowJar by tasks.registering(Copy::class) {
+    group = "build"
+    description = "把 remapJar 的 SRG 产品 jar 落位到 FG 时代输出路径 build/reobfShadowJar/output.jar（根门禁契约）"
+    dependsOn(tasks.named("remapJar"))
+    from(tasks.named<RemapJarTask>("remapJar").flatMap { it.archiveFile })
+    into(layout.buildDirectory.dir("reobfShadowJar"))
+    rename { "output.jar" }
 }
 
 // 打包校验：mod jar 内核心 shade、snakeyaml relocate、mods.toml 与 services 在位、未误打入 Minecraft
 val verifyPackaging by tasks.registering {
     group = "verification"
-    description = "校验 Forge mod jar：核心 shade、snakeyaml relocate、mods.toml/services 在位、未打入 Minecraft"
-    dependsOn("reobfShadowJar")
+    description = "校验 Forge mod jar：核心 shade、snakeyaml relocate、mods.toml/services 在位、SRG remap、未打入 Minecraft"
+    dependsOn(tasks.named("remapJar"))
     doLast {
         val shadow = tasks.named<ShadowJar>("shadowJar").get()
         val plain = tasks.named<Jar>("jar").get()
-        val jar = shadow.archiveFile.get().asFile
+        val jar = tasks.named<RemapJarTask>("remapJar").get().archiveFile.get().asFile
         val entries = ZipFile(jar).use { zf -> zf.entries().asSequence().map { it.name }.toList() }
 
         fun must(cond: Boolean, msg: String) {
             if (!cond) throw GradleException("Forge 打包校验失败：$msg")
         }
-        must(plain.archiveFile.get().asFile != jar, "普通 jar 与最终 shadowJar 输出路径冲突")
+        must(plain.archiveFile.get().asFile != jar, "普通 jar 与最终 remapJar 输出路径冲突")
         must(!shadow.isPreserveFileTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
         must(shadow.isReproducibleFileOrder, "最终产品未启用可复现文件顺序")
         must(entries.contains("top/wcpe/mc/mpmt/core/domain/Mpmt.class"), "核心类未 shade 进 mod jar")
@@ -247,7 +266,7 @@ val verifyPackaging by tasks.registering {
         must(entries.none { it.startsWith("net/minecraft/") }, "误把 Minecraft 类打入 mod jar")
         println("Forge 打包校验通过：")
         println("  产物 = ${jar.name}（条目数 ${entries.size}）")
-        println("  核心已 shade、snakeyaml 已 relocate、mods.toml/services 在位、已 reobf、未打入 Minecraft")
+        println("  核心已 shade、snakeyaml 已 relocate、mods.toml/services 在位、已 remap 到 SRG、未打入 Minecraft")
     }
 }
 
@@ -265,13 +284,13 @@ tasks.test {
 
 // ============================================================================
 // 静态分析 / 质量工具链配置（严格门禁，static-analysis.md）——照根构建 subprojects 同一套，
-// 共享 ../config 规则集（独立 includeBuild 经 rootProject.file("../../../config/...") 引用）；
-// 违规即失败构建（isIgnoreFailures=false）。本工程为单工程 includeBuild，故直接 apply、不用 subprojects 块。
+// 共享根 config 规则集（经 rootProject.file("config/...") 引用）；
+// 违规即失败构建（isIgnoreFailures=false）。本工程为单模块工程，故直接 apply、不用 subprojects 块。
 // ============================================================================
 // 样式审查：Checkstyle（共享裁剪规则集）
 configure<CheckstyleExtension> {
     toolVersion = "10.17.0"
-    configFile = rootProject.file("../../../config/checkstyle/checkstyle.xml")
+    configFile = rootProject.file("config/checkstyle/checkstyle.xml")
     isIgnoreFailures = false
     maxWarnings = 0
 }
@@ -279,7 +298,7 @@ configure<CheckstyleExtension> {
 configure<PmdExtension> {
     toolVersion = "7.0.0"
     isConsoleOutput = true
-    ruleSetConfig = resources.text.fromFile(rootProject.file("../../../config/pmd/ruleset.xml"))
+    ruleSetConfig = resources.text.fromFile(rootProject.file("config/pmd/ruleset.xml"))
     ruleSets = emptyList()
     isIgnoreFailures = false
 }
@@ -299,16 +318,10 @@ configure<SpotBugsExtension> {
     effort.set(Effort.MAX)
     // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
     reportLevel.set(Confidence.MEDIUM)
-    excludeFilter.set(rootProject.file("../../../config/spotbugs/exclude.xml"))
+    excludeFilter.set(rootProject.file("config/spotbugs/exclude.xml"))
 }
 dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
-// 把 lombok.config 登记为编译输入：其改动须失效编译缓存（否则构建缓存会服旧的、缺 @Generated 的类，
-// 导致 SpotBugs/JaCoCo 仍对 Lombok 生成代码误报）。.editorconfig/lombok.config 在仓库根，自动向上查找。
-tasks.withType(JavaCompile::class.java).configureEach {
-    inputs.file(rootProject.file("../../../lombok.config"))
-        .withPropertyName("lombokConfig")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-}
+// lombok.config 由根构建 subprojects{} 统一登记为编译输入（ADR-0026），此处不再重复。
 // 分析工具运行 JVM 与被测模块目标字节码无关：Checkstyle 10.x 需 JDK 11+，故把 Checkstyle/Pmd 分析任务
 // 固定到 JDK 17 启动器运行。afterEvaluate：JavaToolchainService 由 java 插件注册、晚于本配置块。
 afterEvaluate {
@@ -331,14 +344,14 @@ afterEvaluate {
 }
 
 // ============================================================================
-// realserver 验收驱动（独立 acceptance 源集 + 独立 shaded+reobf mod jar，ADR-0014）
-// Forge dev run 因 FG6/FML 模块层不向 mod 暴露库依赖而不可用（已证），故 Forge 与 Bukkit 同走 realserver：
+// realserver 验收驱动（独立 acceptance 源集 + 独立 shaded+remap mod jar，ADR-0014）
+// Forge dev run 因 FML 模块层不向 mod 暴露库依赖而不可用（已证），故 Forge 与 Bukkit 同走 realserver：
 // 真实 Forge 专用服 + 独立 acceptance mod jar。验收驱动代码不入产品 mod jar：单独打 mpmt-acceptance mod，
 // 仅在验收运行期放入服务端 mods/。
-// 编译期继承 main 的类路径（含 ForgeGradle 提供的 patched MC + Forge API）+ main 产物，并叠加 acceptance 核心 + protocol。
+// 编译期继承 main 的类路径（含 arch-loom 提供的 patched MC + Forge API）+ main 产物，并叠加 acceptance 核心 + protocol。
 // ============================================================================
-val acceptanceCoordinate = "top.wcpe.mc.mpmt:acceptance:$version"
-val protocolCoordinate = "top.wcpe.mc.mpmt:protocol:$version"
+val acceptanceProject = project(":modules:acceptance")
+val protocolProject = project(":core:protocol")
 
 val acceptance: SourceSet by sourceSets.creating {
     compileClasspath += sourceSets["main"].compileClasspath + sourceSets["main"].output
@@ -361,10 +374,10 @@ val acceptanceShadowBundle: Configuration by configurations.creating
 
 dependencies {
     // 平台无关验收核心（控制协议 / 协调 / GameTest 框架 / 报告）：验收 jar 独有，shade 进去
-    "acceptanceImplementation"(acceptanceCoordinate)
-    acceptanceShadowBundle(acceptanceCoordinate)
+    "acceptanceImplementation"(acceptanceProject)
+    acceptanceShadowBundle(acceptanceProject)
     // protocol（编 HUD 包用）：仅编译期可见，运行期由产品 mod 提供——绝不打进验收 jar（防 split package）
-    "acceptanceCompileOnly"(protocolCoordinate)
+    "acceptanceCompileOnly"(protocolProject)
 }
 
 // 验收 mod mods.toml 的 ${version} 占位由构建注入
@@ -375,29 +388,49 @@ tasks.named<ProcessResources>("processAcceptanceResources") {
     }
 }
 
-// 验收驱动 mod jar：shade acceptance/protocol/core-domain（均第一方、无第三方运行期依赖，无需 relocate），随后 reobf
+// 验收驱动 mod jar：shade acceptance/protocol/core-domain（均第一方、无第三方运行期依赖，无需 relocate），
+// 产物名 -dev-shadow，作为 remapAcceptanceJar 的输入
 val acceptanceJar by tasks.registering(ShadowJar::class) {
     group = "build"
     description = "构建 realserver 验收驱动 mod mpmt-acceptance（仅验收运行期用，不入产品 jar）"
     archiveBaseName.set("mpmt-acceptance-forge")
-    archiveClassifier.set("")
+    archiveClassifier.set("dev-shadow")
     from(acceptance.output)
     configurations = listOf(acceptanceShadowBundle)
     exclude("META-INF/maven/**")
+    // 与旧 MixinGradle 产物一致的 MixinConfigs 清单属性（值指向产品 jar 内的 mpmt.mixins.json，逐项等价）
+    manifest {
+        attributes("MixinConfigs" to "mpmt.mixins.json")
+    }
     // shadow 改配置不刷新缓存指纹，令其确定性重跑（与产品 shadowJar 一致）
     outputs.upToDateWhen { false }
     outputs.cacheIf { false }
 }
 
-// 对验收 mod jar 同样 reobf（named → SRG），令其能在真实 Forge 服运行；生成 reobfAcceptanceJar
-reobf {
-    create("acceptanceJar")
+// 对验收 mod jar remap（named → SRG），令其能在真实 Forge 服运行；产物 build/libs/mpmt-acceptance-forge-*.jar
+val remapAcceptanceJar by tasks.registering(RemapJarTask::class) {
+    group = "build"
+    description = "把验收 mod jar remap 到 SRG（arch-loom 承担 FG reobf）"
+    dependsOn(acceptanceJar)
+    inputFile.set(acceptanceJar.flatMap { it.archiveFile })
+    archiveBaseName.set("mpmt-acceptance-forge")
+    archiveClassifier.set("")
+}
+
+// 历史编排路径适配：FG reobfAcceptanceJar 的输出路径 build/reobfAcceptanceJar/output.jar（内容即 remap 后验收 jar）
+val reobfAcceptanceJar by tasks.registering(Copy::class) {
+    group = "build"
+    description = "把 remapAcceptanceJar 的 SRG 验收 jar 落位到 FG 时代输出路径 build/reobfAcceptanceJar/output.jar"
+    dependsOn(remapAcceptanceJar)
+    from(remapAcceptanceJar.flatMap { it.archiveFile })
+    into(layout.buildDirectory.dir("reobfAcceptanceJar"))
+    rename { "output.jar" }
 }
 
 // 把验收源集纳入常规 build 的编译校验（只编译，不打包——打包由验收编排按需触发）
 val acceptanceContractTest by tasks.registering(Test::class) {
     group = "verification"
-    description = "运行 Forge acceptance v2 与完整 P1 场景契约测试"
+    description = "运行 Forge acceptance v2 与完整默认轨场景契约测试"
     testClassesDirs = acceptanceTest.output.classesDirs
     classpath = acceptanceTest.runtimeClasspath
     useJUnitPlatform()
@@ -412,9 +445,9 @@ val realAcceptanceReport =
 
 val runSimNetworkAcceptance by tasks.registering(JavaExec::class) {
     group = "verification"
-    description = "运行 Forge 1.20.1 完整 P1 模拟服套件并生成 acceptance v2 报告"
+    description = "运行 Forge 1.20.1 完整默认轨模拟服套件并生成 acceptance v2 报告"
     classpath = acceptance.runtimeClasspath
-    mainClass.set("top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeP1Simulation")
+    mainClass.set("top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeDefaultSimulation")
     dependsOn(tasks.named("acceptanceClasses"), tasks.named("reobfShadowJar"))
     systemProperty("mpmt.acceptance.report", simAcceptanceReport.get().asFile.absolutePath)
     systemProperty("mpmt.acceptance.version", project.version.toString())
@@ -422,7 +455,7 @@ val runSimNetworkAcceptance by tasks.registering(JavaExec::class) {
     systemProperty("mpmt.acceptance.mcVersion", "1.20.1")
     systemProperty("mpmt.acceptance.serverVersion", forgeVersion)
     doFirst {
-        val product = tasks.named<ShadowJar>("shadowJar").get().archiveFile.get().asFile
+        val product = tasks.named<RemapJarTask>("remapJar").get().archiveFile.get().asFile
         val digest = MessageDigest.getInstance("SHA-256").digest(product.readBytes())
         systemProperty("mpmt.acceptance.productJarSha256", digest.joinToString("") { byte -> "%02x".format(byte) })
         val commit = providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim()
@@ -434,7 +467,7 @@ val verifyAcceptanceReport by tasks.registering(JavaExec::class) {
     group = "verification"
     description = "严格校验 Forge acceptance v2 报告，缺元数据、场景或 PASS 均失败"
     classpath = acceptance.runtimeClasspath
-    mainClass.set("top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeP1Simulation")
+    mainClass.set("top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeDefaultSimulation")
     dependsOn(tasks.named("acceptanceClasses"))
     doFirst {
         val report = realAcceptanceReport.get()

@@ -74,7 +74,7 @@ abstract class PaperHostService :
         /** 场景白名单（可选，逗号分隔）；空=全部。 */
         val acceptanceOnly: Property<String>
 
-        /** 矩阵 id（可选，如 R6）。 */
+        /** 矩阵 id（可选，如 SCHEDULER）。 */
         val acceptanceMatrix: Property<String>
 
         /** 矩阵本轮运行标识。 */
@@ -83,19 +83,19 @@ abstract class PaperHostService :
         /** 矩阵本轮开始时间戳（毫秒）。 */
         val acceptanceStartEpochMs: Property<String>
 
-        /** P1 报告元数据：git commit。 */
+        /** 默认轨报告元数据：git commit。 */
         val acceptanceCommit: Property<String>
 
-        /** P1 报告元数据：产品版本。 */
+        /** 默认轨报告元数据：产品版本。 */
         val acceptanceVersion: Property<String>
 
-        /** P1 报告元数据：MC 版本。 */
+        /** 默认轨报告元数据：MC 版本。 */
         val acceptanceMcVersion: Property<String>
 
-        /** P1 报告元数据：服务端标识串。 */
+        /** 默认轨报告元数据：服务端标识串。 */
         val acceptanceServerVersion: Property<String>
 
-        /** P1 报告元数据：产品 jar SHA-256（64 hex）。 */
+        /** 默认轨报告元数据：产品 jar SHA-256（64 hex）。 */
         val acceptanceProductJarSha256: Property<String>
     }
 
@@ -216,7 +216,7 @@ abstract class PaperHostService :
                     add("-Dmpmt.acceptance.artifact.server-acceptance=${acceptanceJar.absolutePath}")
                     add("-Dmpmt.acceptance.artifact.client-product=${clientProductJar.absolutePath}")
                     add("-Dmpmt.acceptance.artifact.client-acceptance=${clientAcceptanceJar.absolutePath}")
-                    // P1 权威报告元数据（缺任一项驱动会 ERROR framework/driver-error）
+                    // 默认轨权威报告元数据（缺任一项驱动会 ERROR framework/driver-error）
                     parameters.acceptanceCommit.getOrElse("").takeIf { it.isNotBlank() }?.let {
                         add("-Dmpmt.acceptance.commit=$it")
                     }

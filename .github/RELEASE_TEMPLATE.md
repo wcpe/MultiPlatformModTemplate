@@ -30,7 +30,7 @@
 
 - [ ] 核心单测：`:core:domain:test` / `:core:protocol:test` / `:modules:acceptance:test` 全绿
 - [ ] 版本矩阵门：`:runVersionMatrixGate` BUILD SUCCESSFUL（P2 核心车道）
-- [ ] P3 R7 门：`:runP3R7Gate` 使用本轮 `RUN_ID`、开始毫秒和实际 Forge 服务端 JAR，通过严格当前报告校验
+- [ ] REALSERVER262 真服门：`:runRealServerGate262` 使用本轮 `RUN_ID`、开始毫秒和实际 Forge 服务端 JAR，通过严格当前报告校验
 - [ ] realserver 合规报告 + 用户实机确认：见 `CHANGELOG.md` 本版本段
 
 ## 升级注意

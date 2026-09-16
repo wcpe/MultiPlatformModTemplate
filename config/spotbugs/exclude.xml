@@ -47,6 +47,21 @@
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
 
+    <!-- Forge 1.12.2 客户端会话同 Fabric / Forge 26.2：须把活跃网络特性提供给验收伴侣读取真实状态，
+         复制该对象会脱离当前派发器，故仅放行该生命周期 getter 的 EI。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.client.ForgeClientSession"/>
+        <Method name="networkFeature"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
+    <!-- 同上 Netty 误报：1.12.2 裸字节收包经 ByteBuf.getBytes(int, byte[]) 填充缓冲（ADR-0018），
+         该调用推进读指针且写出目标数组，SpotBugs 误判为"无副作用"。仅放行该类的 RV。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.net.ForgePayloadCodec"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+
     <!-- 协议包为短生命周期传输 DTO（@Value），byte[] 载荷仅在可靠性层内部流转；对其 getter/构造做
          防御性拷贝在分片热路径上不划算。protocol.packet 包内 EI/EI2 豁免。 -->
     <Match>
@@ -75,6 +90,12 @@
         <Class name="top.wcpe.mc.mpmt.platform.fabric.version.v1_20.V1_20ClientNetwork"/>
         <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
     </Match>
+    <!-- 同上误报：Forge L4 版本绑定（v1_20）同样经 FriendlyByteBuf.writeBytes 收发裸字节，依赖其写入
+         缓冲的副作用（返回 this 仅供链式调用）。与上方 Forge 网络类同款，仅放行该类 RV。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.version.v1_20.V1_20ServerNetwork"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
 
     <!-- 按设计：@Mod 入口由 Forge 启动期一次性实例化，其构造函数即平台装配点，把活跃传输发布到
          volatile static Holder 供同进程验收驱动 mod 读取（ADR-0002 Holder 形态、启动期一次写入后只读）。
@@ -92,10 +113,26 @@
         <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD,MS_EXPOSE_REP"/>
     </Match>
 
+    <!-- 同上按设计：Forge 1.20.1 @Mod 入口与 NeoForge 镜像同一 Holder 形态（ADR-0002，启动期一次写入后
+         只读）：构造期把活跃传输写入 volatile static Holder（ST），静态 getter 返回该传输供同进程验收驱动
+         mod 读取（MS，传输对象本就需被同进程共享）。仅放行该入口类。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.MpmtForgeMod"/>
+        <Bug pattern="MS_EXPOSE_REP"/>
+    </Match>
+
     <!-- Forge 26.2 的产品通道由 @Mod 入口创建，并在同一加载器内由客户端事件注册复用；通道并非
          可变集合或数组，复制会注册到另一条网络通道。仅放行该静态访问器的 MS。 -->
     <Match>
         <Class name="top.wcpe.mc.mpmt.platform.forge.modern.MpmtForge262Mod"/>
+        <Method name="productChannel"/>
+        <Bug pattern="MS_EXPOSE_REP"/>
+    </Match>
+
+    <!-- Forge 1.21.1 同 26.2：产品通道由 @Mod 入口创建，客户端事件在同一加载器内复用该通道；
+         通道非可变集合/数组，复制会注册到另一条网络通道。仅放行该静态访问器的 MS。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.modern.MpmtForge121Mod"/>
         <Method name="productChannel"/>
         <Bug pattern="MS_EXPOSE_REP"/>
     </Match>

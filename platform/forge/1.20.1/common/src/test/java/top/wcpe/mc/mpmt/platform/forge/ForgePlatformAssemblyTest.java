@@ -43,6 +43,7 @@ class ForgePlatformAssemblyTest {
     @Test
     @DisplayName("Forge 入口使用运行期探测结果选择 L4 adapter")
     void 入口使用探测后的Adapter() {
+        ForgeMinecraftTestSupport.resetNetworkRegistry();
         AtomicBoolean probed = new AtomicBoolean();
         ForgeServerNetwork network =
                 MpmtForgeMod.detectServerNetwork(

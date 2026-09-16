@@ -24,7 +24,7 @@ public final class ClientHudServerScenario extends BukkitServerScenario {
     @Override
     public void run(ServerGameTestContext context) {
         awaitClientReady(CLIENT_READY_TIMEOUT_MS);
-        // 给握手后产品四类 HUD 演示包留出窗口，再发验收 ACTIONBAR（对齐 1.21.1 / R4）
+        // 给握手后产品四类 HUD 演示包留出窗口，再发验收 ACTIONBAR（对齐 1.21.1 / STANDARD）
         context.waitTicks(40);
         context.onMain(() -> sendHud(context));
         runClientStep("verify-hud", "{}");

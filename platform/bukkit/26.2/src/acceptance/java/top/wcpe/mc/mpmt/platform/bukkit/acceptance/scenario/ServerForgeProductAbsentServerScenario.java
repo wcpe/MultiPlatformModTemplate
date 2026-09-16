@@ -5,8 +5,8 @@ import java.util.Map;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.platform.bukkit.acceptance.BukkitServerGameTestContext;
 
-/** R5：从 CatServer 的 Forge Loader 权威断言服务端未加载我方 Forge 产品或验收 mod。 */
-public final class ServerForgeProductAbsentServerScenario extends R5ServerScenario {
+/** HYBRID：从 CatServer 的 Forge Loader 权威断言服务端未加载我方 Forge 产品或验收 mod。 */
+public final class ServerForgeProductAbsentServerScenario extends HybridServerScenario {
 
     private static final String FORGE_LOADER_CLASS = "net.minecraftforge.fml.common.Loader";
     private static final String PRODUCT_MOD_ID = "mpmt";
@@ -18,7 +18,7 @@ public final class ServerForgeProductAbsentServerScenario extends R5ServerScenar
     }
 
     @Override
-    protected void runR5(ServerGameTestContext context) {
+    protected void runHybrid(ServerGameTestContext context) {
         BukkitServerGameTestContext bukkit = bukkit(context);
         Map<?, ?> indexedMods =
                 context.onMain(

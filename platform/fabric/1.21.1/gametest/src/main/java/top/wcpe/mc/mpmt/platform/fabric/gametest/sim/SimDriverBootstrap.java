@@ -14,7 +14,7 @@ import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTest;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestRunner;
 import top.wcpe.mc.mpmt.acceptance.report.AcceptanceReport;
 import top.wcpe.mc.mpmt.acceptance.report.AcceptanceReportMetadata;
-import top.wcpe.mc.mpmt.acceptance.report.P1ScenarioMatrix;
+import top.wcpe.mc.mpmt.acceptance.report.DefaultScenarioMatrix;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioResult;
 import top.wcpe.mc.mpmt.platform.fabric.gametest.FabricServerGameTestContext;
 
@@ -61,9 +61,9 @@ public final class SimDriverBootstrap {
 
     private static void runAndReport(MinecraftServer server) {
         List<ServerGameTest> tests = SimScenarioCatalog.all();
-        List<String> required = P1ScenarioMatrix.requiredFor(PLATFORM);
+        List<String> required = DefaultScenarioMatrix.requiredFor(PLATFORM);
         if (!required.equals(SimScenarioCatalog.scenarioIds())) {
-            throw new IllegalStateException("Fabric 模拟服场景目录与 P1 矩阵不一致");
+            throw new IllegalStateException("Fabric 模拟服场景目录与默认轨清单不一致");
         }
         List<ScenarioResult> results =
                 ServerGameTestRunner.runAll(tests, test -> new FabricServerGameTestContext(server));

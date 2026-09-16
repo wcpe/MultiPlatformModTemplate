@@ -27,7 +27,7 @@ final class ForgeAcceptanceCompanion {
     private static final int STEP_TIMEOUT_TICKS = 200;
     private static final String JAVA_EXECUTABLE_PROPERTY = "mpmt.acceptance.javaExecutable";
     private static final String SERVER_PROPERTY = "mpmt.acceptance.server";
-    /** 默认对齐 CatServer R5 宿主端口。 */
+    /** 默认对齐 CatServer（HYBRID 矩阵）宿主端口。 */
     private static final String DEFAULT_SERVER = "127.0.0.1:25568";
 
     private final ForgeClientTransportPort transport;
@@ -100,7 +100,7 @@ final class ForgeAcceptanceCompanion {
     /**
      * 主菜单（或任意非世界屏幕）后程序化连入验收服，只发起一次。
      *
-     * <p>地址取 {@code -Dmpmt.acceptance.server}，默认 {@code 127.0.0.1:25568}（CatServer R5）。
+     * <p>地址取 {@code -Dmpmt.acceptance.server}，默认 {@code 127.0.0.1:25568}（CatServer（HYBRID 矩阵））。
      */
     private void tryAutoConnect(Minecraft client) {
         if (client.world != null || client.player != null) {

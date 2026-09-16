@@ -74,19 +74,31 @@ public final class Forge112ContractTest {
         File repositoryRoot = propertyFile("mpmt.test.repositoryRoot");
         // 布局收纳后：platform/forge/1.12.2（ADR-0007 / 目录即工程）
         File lane = new File(repositoryRoot, "platform/forge/1.12.2");
-        String wrapper = read(new File(lane, "gradle/wrapper/gradle-wrapper.properties"));
         String build = read(new File(lane, "build.gradle"));
-        require(wrapper.contains("gradle-5.6.4-bin.zip"), "wrapper 未冻结 Gradle 5.6.4");
-        require(build.contains("ForgeGradle:3.0.197"), "未冻结 ForgeGradle 3.0.197");
-        require(build.contains("1.12.2-14.23.5.2860"), "未冻结 Forge 1.12.2-14.23.5.2860");
-        require(!build.contains("includeBuild"), "1.12.2 车道不得复合加载现代根构建");
+        String rootSettings = read(new File(repositoryRoot, "settings.gradle.kts"));
+
+        // ADR-0026：车道为根构建子模块——不再持有独立 settings / 自有 wrapper / 反向 includeBuild
+        require(!new File(lane, "settings.gradle.kts").exists(), "子模块车道不得再持有独立 settings");
+        require(!new File(lane, "gradlew").exists(), "子模块车道不得再持有自有 wrapper");
+        require(!build.contains("includeBuild"), "子模块车道不得复合加载根构建");
+
+        // ADR-0025：构建插件统一 top.wcpe.loom，版本在根 settings 单点 pin
+        require(build.contains("top.wcpe.loom"), "未应用 top.wcpe.loom 插件");
         require(
-                build.contains(
-                        "sharedModules = ['domain', 'runtime', 'client', 'protocol', 'acceptance']"),
-                "缺少完整的本地共享 JAR 输入契约");
-        require(build.contains("${dir}/build/libs/${module}-${project.version}.jar"), "共享 JAR 路径不符");
-        require(build.contains("sharedJars.each(verifySharedJar)"), "共享 JAR 未在配置期校验");
-        require(build.contains("major > 52"), "共享 JAR 未限制 Java 8 类版本");
+                rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.1"),
+                "根 settings 未冻结 top.wcpe.loom 1.17.1");
+
+        require(build.contains("1.12.2-14.23.5.2860"), "未冻结 Forge 1.12.2-14.23.5.2860");
+
+        // legacy（FG2 时代）链路前置条件（ADR-0025 决策 5）：必须声明 Pack200 provider，
+        // 且不得改用 no-remap 变体（本车道走 MCP 映射 + 重映射链路）。
+        require(build.contains("pack200Provider"), "legacy 链路必须声明 Pack200 provider");
+        require(!build.contains("loom-no-remap"), "legacy 链路不得使用 no-remap 变体");
+
+        // ADR-0026 决策 6：共享核心经同根构建的项目产物消费，不再按 build/libs 路径硬编码。
+        // Java 8 字节码约束由 verifyArtifactIsolation() 的 requireJava8Classes() 对实际产物校验。
+        require(build.contains("moduleJar("), "共享模块必须经同根构建项目产物消费");
+        require(!build.contains("sharedJars"), "不得再按 build/libs 路径硬编码共享 JAR");
     }
 
     private static void verifyClientOnlyOptionalMetadata() throws IOException {

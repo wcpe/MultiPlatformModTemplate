@@ -7,14 +7,12 @@ import org.gradle.api.plugins.quality.Checkstyle
 import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.plugins.quality.Pmd
 import org.gradle.api.plugins.quality.PmdExtension
-import org.gradle.api.tasks.PathSensitivity
-import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.spongepowered.gradle.plugin.config.PluginLoaders
 import org.spongepowered.plugin.metadata.model.PluginDependency
 import java.util.zip.ZipFile
 
-// platform-sponge（L3）：独立 includeBuild，应用 SpongeGradle（ADR-0007，隔离加载器专属插件）。
+// platform-sponge（L3）：根构建子模块，应用 SpongeGradle（ADR-0007，隔离加载器专属插件）。
 // 锚点 MC 1.20.1 / SpongeAPI 11.0.0（SpongeVanilla）。Sponge 为纯服务端平台（无客户端插件 API）：
 // FR-27 跨端 HUD 由 Sponge 服下发、客户端复用我方 Fabric 伴侣渲染（异构互通，同 Bukkit 模式）。
 // spongeapi 由 sponge{} apiVersion 接入（compileOnly，运行期服务端提供，不 shade）；core shade + relocate snakeyaml（ADR-0012）。
@@ -22,31 +20,28 @@ import java.util.zip.ZipFile
 
 plugins {
     `java-library`
-    id("org.spongepowered.gradle.plugin") version "2.3.0"
+    id("org.spongepowered.gradle.plugin")
     id("com.gradleup.shadow") version "8.3.11"
-    // 静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
+    // 静态分析 / 质量工具链由根构建 subprojects{} 统一提供（含 spotbugs/ktlint/detekt/kover，见 ADR-0026）。
+    // 车道内重复声明会分裂插件类加载器并破坏 loom 清单服务，故此处不再声明。
+    // 历史说明：静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
     // 核心 Gradle 插件经 apply(plugin=...) 接入（见下方装配块）；外部插件在此带版本直接 apply。
-    id("com.github.spotbugs") version "6.0.26"
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
-    id("io.gitlab.arturbosch.detekt") version "1.23.7"
-    id("org.jetbrains.kotlinx.kover") version "0.8.3"
 }
 
 group = "top.wcpe.mc.mpmt"
-version = file("../../../VERSION").readText().trim()
 
 val snakeyamlVersion = "2.2"
 // 插件元数据保持与 RC1365 清单一致，编译类路径固定到同源旧 API 制品。
 val spongeMetadataVersion = "11.0.0-SNAPSHOT"
 val spongeCompileVersion = "11.0.0-20230826.165715-4"
 // 官方旧 API SHA-256：1278386c819b2009d69241e3b9356b44c3be247e7da7ea21be42aceb444459e3
-// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经 includeBuild 依赖替换消费
-val platformApiCoordinate = "top.wcpe.mc.mpmt:sponge-api:$version"
-val spiCoordinate = "top.wcpe.mc.mpmt:spi:$version"
+// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经同根构建项目依赖消费
+val platformApiCoordinate = project(":platform:sponge:sponge-api")
+val spiCoordinate = project(":core:spi")
 // 服务端公共网络特性（经 api 传递 protocol + core-runtime）
-val serverCoordinate = "top.wcpe.mc.mpmt:server:$version"
+val serverCoordinate = project(":core:server")
 // 客户端公共网络特性（握手 / 心跳），仅验收契约复用
-val clientCoordinate = "top.wcpe.mc.mpmt:client:$version"
+val clientCoordinate = project(":core:client")
 
 base {
     // 单锚点 1.20.1；产物名带版本
@@ -90,8 +85,8 @@ configurations.configureEach {
 }
 
 // ============================================================================
-// 静态分析 / 质量工具链装配（严格门禁，static-analysis.md）——本独立 includeBuild 单工程直接 apply。
-// includeBuild 的 rootProject 即本目录，共享规则集在仓库根 config/，故引用 ../config/*；
+// 静态分析 / 质量工具链装配（严格门禁，static-analysis.md）——根构建子模块直接 apply。
+// 共享规则集在仓库根 config/，故经 rootProject 引用 config/*；
 // .editorconfig / lombok.config 在仓库根，ktlint / Lombok 自动向上查找，无需额外配置。
 // 违规即失败构建（isIgnoreFailures=false），与根构建口径一致。
 // 注：本工程主工具链与分析工具均使用 JDK 17。
@@ -100,7 +95,7 @@ configurations.configureEach {
 apply(plugin = "checkstyle")
 configure<CheckstyleExtension> {
     toolVersion = "10.17.0"
-    configFile = rootProject.file("../../../config/checkstyle/checkstyle.xml")
+    configFile = rootProject.file("config/checkstyle/checkstyle.xml")
     isIgnoreFailures = false
     maxWarnings = 0
 }
@@ -109,7 +104,7 @@ apply(plugin = "pmd")
 configure<PmdExtension> {
     toolVersion = "7.0.0"
     isConsoleOutput = true
-    ruleSetConfig = resources.text.fromFile(rootProject.file("../../../config/pmd/ruleset.xml"))
+    ruleSetConfig = resources.text.fromFile(rootProject.file("config/pmd/ruleset.xml"))
     ruleSets = emptyList()
     isIgnoreFailures = false
 }
@@ -128,16 +123,10 @@ configure<SpotBugsExtension> {
     effort.set(Effort.MAX)
     // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
     reportLevel.set(Confidence.MEDIUM)
-    excludeFilter.set(rootProject.file("../../../config/spotbugs/exclude.xml"))
+    excludeFilter.set(rootProject.file("config/spotbugs/exclude.xml"))
 }
 dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
-// 把 lombok.config 登记为编译输入：其改动须失效编译缓存（否则缓存会服旧的、缺 @Generated 的类，
-// 导致 SpotBugs/JaCoCo 仍对 Lombok 生成代码误报）。lombok.config 在仓库根，故引用 ../lombok.config。
-tasks.withType(JavaCompile::class.java).configureEach {
-    inputs.file(rootProject.file("../../../lombok.config"))
-        .withPropertyName("lombokConfig")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-}
+// lombok.config 由根构建 subprojects{} 统一登记为编译输入（ADR-0026），此处不再重复。
 // 分析任务固定 JDK 17 启动器：Checkstyle 10.x / PMD 7.x 需 JDK 11+，与平台工具链及根构建口径一致。
 // SpotBugs worker 使用守护 JVM，无 javaLauncher 属性，不单独设置。
 val analysisToolchains = extensions.getByType(JavaToolchainService::class.java)
@@ -257,8 +246,8 @@ val verifyPackaging by tasks.registering {
 // 单独打 mpmt-acceptance Sponge 插件，仅在验收运行期放入服务端。客户端复用我方 Fabric 验收伴侣（异构互通）。
 // 编译期继承 main 类路径（含 spongeapi + spi/server）+ main 产物，叠加 acceptance 核心 + protocol。
 // ============================================================================
-val acceptanceCoordinate = "top.wcpe.mc.mpmt:acceptance:$version"
-val protocolCoordinate = "top.wcpe.mc.mpmt:protocol:$version"
+val acceptanceCoordinate = project(":modules:acceptance")
+val protocolCoordinate = project(":core:protocol")
 
 val acceptance: SourceSet by sourceSets.creating {
     compileClasspath += sourceSets["main"].compileClasspath + sourceSets["main"].output
@@ -266,7 +255,7 @@ val acceptance: SourceSet by sourceSets.creating {
 }
 configurations["acceptanceImplementation"].extendsFrom(configurations["implementation"])
 
-// 纯 JVM 验收契约源集：验证 P1 清单与 acceptance v2 严格报告
+// 纯 JVM 验收契约源集：验证默认轨清单与 acceptance v2 严格报告
 val acceptanceTest: SourceSet by sourceSets.creating {
     compileClasspath += acceptance.output + acceptance.compileClasspath + sourceSets["main"].output
     runtimeClasspath += output + acceptance.runtimeClasspath + compileClasspath
@@ -283,7 +272,7 @@ dependencies {
     "acceptanceImplementation"(protocolCoordinate)
     acceptanceShadowBundle(acceptanceCoordinate)
     acceptanceShadowBundle(protocolCoordinate)
-    // 纯 JVM P1 契约依赖仅挂在 acceptanceTest，避免验收插件 jar 膨胀
+    // 纯 JVM 默认轨契约依赖仅挂在 acceptanceTest，避免验收插件 jar 膨胀
     "acceptanceTestImplementation"(acceptanceCoordinate)
     "acceptanceTestImplementation"(protocolCoordinate)
     "acceptanceTestImplementation"(serverCoordinate)
@@ -321,7 +310,7 @@ tasks.named("assemble") {
 
 val acceptanceContractTest by tasks.registering(Test::class) {
     group = "verification"
-    description = "运行 Sponge acceptance v2 与完整 P1 场景契约测试"
+    description = "运行 Sponge acceptance v2 与完整默认轨场景契约测试"
     testClassesDirs = acceptanceTest.output.classesDirs
     classpath = acceptanceTest.runtimeClasspath
     useJUnitPlatform()

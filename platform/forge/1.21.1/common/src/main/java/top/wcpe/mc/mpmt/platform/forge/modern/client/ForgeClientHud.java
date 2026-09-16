@@ -48,6 +48,7 @@ public final class ForgeClientHud {
                     text,
                     hud.getSubtitle().isEmpty() ? null : Component.literal(hud.getSubtitle()));
             case CHAT -> gui.getChat().addMessage(text);
+            default -> gui.getChat().addMessage(text);
         }
     }
 

@@ -19,10 +19,10 @@ gradlePlugin {
             implementationClass =
                 "top.wcpe.mc.mpmt.gradle.realserver.MpmtRealServerAcceptancePlugin"
         }
-        register("mpmtP3R7ReportGate") {
-            id = "top.wcpe.mc.mpmt.p3-r7-report-gate"
+        register("mpmtRealServerReportGate") {
+            id = "top.wcpe.mc.mpmt.realserver-report-gate"
             implementationClass =
-                "top.wcpe.mc.mpmt.gradle.realserver.P3R7ReportGatePlugin"
+                "top.wcpe.mc.mpmt.gradle.realserver.RealServerReportGatePlugin"
         }
     }
 }
@@ -38,6 +38,9 @@ detekt {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    // 契约测试读取仓库外部文件（根构建 / 各车道 settings 等）而未声明为任务输入；
+    // 禁用 up-to-date 缓存，避免外部文件变更后仍命中陈旧的绿结果。
+    outputs.upToDateWhen { false }
 }
 
 tasks.named("check") {

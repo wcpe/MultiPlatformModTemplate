@@ -3,57 +3,59 @@ import com.github.spotbugs.snom.Confidence
 import com.github.spotbugs.snom.Effort
 import com.github.spotbugs.snom.SpotBugsExtension
 import com.github.spotbugs.snom.SpotBugsTask
+import net.fabricmc.loom.task.RemapJarTask
 import org.gradle.api.file.FileCollection
 import org.gradle.api.plugins.quality.Checkstyle
 import org.gradle.api.plugins.quality.CheckstyleExtension
 import org.gradle.api.plugins.quality.Pmd
 import org.gradle.api.plugins.quality.PmdExtension
-import org.gradle.api.tasks.PathSensitivity
-import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.jvm.tasks.Jar
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
 import java.security.MessageDigest
 import java.util.zip.ZipFile
 
-// platform-neoforge（L3）：自有 Gradle 8 车道，应用 NeoGradle（ADR-0007，隔离加载器专属插件）。
-// 锚点 MC 1.20.2（NeoForge 无 1.20.1；PRD §7）。NeoForge 运行期用官方 Mojmap、无 SRG/reobf（区别于 Forge）；
-// Mixin 内置（mods.toml [[mixins]] 声明、无 MixinGradle、无 refmap）。打包：shade 共享核心 + relocate snakeyaml（ADR-0012）。
-// dev run classpath 墙同 FG：受控 JAR 不会自动进入 modSource 运行期类路径，经 additionalRuntimeClasspath 暴露。
+// platform-neoforge（L3）：根构建子模块，应用 arch-loom（top.wcpe.loom，ADR-0007，隔离加载器专属插件）。
+// 锚点 MC 1.20.2（NeoForge 无 1.20.1；PRD §7）。NeoForge 运行期用官方 Mojmap（arch-loom usesMojangAtRuntime
+// 对 neoforge 平台恒真 → remapJar 恒等重映射、无 SRG，区别于 Forge）；Mixin 内置（mods.toml [[mixins]] 声明、
+// 无 refmap）。打包链路（ADR-0012）：shade 共享核心 + relocate snakeyaml → remapJar 产出最终产品 jar。
+// dev run classpath 墙同 FG：受控 JAR 不会自动进入 dev mod 运行期类路径，经 coreLibJar（FMLModType:GAMELIBRARY）
+// 放 run-*/mods 暴露。
 
 plugins {
     `java-library`
-    id("net.neoforged.gradle.userdev") version "7.0.116"
-    id("com.gradleup.shadow") version "8.3.3"
-    // 静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
+    id("top.wcpe.loom")
+    // 8.3.11：修复 RelocatorRemapper.mapValue 与 loom 依赖树上新 ASM（visitLdcInsn 传 Type）的不兼容
+    id("com.gradleup.shadow") version "8.3.11"
+    // 静态分析 / 质量工具链由根构建 subprojects{} 统一提供（含 spotbugs/ktlint/detekt/kover，见 ADR-0026）。
+    // 车道内重复声明会分裂插件类加载器并破坏 loom 清单服务，故此处不再声明。
+    // 历史说明：静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
     // 核心 Gradle 插件经 apply(plugin=...) 接入（见下方装配块）；外部插件在此带版本直接 apply。
-    id("com.github.spotbugs") version "6.0.26"
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
-    id("io.gitlab.arturbosch.detekt") version "1.23.7"
-    id("org.jetbrains.kotlinx.kover") version "0.8.3"
 }
 
 group = "top.wcpe.mc.mpmt"
-version = file("../../../VERSION").readText().trim()
 
 val neoforgeVersion = "20.2.93"
 val snakeyamlVersion = "2.2"
-// 自有 Gradle 8 车道不能反向 include 根工程；根工程先产出这些受控 JAR，
-// 本车道只按文件消费，避免复合构建循环和嵌套 Gradle 调用。
-val repositoryRoot = rootProject.file("../../..").canonicalFile
-fun internalJar(modulePath: String, archiveName: String) =
-    files(File(repositoryRoot, "$modulePath/build/libs/$archiveName-$version.jar"))
 
-val domainJar = internalJar("core/domain", "domain")
-val runtimeJar = internalJar("core/runtime", "runtime")
-val protocolJar = internalJar("core/protocol", "protocol")
-val spiJar = internalJar("core/spi", "spi")
-val serverJar = internalJar("core/server", "server")
-val clientJar = internalJar("core/client", "client")
-val neoforgeApiJar = internalJar("platform/neoforge/neoforge-api", "platform-neoforge-api")
-val acceptanceCoreJar = internalJar("modules/acceptance", "acceptance")
-val productInternalJars: List<FileCollection> =
+// 共享核心 / 平台 API / 验收核心产物：直接消费同根构建下各子模块的 jar 任务产物
+// （FileCollection，自带任务依赖；文件输入、不引入传递依赖）。
+// 用 withType<Jar>().matching 惰性取任务：named("jar") 会在本项目先于生产者配置时
+// 立即抛 UnknownTaskException（子模块按路径序配置，:platform:neoforge:1.20.2 先于
+// :platform:neoforge:neoforge-api），故不可用。
+fun moduleJar(projectPath: String): FileCollection =
+    files(project(projectPath).tasks.withType<Jar>().matching { it.name == "jar" })
+
+val domainJar = moduleJar(":core:domain")
+val runtimeJar = moduleJar(":core:runtime")
+val protocolJar = moduleJar(":core:protocol")
+val spiJar = moduleJar(":core:spi")
+val serverJar = moduleJar(":core:server")
+val clientJar = moduleJar(":core:client")
+val neoforgeApiJar = moduleJar(":platform:neoforge:neoforge-api")
+val acceptanceCoreJar = moduleJar(":modules:acceptance")
+val productInternalJars =
     listOf(domainJar, runtimeJar, protocolJar, spiJar, serverJar, clientJar, neoforgeApiJar)
-val requiredInternalJars: List<FileCollection> = productInternalJars + listOf(acceptanceCoreJar)
 
 base {
     // 单锚点 1.20.2；产物名带版本以免与多版本矩阵混淆
@@ -85,8 +87,8 @@ repositories {
 }
 
 // ============================================================================
-// 静态分析 / 质量工具链装配（严格门禁，static-analysis.md）——本独立 includeBuild 单工程直接 apply。
-// 本独立车道的 rootProject 即本目录，共享规则集在仓库根 config/，故引用 ../../../config/*；
+// 静态分析 / 质量工具链装配（严格门禁，static-analysis.md）——根构建子模块直接 apply。
+// 共享规则集在仓库根 config/，故引用 rootProject.file("config/*")；
 // .editorconfig / lombok.config 在仓库根，ktlint / Lombok 自动向上查找，无需额外配置。
 // 违规即失败构建（isIgnoreFailures=false），与根构建口径一致。
 // ============================================================================
@@ -94,7 +96,7 @@ repositories {
 apply(plugin = "checkstyle")
 configure<CheckstyleExtension> {
     toolVersion = "10.17.0"
-    configFile = rootProject.file("../../../config/checkstyle/checkstyle.xml")
+    configFile = rootProject.file("config/checkstyle/checkstyle.xml")
     isIgnoreFailures = false
     maxWarnings = 0
 }
@@ -103,7 +105,7 @@ apply(plugin = "pmd")
 configure<PmdExtension> {
     toolVersion = "7.0.0"
     isConsoleOutput = true
-    ruleSetConfig = resources.text.fromFile(rootProject.file("../../../config/pmd/ruleset.xml"))
+    ruleSetConfig = resources.text.fromFile(rootProject.file("config/pmd/ruleset.xml"))
     ruleSets = emptyList()
     isIgnoreFailures = false
 }
@@ -122,17 +124,11 @@ configure<SpotBugsExtension> {
     effort.set(Effort.MAX)
     // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
     reportLevel.set(Confidence.MEDIUM)
-    excludeFilter.set(rootProject.file("../../../config/spotbugs/exclude.xml"))
+    excludeFilter.set(rootProject.file("config/spotbugs/exclude.xml"))
 }
 dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
-// 把 lombok.config 登记为编译输入：其改动须失效编译缓存（否则缓存会服旧的、缺 @Generated 的类，
-// 导致 SpotBugs/JaCoCo 仍对 Lombok 生成代码误报）。lombok.config 在仓库根，故引用 ../lombok.config。
-tasks.withType(JavaCompile::class.java).configureEach {
-    inputs.file(rootProject.file("../../../lombok.config"))
-        .withPropertyName("lombokConfig")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-}
-// 分析任务固定 JDK 17 启动器：Checkstyle 10.x / PMD 7.x 需 JDK 11+；本工程 NeoGradle 编译目标已是 JDK 17，
+// lombok.config 由根构建 subprojects{} 统一登记为编译输入（ADR-0026），此处不再重复。
+// 分析任务固定 JDK 17 启动器：Checkstyle 10.x / PMD 7.x 需 JDK 11+；本工程编译目标已是 JDK 17，
 // 仍显式固定分析任务启动器与根构建口径一致。SpotBugs worker 用守护 JVM，无 javaLauncher 属性、不设。
 val analysisToolchains = extensions.getByType(JavaToolchainService::class.java)
 val analysisLauncher =
@@ -155,8 +151,11 @@ tasks.withType(SpotBugsTask::class.java).configureEach {
 val shadowBundle: Configuration by configurations.creating
 
 dependencies {
-    // NeoForge userdev：单一依赖传递性引入 patched MC + loader（NeoGradle 7，非 minecraft(...)）
-    implementation("net.neoforged:neoforge:$neoforgeVersion")
+    // userdev 单坐标拆分（arch-loom 三段式）：原版 MC 本体 + 官方 Mojang 映射（ADR-0016）+ NeoForge
+    // （arch-loom 的 neoForge 配置，由其 installer-tools 管线解析 userdev 并产出 patched MC dev jar）
+    minecraft("com.mojang:minecraft:1.20.2")
+    mappings(loom.officialMojangMappings())
+    "neoForge"("net.neoforged:neoforge:$neoforgeVersion")
 
     // 文件输入没有 POM 传递关系，故显式列出完整内部闭包并一并 shade。
     productInternalJars.forEach {
@@ -167,7 +166,7 @@ dependencies {
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
 
-    // dev run 运行期类路径见文件末尾 realserver 编排段（先实测 modSource 是否已含库 runtimeClasspath）。
+    // dev run 运行期类路径见上方 loom runs 段（source(main) 提供 dev mod 类路径，core 库经 coreLibJar 进 run-*/mods）。
 
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -175,67 +174,55 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-val verifyInternalJars by tasks.registering {
-    group = "verification"
-    description = "校验 NeoForge 1.20.2 受控内部 JAR 输入已由根工程准备"
-    doLast {
-        val missing = requiredInternalJars.flatMap { it.files }.filterNot(File::isFile)
-        if (missing.isNotEmpty()) {
-            val paths = missing.joinToString(System.lineSeparator()) { "  - ${it.absolutePath}" }
-            throw GradleException(
-                "缺少 NeoForge 1.20.2 内部 JAR 输入：${System.lineSeparator()}$paths${System.lineSeparator()}" +
-                    "请先在仓库根运行 ./gradlew :prepareNeoForge1202Inputs；不要反向 includeBuild 或嵌套调用 Gradle。",
+// ============================================================================
+// loom 配置：dev run（arch-loom 自动装配 MC + NeoForge dev 资源与启动类路径）
+// ============================================================================
+loom {
+    runs {
+        // loom 已为 forge 系预建默认 client/server 运行配置（client()/server() 模板已应用），这里只做等价移植。
+        // source(main) 等价 NeoGradle modSource：MOD_CLASSES 指向 main 源集输出，提供产品 main 类；
+        // core 库 FML 模块层不向 mod 暴露（NoClassDefFoundError），故打成带 FMLModType:GAMELIBRARY 的
+        // coreLibJar 放 run-*/mods，FML 当 game library 加载、对 mod 可见（research §8）。
+        // 验收驱动 acceptanceJar 亦放 mods（自带 mods.toml）。
+        getByName("client") {
+            configName = "NeoForge Client"
+            source(project.sourceSets["main"])
+            runDir("run-client")
+            property("forge.logging.console.level", "info")
+            property("mpmt.acceptance", "true")
+            property(
+                "mpmt.acceptance.server",
+                (project.findProperty("mpmt.acceptance.server") as String?) ?: "127.0.0.1",
             )
         }
-    }
-}
-tasks.withType<JavaCompile>().configureEach {
-    dependsOn(verifyInternalJars)
-}
-
-// NeoGradle 运行配置：client/server dev run（NeoGradle 自动装好 MC 客户端 + 资源）。
-// Kotlin DSL 下 runs 为 NamedDomainObjectContainer，用 create("...")（Groovy 的 client{} 简写不可用）。
-runs {
-    configureEach {
-        // modSource 必需（NeoGradle 装配 BootstrapLauncher 启动类路径），提供产品 main 类；core 库 FML 模块层
-        // 不向 mod 暴露（NoClassDefFoundError），故打成带 FMLModType:GAMELIBRARY 的 coreLibJar 放 run-*/mods，
-        // FML 当 game library 加载、对 mod 可见（research §8）。验收驱动 acceptanceJar 亦放 mods（自带 mods.toml）。
-        modSource(project.sourceSets["main"])
-        systemProperty("forge.logging.console.level", "info")
-        systemProperty("mpmt.acceptance", "true")
-    }
-    create("client") {
-        workingDirectory(project.file("run-client"))
-        systemProperty(
-            "mpmt.acceptance.server",
-            (project.findProperty("mpmt.acceptance.server") as String?) ?: "127.0.0.1",
-        )
-    }
-    create("server") {
-        workingDirectory(project.file("run-server"))
-        programArgument("--nogui")
-        systemProperty(
-            "mpmt.acceptance.report",
-            project.file("run-server/acceptance-report.txt").absolutePath,
-        )
-        systemProperty("mpmt.acceptance.deadlineMs", "660000")
-        // v2 元数据：commit 配置期取 git；productJar 供驱动算 SHA（对齐 Forge realserver）
-        systemProperty(
-            "mpmt.acceptance.commit",
-            providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim(),
-        )
-        systemProperty("mpmt.acceptance.version", project.version.toString())
-        systemProperty("mpmt.acceptance.platform", "neoforge")
-        systemProperty("mpmt.acceptance.mcVersion", "1.20.2")
-        systemProperty("mpmt.acceptance.serverVersion", neoforgeVersion)
-        systemProperty(
-            "mpmt.acceptance.productJar",
-            layout.buildDirectory
-                .file("libs/mpmt-neoforge-1.20.2-${project.version}.jar")
-                .get()
-                .asFile
-                .absolutePath,
-        )
+        // loom server 模板已自带 nogui 程序参数，无需（不可）重复声明
+        getByName("server") {
+            configName = "NeoForge Server"
+            source(project.sourceSets["main"])
+            runDir("run-server")
+            property("forge.logging.console.level", "info")
+            property("mpmt.acceptance", "true")
+            property("mpmt.acceptance.report", project.file("run-server/acceptance-report.txt").absolutePath)
+            property("mpmt.acceptance.deadlineMs", "660000")
+            // v2 元数据：commit 配置期取 git；productJar 供驱动算 SHA（对齐 Forge realserver）
+            property(
+                "mpmt.acceptance.commit",
+                providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim(),
+            )
+            property("mpmt.acceptance.version", project.version.toString())
+            property("mpmt.acceptance.platform", "neoforge")
+            property("mpmt.acceptance.mcVersion", "1.20.2")
+            property("mpmt.acceptance.serverVersion", neoforgeVersion)
+            property(
+                "mpmt.acceptance.productJar",
+                // 与 archivesName=mpmt-neoforge-1.20.2 对齐
+                layout.buildDirectory
+                    .file("libs/mpmt-neoforge-1.20.2-${project.version}.jar")
+                    .get()
+                    .asFile
+                    .absolutePath,
+            )
+        }
     }
 }
 
@@ -263,13 +250,16 @@ tasks.processResources {
     }
 }
 
+// 普通 jar：loom 约定产物落 build/devlibs 且带 -dev 分类器（用户开发版，非最终产品）
 tasks.named<Jar>("jar") {
     archiveClassifier.set("dev")
 }
 
-// 最终 mod jar = shadowJar（shade core/spi + relocate snakeyaml）。NeoForge 运行期 Mojmap、无 reobf。
+// 打包链路：shadowJar（shade core/spi + relocate snakeyaml，中间产物名 -dev-shadow）→ remapJar。
+// NeoForge 1.20.2 生产运行期即 Mojang 命名（arch-loom usesMojangAtRuntime 恒真）→ 恒等重映射，
+// remapJar 产出无 classifier 的最终产品 jar（承担 userdev 时代 shadowJar 的产品语义与输出路径）。
 tasks.named<ShadowJar>("shadowJar") {
-    archiveClassifier.set("")
+    archiveClassifier.set("dev-shadow")
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
     configurations = listOf(shadowBundle)
@@ -280,21 +270,29 @@ tasks.named<ShadowJar>("shadowJar") {
     outputs.cacheIf { false }
 }
 
-// 打包校验：最终产品必须是无 classifier 的 shadowJar，并包含运行所需核心与平台元数据。
+// remapJar 改吃 shadowJar 产物，使 core / 第三方随之进入最终产品 jar（恒等映射不改动内容，仅落位产品命名）
+tasks.named<RemapJarTask>("remapJar") {
+    dependsOn(tasks.named("shadowJar"))
+    inputFile.set(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
+    archiveClassifier.set("")
+}
+
+// 打包校验：最终产品必须是无 classifier 的 remapJar 产物（内容为 shadowJar 的恒等重映射），
+// 并包含运行所需核心与平台元数据。
 val verifyPackaging by tasks.registering {
     group = "verification"
     description = "校验 NeoForge mod jar：核心 shade、snakeyaml relocate、mods.toml/services 在位、未打入 Minecraft"
-    dependsOn(tasks.named("shadowJar"))
+    dependsOn(tasks.named("remapJar"))
     doLast {
         val shadow = tasks.named<ShadowJar>("shadowJar").get()
         val plain = tasks.named<Jar>("jar").get()
-        val jar = shadow.archiveFile.get().asFile
+        val jar = tasks.named<RemapJarTask>("remapJar").get().archiveFile.get().asFile
         val entries = ZipFile(jar).use { zf -> zf.entries().asSequence().map { it.name }.toList() }
 
         fun must(condition: Boolean, message: String) {
             if (!condition) throw GradleException("NeoForge 打包校验失败：$message")
         }
-        must(plain.archiveFile.get().asFile != jar, "普通 jar 与最终 shadowJar 输出路径冲突")
+        must(plain.archiveFile.get().asFile != jar, "普通 jar 与最终产品 jar 输出路径冲突")
         must(!shadow.isPreserveFileTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
         must(shadow.isReproducibleFileOrder, "最终产品未启用可复现文件顺序")
         must(entries.contains("top/wcpe/mc/mpmt/core/domain/Mpmt.class"), "核心类未 shade 进 mod jar")
@@ -330,7 +328,7 @@ tasks.test {
 // realserver 验收驱动（独立 acceptance 源集 + 独立 shaded mod jar，ADR-0014）
 // NeoForge 与 Forge 同走 realserver：真实 NeoForge 专用服 + 独立 acceptance mod jar。验收驱动代码不入产品 mod jar：
 // 单独打 mpmt-acceptance-neoforge mod，仅在验收运行期放入服务端 mods/。
-// 编译期继承 main 的类路径（含 NeoGradle 提供的 patched MC + NeoForge API）+ main 产物，并叠加 acceptance 核心 + protocol。
+// 编译期继承 main 的类路径（含 arch-loom 提供的 patched MC + NeoForge API）+ main 产物，并叠加 acceptance 核心 + protocol。
 // NeoForge 运行期官方 Mojmap、无 SRG/reobf（区别于 Forge），故无 reobf 步骤。
 // ============================================================================
 val acceptance: SourceSet by sourceSets.creating {
@@ -386,7 +384,7 @@ val acceptanceJar by tasks.registering(ShadowJar::class) {
 // 把验收源集纳入常规 build 的编译校验（只编译，不打包——打包由验收编排按需触发）
 val acceptanceContractTest by tasks.registering(Test::class) {
     group = "verification"
-    description = "运行 NeoForge acceptance v2 与完整 P1 场景契约测试"
+    description = "运行 NeoForge acceptance v2 与完整默认轨场景契约测试"
     testClassesDirs = acceptanceTest.output.classesDirs
     classpath = acceptanceTest.runtimeClasspath
     useJUnitPlatform()
@@ -401,17 +399,17 @@ val realAcceptanceReport =
 
 val runSimNetworkAcceptance by tasks.registering(JavaExec::class) {
     group = "verification"
-    description = "运行 NeoForge 1.20.2 完整 P1 模拟服套件并生成 acceptance v2 报告"
+    description = "运行 NeoForge 1.20.2 完整默认轨模拟服套件并生成 acceptance v2 报告"
     classpath = acceptance.runtimeClasspath
-    mainClass.set("top.wcpe.mc.mpmt.platform.neoforge.acceptance.sim.NeoForgeP1Simulation")
-    dependsOn(tasks.named("acceptanceClasses"), tasks.named("shadowJar"))
+    mainClass.set("top.wcpe.mc.mpmt.platform.neoforge.acceptance.sim.NeoForgeDefaultSimulation")
+    dependsOn(tasks.named("acceptanceClasses"), tasks.named("remapJar"))
     systemProperty("mpmt.acceptance.report", simAcceptanceReport.get().asFile.absolutePath)
     systemProperty("mpmt.acceptance.version", project.version.toString())
     systemProperty("mpmt.acceptance.platform", "neoforge")
     systemProperty("mpmt.acceptance.mcVersion", "1.20.2")
     systemProperty("mpmt.acceptance.serverVersion", neoforgeVersion)
     doFirst {
-        val product = tasks.named<ShadowJar>("shadowJar").get().archiveFile.get().asFile
+        val product = tasks.named<RemapJarTask>("remapJar").get().archiveFile.get().asFile
         val digest = MessageDigest.getInstance("SHA-256").digest(product.readBytes())
         systemProperty("mpmt.acceptance.productJarSha256", digest.joinToString("") { byte -> "%02x".format(byte) })
         val commit = providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim()
@@ -423,7 +421,7 @@ val verifyAcceptanceReport by tasks.registering(JavaExec::class) {
     group = "verification"
     description = "严格校验 NeoForge acceptance v2 报告，缺元数据、场景或 PASS 均失败"
     classpath = acceptance.runtimeClasspath
-    mainClass.set("top.wcpe.mc.mpmt.platform.neoforge.acceptance.sim.NeoForgeP1Simulation")
+    mainClass.set("top.wcpe.mc.mpmt.platform.neoforge.acceptance.sim.NeoForgeDefaultSimulation")
     dependsOn(tasks.named("acceptanceClasses"))
     doFirst {
         val report = realAcceptanceReport.get()

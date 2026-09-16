@@ -10,7 +10,7 @@ import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.platform.bukkit.acceptance.BukkitServerGameTestContext;
 
 /**
- * R6 场景共享：经 {@link ProductPluginAccess} 调用产品 Folia 调度入口、在线玩家引用与有界等待。
+ * SCHEDULER 场景共享：经 {@link ProductPluginAccess} 调用产品 Folia 调度入口、在线玩家引用与有界等待。
  *
  * <p>验收 jar 不挂产品 main（ADR-0014），调度经 primitive 反射桥，不跨 CL 强转 SchedulerPort。
  */

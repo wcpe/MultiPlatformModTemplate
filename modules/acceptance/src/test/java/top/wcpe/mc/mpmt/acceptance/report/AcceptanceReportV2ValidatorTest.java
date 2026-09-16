@@ -36,21 +36,21 @@ class AcceptanceReportV2ValidatorTest {
     }
 
     @Test
-    @DisplayName("R5 缺少融合服专属 required 场景时拒绝")
-    void r5缺少专属required拒绝() {
-        assertRejected(render("R5", requiredPassScenarios()), expectation("R5"));
+    @DisplayName("HYBRID 缺少融合服专属 required 场景时拒绝")
+    void hybrid缺少专属required拒绝() {
+        assertRejected(render("HYBRID", requiredPassScenarios()), expectation("HYBRID"));
     }
 
     @Test
-    @DisplayName("R6 缺少调度专属 required 场景时拒绝")
-    void r6缺少专属required拒绝() {
-        assertRejected(render("R6", requiredPassScenarios()), expectation("R6"));
+    @DisplayName("SCHEDULER 缺少调度专属 required 场景时拒绝")
+    void scheduler缺少专属required拒绝() {
+        assertRejected(render("SCHEDULER", requiredPassScenarios()), expectation("SCHEDULER"));
     }
 
     @Test
-    @DisplayName("R7 在构造预期时使用公共三场景")
-    void r7构造预期() {
-        assertDoesNotThrow(() -> expectation("R7"));
+    @DisplayName("REALSERVER262 在构造预期时使用公共三场景")
+    void realserver262构造预期() {
+        assertDoesNotThrow(() -> expectation("REALSERVER262"));
     }
 
     @Test
@@ -80,7 +80,7 @@ class AcceptanceReportV2ValidatorTest {
     void 拒绝缺失或重复记录() {
         String valid = validText();
         assertRejected(valid.replace("RUN_ID\trun-1\n", ""));
-        assertRejected(valid.replace("MATRIX\tR1\n", "MATRIX\tR1\nMATRIX\tR1\n"));
+        assertRejected(valid.replace("MATRIX\tSTANDARD\n", "MATRIX\tSTANDARD\nMATRIX\tSTANDARD\n"));
         assertRejected(valid.replace(artifactLine("server-runtime", SERVER_RUNTIME_HASH), ""));
         assertRejected(valid.replace(
                 artifactLine("server-runtime", SERVER_RUNTIME_HASH),
@@ -116,7 +116,7 @@ class AcceptanceReportV2ValidatorTest {
     void 拒绝预期不匹配() {
         String valid = validText();
         assertRejected(valid.replace("RUN_ID\trun-1", "RUN_ID\trun-2"));
-        assertRejected(valid.replace("MATRIX\tR1", "MATRIX\tR2"));
+        assertRejected(valid.replace("MATRIX\tSTANDARD", "MATRIX\tHYBRID"));
         assertRejected(valid.replace("START_EPOCH_MS\t1000", "START_EPOCH_MS\t1001"));
         assertRejected(valid.replace("SERVER_JAVA\t21", "SERVER_JAVA\t17"));
         assertRejected(valid.replace("C:/server/java.exe", "C:/other/java.exe"));
@@ -151,7 +151,7 @@ class AcceptanceReportV2ValidatorTest {
     }
 
     private static String render(List<ReportScenario> scenarios) {
-        return render("R1", scenarios);
+        return render("STANDARD", scenarios);
     }
 
     private static String render(String matrix, List<ReportScenario> scenarios) {
@@ -167,7 +167,7 @@ class AcceptanceReportV2ValidatorTest {
     }
 
     private static AcceptanceReportV2Expectation expectation() {
-        return expectation("R1");
+        return expectation("STANDARD");
     }
 
     private static AcceptanceReportV2Expectation expectation(String matrix) {

@@ -1,0 +1,44 @@
+name: CodeQL 安全分析
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: 分析 Java 与 Kotlin
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: 初始化 CodeQL
+        uses: github/codeql-action/init@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28
+        with:
+          languages: java-kotlin
+          build-mode: manual
+
+      - name: 构建分析目标
+        uses: ./.github/actions/build-release-artifacts
+        with:
+          validate-template: "false"
+
+      - name: 上传 CodeQL 结果
+        uses: github/codeql-action/analyze@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28
+        with:
+          category: /language:java-kotlin

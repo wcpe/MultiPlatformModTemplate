@@ -46,6 +46,12 @@ public final class ForgeServerServices {
         return new ForgeServerServices(sessions, network, service);
     }
 
+    /** 判断给定会话表是否为服务端闭环共享实例。 */
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
+    boolean usesSessionRegistry(SessionRegistry candidate) {
+        return sessionRegistry == candidate;
+    }
+
     public ServerNetworkFeature networkFeature() {
         return networkFeature;
     }

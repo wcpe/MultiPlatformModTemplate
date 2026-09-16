@@ -45,8 +45,8 @@ public final class Forge262ContractMain {
                 "Minecraft 版本未冻结为 26.2");
         require("26.2-65.0.9".equals(System.getProperty("mpmt.test.forgeVersion")),
                 "Forge 版本未冻结为 26.2-65.0.9");
-        require("7.0.31".equals(System.getProperty("mpmt.test.forgeGradleVersion")),
-                "ForgeGradle 版本未冻结为 7.0.31");
+        require("1.17.1".equals(System.getProperty("mpmt.test.loomVersion")),
+                "loom 版本未冻结为 1.17.1（WCPE Loom 正式版，ADR-0025）");
         require("9.6.1".equals(System.getProperty("mpmt.test.gradleVersion")),
                 "Gradle 版本未冻结为 9.6.1");
         require(Runtime.version().feature() == 25, "契约测试必须运行于 Java 25");
@@ -54,34 +54,30 @@ public final class Forge262ContractMain {
 
     private static void verifyIndependentBuild(Path repositoryRoot, Path projectDir)
             throws IOException {
-        String settings = read(projectDir.resolve("settings.gradle.kts"));
         String build = read(projectDir.resolve("build.gradle"));
-        String wrapper = read(projectDir.resolve("gradle/wrapper/gradle-wrapper.properties"));
-        // 收纳后独立 launcher 位于 platform/forge/26.2，不再经过旧 platform-forge 根包装脚本
-        String unixLauncher = read(projectDir.resolve("gradlew"));
-        String windowsLauncher = read(projectDir.resolve("gradlew.bat"));
-        // 收纳后允许 settings 反向 includeBuild 根工程做依赖替换；
-        // 构建期仍以本地 shared JAR 校验为准，禁止嵌套根 launcher。
-        require(settings.contains("includeBuild(\"../../..\")")
-                        || settings.contains("includeBuild('../../..')"),
-                "settings 须反向 includeBuild 仓库根以替换共享坐标");
+        String properties = read(projectDir.resolve("gradle.properties"));
+        String rootSettings = read(repositoryRoot.resolve("settings.gradle.kts"));
+        // ADR-0026：车道为根构建子模块——不再持有独立 settings / 自有 wrapper / 反向 includeBuild
+        require(!Files.exists(projectDir.resolve("settings.gradle.kts")),
+                "子模块车道不得再持有独立 settings");
+        require(!Files.exists(projectDir.resolve("gradlew")),
+                "子模块车道不得再持有自有 wrapper");
+        require(!build.contains("includeBuild"), "子模块车道不得复合加载根构建");
         require(build.contains("options.release = 25"), "Java 编译目标必须为 25");
         require(!MAPPINGS_DECLARATION.matcher(build).find(),
-                "Minecraft 26.2 不得声明 Mojang mappings");
-        require(build.contains("net.minecraftforge.gradle' version '7.0.31'")
-                        || build.contains("net.minecraftforge.gradle\" version \"7.0.31\""),
-                "必须使用 ForgeGradle 7.0.31");
-        require(build.contains("productSharedModules"), "产品必须本地消费共享产品核心");
-        require(build.contains("sharedJars.each(verifySharedJar)"), "配置期必须校验共享 JAR");
-        require(build.contains("sharedModuleArchives"), "共享 JAR 必须显式映射工程产物名");
-        require(build.contains("${archive}-${repositoryVersion}.jar"),
-                "共享 JAR 输入必须跟随仓库 VERSION 真源");
-        require(!build.contains("${module}-0.1.0.jar"),
-                "共享 JAR 输入不得钉死历史 0.1.0 文件名");
-        require(build.contains("独立车道不会 includeBuild 根工程"),
-                "共享 JAR 校验文案须声明不依赖根 launcher 复合构建");
-        require(build.contains("register('server')")
-                        && build.contains("register('client')")
+                "Minecraft 26.2 不得声明 mappings（无混淆版本走 disableObfuscation 管线）");
+        // ADR-0025：插件统一为 top.wcpe.loom（WCPE Loom），版本在根 settings 单点 pin
+        require(build.contains("top.wcpe.loom"), "必须使用 WCPE Loom（top.wcpe.loom，ADR-0025）");
+        require(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.1"),
+                "根 settings 未冻结 top.wcpe.loom 1.17.1");
+        require(properties.contains("loom.platform=forge"), "gradle.properties 须声明 loom.platform=forge");
+        require(properties.contains("fabric.loom.disableObfuscation=true"),
+                "gradle.properties 须声明 disableObfuscation（26.2 无混淆无官方 mappings）");
+        // ADR-0026 决策 6：共享核心经同根构建项目产物消费，不再按 build/libs 路径硬编码
+        require(build.contains("moduleJar("), "共享模块必须经同根构建项目产物消费");
+        require(!build.contains("sharedJars"), "不得再按 build/libs 路径硬编码共享 JAR");
+        require(build.contains("acceptanceServer {")
+                        && build.contains("acceptanceClient {")
                         && build.contains("runRealServerAcceptance"),
                 "缺少要求的验收运行入口");
         require(build.contains("mpmt.acceptance.artifact.server-runtime"),
@@ -89,24 +85,17 @@ public final class Forge262ContractMain {
         require(build.contains("def realServerHostRequested"),
                 "真实服务端入口必须显式识别主机任务");
         require(build.contains("tasks.register('runRealServerAcceptanceHost')")
-                        && build.contains("dependsOn tasks.named('runServer')"),
-                "真实服务端入口必须复用 Forge runServer 启动链路");
+                        && build.contains("dependsOn tasks.named('runAcceptanceServer')"),
+                "真实服务端入口必须复用 loom runAcceptanceServer 启动链路");
         require(build.contains("def acceptanceServerRunDirectory")
                         && build.contains("realServerHostRequested ? 'run-realserver' : 'run-acceptance-server'")
-                        && build.contains("workingDir = layout.projectDirectory.dir(acceptanceServerRunDirectory)")
+                        && build.contains("runDir acceptanceServerRunDirectory")
                         && build.contains("project.file(\"${acceptanceServerRunDirectory}/acceptance-report.txt\").absolutePath"),
                 "真实服务端入口必须写入独立运行目录的报告");
         require(!build.contains("tasks.register('runRealServerAcceptanceHost', Exec)"),
                 "真实服务端入口不得直接以原版 server.jar 启动");
-        require(wrapper.contains("gradle-9.6.1-bin.zip"), "wrapper 版本必须为 9.6.1");
-        // 收纳后 wrapper 使用 validateDistributionUrl=true；不再硬编码历史 distributionSha256Sum
-        require(wrapper.contains("validateDistributionUrl=true")
-                        || wrapper.contains("distributionSha256Sum"),
-                "wrapper 须启用发行包校验（validateDistributionUrl 或 distributionSha256Sum）");
         require(projectDir.endsWith(Paths.get("platform", "forge", "26.2")),
-                "独立车道工程目录必须为 platform/forge/26.2");
-        require(unixLauncher.contains("JAVA_HOME"), "Unix 启动脚本未强制 JAVA_HOME");
-        require(windowsLauncher.contains("JAVA_HOME"), "Windows 启动脚本未强制 JAVA_HOME");
+                "车道工程目录必须为 platform/forge/26.2");
     }
 
     private static void verifyNetworkSources(Path projectDir) throws IOException {
@@ -137,15 +126,9 @@ public final class Forge262ContractMain {
     private static void verifyDevRunClasspath(Path projectDir) throws IOException {
         String build = read(projectDir.resolve("build.gradle"));
         String properties = read(projectDir.resolve("gradle.properties"));
-        int serverStart = build.indexOf("register('server')");
-        int clientStart = build.indexOf("register('client')");
+        int serverStart = build.indexOf("acceptanceServer {");
+        int clientStart = build.indexOf("acceptanceClient {");
         require(serverStart >= 0 && clientStart > serverStart, "缺少 server/client 运行配置");
-        require(!build.contains("mods {"),
-                "26.2 launcher metadata 不消费 source_roots，不得保留无效 mods 配置");
-        require(!build.contains("classpath sourceSets.acceptance.runtimeClasspath"),
-                "不得污染 Slime Launcher 自身的 JavaExec classpath");
-        require(!build.contains("it.runtimeClasspath.from(sourceSets.acceptance.output)"),
-                "额外 runtime classpath 目录不会被 26.2 开发态 locator 识别为 mod");
         require(build.contains("def installDevAcceptanceMod")
                         && build.contains("from acceptanceJar")
                         && build.contains("into modsDir"),
@@ -159,7 +142,7 @@ public final class Forge262ContractMain {
                 "真实服务端验收必须关闭线上认证，允许本地 Dev 客户端连接");
         require(build.contains("installDevAcceptanceMod(runDir)")
                         && build.contains("installDevAcceptanceMod(project.file('run-acceptance-client'))"),
-                "runServer/runClient 均须安装验收伴侣 JAR");
+                "runAcceptanceServer/runAcceptanceClient 均须安装验收伴侣 JAR");
         require(!properties.contains("net.minecraftforge.gradle.merge-source-sets"),
                 "不得重新启用已被实机证伪的 merge-source-sets 推测配置");
     }

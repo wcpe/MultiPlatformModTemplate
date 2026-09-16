@@ -3,8 +3,8 @@ package top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario;
 import java.util.concurrent.CountDownLatch;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 
-/** R6：经产品实际 FoliaSchedulerPort 验证全局调度入口。 */
-public final class GlobalSchedulerServerScenario extends R6ServerScenario {
+/** SCHEDULER：经产品实际 FoliaSchedulerPort 验证全局调度入口。 */
+public final class GlobalSchedulerServerScenario extends SchedulerServerScenario {
 
     @Override
     public String id() {
@@ -12,7 +12,7 @@ public final class GlobalSchedulerServerScenario extends R6ServerScenario {
     }
 
     @Override
-    protected void runR6(ServerGameTestContext context) {
+    protected void runScheduler(ServerGameTestContext context) {
         FoliaSchedulerScenarioSupport.assertFoliaScheduler(context);
         CountDownLatch executed = new CountDownLatch(1);
         ProductPluginAccess.runGlobalSchedulerTask(executed::countDown);

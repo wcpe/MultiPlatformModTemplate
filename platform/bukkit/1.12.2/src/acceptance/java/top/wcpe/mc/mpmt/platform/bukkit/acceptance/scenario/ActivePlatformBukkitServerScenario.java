@@ -2,8 +2,8 @@ package top.wcpe.mc.mpmt.platform.bukkit.acceptance.scenario;
 
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 
-/** R5：断言产品实际唯一活动平台为 Bukkit。 */
-public final class ActivePlatformBukkitServerScenario extends R5ServerScenario {
+/** HYBRID：断言产品实际唯一活动平台为 Bukkit。 */
+public final class ActivePlatformBukkitServerScenario extends HybridServerScenario {
 
     @Override
     public String id() {
@@ -11,7 +11,7 @@ public final class ActivePlatformBukkitServerScenario extends R5ServerScenario {
     }
 
     @Override
-    protected void runR5(ServerGameTestContext context) {
+    protected void runHybrid(ServerGameTestContext context) {
         context.assertEquals(
                 "bukkit",
                 ProductPluginAccess.activePlatformId(),

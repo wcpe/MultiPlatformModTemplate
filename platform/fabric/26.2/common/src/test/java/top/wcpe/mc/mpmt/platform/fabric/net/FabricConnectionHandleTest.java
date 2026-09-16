@@ -15,7 +15,7 @@ import sun.misc.Unsafe;
 /**
  * Fabric 连接句柄相等性契约（tip：按玩家 UUID）。
  *
- * <p>P2 曾按 {@code ServerPlayer} 身份相等；tip 文档与会话表键稳定要求按 UUID，本测覆盖 tip 语义。
+ * <p>此前曾按 {@code ServerPlayer} 身份相等；tip 文档与会话表键稳定要求按 UUID，本测覆盖 tip 语义。
  */
 class FabricConnectionHandleTest {
 

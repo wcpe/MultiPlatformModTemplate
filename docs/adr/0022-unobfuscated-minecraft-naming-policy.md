@@ -4,6 +4,8 @@
 
 已接受
 
+> **2026-09 注记（构建链路部分已更新）**：本 ADR 的**命名策略**（26.1+ 使用上游原始命名、不声明任何 mappings 依赖）继续有效。但其**加载器构建链路**的表述已被后续决策取代：Fabric 与 Forge 26.1+ 现在**统一使用 WCPE Loom**（Fabric 走 `fabric.loom.disableObfuscation`、Forge 走 `top.wcpe.loom-no-remap` 变体 + 复用 Forge 自身 mcp_config 的合并步骤），不再使用 ForgeGradle，也不再使用上游 `net.fabricmc.fabric-loom`；详见 [ADR-0025](0025-wcpe-loom-toolchain-unification.md) 决策 4 与 [ADR-0026](0026-single-build-subproject-unification.md)。下文决策中的 "ForgeGradle" / "fabric-loom" 字样属当时表述，保留为历史记录。
+
 ## 背景
 
 [ADR-0016](0016-mappings-policy.md) 以“存在 Mojang 官方映射时统一使用 Mojmap，否则按加载器回退”为前提，覆盖的是 Minecraft 仍以混淆制品发布的版本。Minecraft 26.1 起，上游游戏制品不再混淆，也不再发布对应的 Mojang mappings；映射制品缺失不代表 Fabric 不支持该游戏版本，而是旧的反混淆前提已经消失。

@@ -14,18 +14,17 @@ import org.junit.jupiter.api.Test;
 class MatrixScenarioCatalogTest {
 
     @Test
-    @DisplayName("R1–R4 与 R7 仅产品三件套；R5/R6 含专属场景")
+    @DisplayName("STANDARD 与 REALSERVER262 仅产品三件套；HYBRID/SCHEDULER 含专属场景")
     void 矩阵清单() {
         List<String> common =
                 Arrays.asList("product-handshake", "product-roundtrip", "client-hud");
-        assertEquals(common, MatrixScenarioCatalog.requiredFor("R1"));
-        assertEquals(common, MatrixScenarioCatalog.requiredFor("R4"));
-        assertEquals(common, MatrixScenarioCatalog.requiredFor("R7"));
-        assertTrue(MatrixScenarioCatalog.requiredFor("R5").contains("hybrid-forge-bukkit"));
-        assertTrue(MatrixScenarioCatalog.requiredFor("R6").contains("entity-scheduler"));
-        assertFalse(MatrixScenarioCatalog.allowsInMatrix("R1", "real-round-trip"));
-        assertFalse(MatrixScenarioCatalog.allowsInMatrix("R1", "smoke"));
-        assertTrue(MatrixScenarioCatalog.allowsInMatrix("R6", "global-scheduler"));
+        assertEquals(common, MatrixScenarioCatalog.requiredFor("STANDARD"));
+        assertEquals(common, MatrixScenarioCatalog.requiredFor("REALSERVER262"));
+        assertTrue(MatrixScenarioCatalog.requiredFor("HYBRID").contains("hybrid-forge-bukkit"));
+        assertTrue(MatrixScenarioCatalog.requiredFor("SCHEDULER").contains("entity-scheduler"));
+        assertFalse(MatrixScenarioCatalog.allowsInMatrix("STANDARD", "real-round-trip"));
+        assertFalse(MatrixScenarioCatalog.allowsInMatrix("STANDARD", "smoke"));
+        assertTrue(MatrixScenarioCatalog.allowsInMatrix("SCHEDULER", "global-scheduler"));
     }
 
     @Test

@@ -6,34 +6,28 @@ package top.wcpe.mc.mpmt.gradle.realserver
  * <p>客户端一律由**对应 loader 的 gametest / acceptance 伴侣**进服（自写 GameTest 伴侣、
  * quickPlay 或 FG/Neo runClient），不用 shell；mineflayer 仅 A 辅车道（mc-testkit）。
  *
- * <p>includeBuild 名与仓库根 settings 对齐：Fabric/Forge 按 MC 版本拆独立构建；
- * Bukkit 为根多模块（`platform:bukkit:版本`），本枚举的 includedBuildName 为 null，
- * 根包装任务直接 dependsOn 对应 server 工程。
+ * <p>ADR-0026 起全部平台车道均为**根构建子模块**，因此每条车道只需一个根工程任务路径；
+ * 不再区分"复合构建名"与"根多模块路径"。
  */
 enum class PlatformLane(
     val id: String,
     val displayName: String,
     val serverKind: ServerKind,
     val clientKind: ClientKind,
-    /** composite includeBuild 名；null = 根多模块或自有 launcher 车道 */
-    val includedBuildName: String?,
+    /** 根工程内该车道的真服门任务全路径；例：`:platform:fabric:fabric-1.20.1:runRealServerAcceptance` */
+    val rootTaskPath: String,
     /** 平台/模块内门禁任务名 */
     val verifyTaskName: String,
     val defaultReportHint: String,
-    /** 可选：默认矩阵（R5/R6）；空=P1 */
+    /** 可选：默认矩阵（HYBRID/SCHEDULER/REALSERVER262）；空=默认轨 */
     val defaultMatrix: String = "",
-    /**
-     * 根工程内任务路径（仅 includedBuildName==null 时用）。
-     * 例：`:platform:bukkit:1.20.1:runRealServerAcceptance`
-     */
-    val rootProjectTaskPath: String? = null,
 ) {
     FABRIC(
         id = "Fabric",
         displayName = "Fabric 1.20.1 专用服",
         serverKind = ServerKind.MOD_DEDICATED,
         clientKind = ClientKind.FABRIC_GAMETEST,
-        includedBuildName = "platform-fabric-1.20.1",
+        rootTaskPath = ":platform:fabric:fabric-1.20.1:runRealServerAcceptance",
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "build/acceptance/server-report.txt",
     ),
@@ -42,7 +36,7 @@ enum class PlatformLane(
         displayName = "Fabric 1.21.1 专用服",
         serverKind = ServerKind.MOD_DEDICATED,
         clientKind = ClientKind.FABRIC_GAMETEST,
-        includedBuildName = "platform-fabric-1.21.1",
+        rootTaskPath = ":platform:fabric:fabric-1.21.1:runRealServerAcceptance",
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "build/acceptance/server-report.txt",
     ),
@@ -51,17 +45,17 @@ enum class PlatformLane(
         displayName = "Fabric 26.2 专用服",
         serverKind = ServerKind.MOD_DEDICATED,
         clientKind = ClientKind.FABRIC_GAMETEST,
-        includedBuildName = "platform-fabric-26.2",
+        rootTaskPath = ":platform:fabric:fabric-26.2:runRealServerAcceptance",
         verifyTaskName = "runRealServerAcceptance",
-        defaultReportHint = "build/acceptance/server-report-r7.txt",
-        defaultMatrix = "R7",
+        defaultReportHint = "build/acceptance/server-report-realserver262.txt",
+        defaultMatrix = "REALSERVER262",
     ),
     FORGE(
         id = "Forge",
         displayName = "Forge 1.20.1 专用服",
         serverKind = ServerKind.MOD_DEDICATED,
         clientKind = ClientKind.FORGE_ACCEPTANCE,
-        includedBuildName = "platform-forge-1.20.1",
+        rootTaskPath = ":platform:forge:forge-1.20.1:runRealServerAcceptance",
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "run-server/acceptance-report.txt",
     ),
@@ -70,18 +64,18 @@ enum class PlatformLane(
         displayName = "Forge 26.2 专用服",
         serverKind = ServerKind.MOD_DEDICATED,
         clientKind = ClientKind.FORGE_ACCEPTANCE,
-        // ForgeGradle 7 与 JDK 25 由自有 wrapper 管理；根仅消费既有制品和报告。
-        includedBuildName = null,
+        // JDK 25 由根构建统一要求（ADR-0026 决策 4）；车道为标准子模块。
+        rootTaskPath = ":platform:forge:forge-26.2:runRealServerAcceptance",
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "run-acceptance-server/acceptance-report.txt",
-        defaultMatrix = "R7",
+        defaultMatrix = "REALSERVER262",
     ),
     NEOFORGE(
         id = "NeoForge",
         displayName = "NeoForge 1.20.2 专用服",
         serverKind = ServerKind.MOD_DEDICATED,
         clientKind = ClientKind.NEOFORGE_ACCEPTANCE,
-        includedBuildName = "platform-neoforge",
+        rootTaskPath = ":platform:neoforge:neoforge-1.20.2:runRealServerAcceptance",
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "run-server/acceptance-report.txt",
     ),
@@ -90,50 +84,46 @@ enum class PlatformLane(
         displayName = "Paper 1.20.1 插件宿主",
         serverKind = ServerKind.PLUGIN_HOST,
         clientKind = ClientKind.FABRIC_GAMETEST,
-        includedBuildName = null,
+        rootTaskPath = ":platform:bukkit:1.20.1:runRealServerAcceptance",
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "build/acceptance/server-report.txt",
-        rootProjectTaskPath = ":platform:bukkit:1.20.1:runRealServerAcceptance",
     ),
     BUKKIT_262(
         id = "Bukkit262",
         displayName = "Paper 26.2 插件宿主",
         serverKind = ServerKind.PLUGIN_HOST,
         clientKind = ClientKind.FABRIC_GAMETEST,
-        includedBuildName = null,
+        rootTaskPath = ":platform:bukkit:26.2:runRealServerAcceptance",
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "build/acceptance/server-report.txt",
-        defaultMatrix = "R7",
-        rootProjectTaskPath = ":platform:bukkit:26.2:runRealServerAcceptance",
+        defaultMatrix = "REALSERVER262",
     ),
     FOLIA(
         id = "Folia",
         displayName = "Folia 1.20.1 插件宿主（区域调度）",
         serverKind = ServerKind.PLUGIN_HOST,
         clientKind = ClientKind.FABRIC_GAMETEST,
-        includedBuildName = null,
+        rootTaskPath = ":platform:bukkit:1.20.1:runRealServerAcceptance",
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "build/acceptance/server-report.txt",
-        defaultMatrix = "R6",
-        rootProjectTaskPath = ":platform:bukkit:1.20.1:runRealServerAcceptance",
+        defaultMatrix = "SCHEDULER",
     ),
     CATSERVER(
         id = "CatServer",
         displayName = "CatServer 1.12.2 融合服（Bukkit 活跃）",
         serverKind = ServerKind.PLUGIN_HOST,
         clientKind = ClientKind.FORGE_112_OPTIONAL,
-        includedBuildName = null,
+        rootTaskPath = ":platform:bukkit:1.12.2:runRealServerAcceptance",
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "build/acceptance/server-report.txt",
-        defaultMatrix = "R5",
-        rootProjectTaskPath = ":platform:bukkit:1.12.2:runRealServerAcceptance",
+        defaultMatrix = "HYBRID",
     ),
     SPONGE(
         id = "Sponge",
         displayName = "SpongeVanilla 1.20.1 宿主",
         serverKind = ServerKind.PLUGIN_HOST,
         clientKind = ClientKind.FABRIC_GAMETEST,
-        includedBuildName = "platform-sponge",
+        rootTaskPath = ":platform:sponge:sponge-1.20.1:runRealServerAcceptance",
         verifyTaskName = "runRealServerAcceptance",
         defaultReportHint = "run/acceptance-report.txt",
     ),
@@ -156,7 +146,7 @@ enum class PlatformLane(
         /** NeoForge acceptance 伴侣 */
         NEOFORGE_ACCEPTANCE,
 
-        /** Forge 1.12.2 伴侣（R5 optional） */
+        /** Forge 1.12.2 伴侣（HYBRID optional） */
         FORGE_112_OPTIONAL,
     }
 

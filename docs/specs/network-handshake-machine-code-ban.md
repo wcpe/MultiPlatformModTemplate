@@ -147,7 +147,7 @@ core-domain/ …/core/domain/port/{TransportPort,ConnectionHandle,MachineCodePro
 core-server/ …/{HandshakeServerService,BanService}.java   core-client/ …/{HandshakeClientService,DefaultMachineCodeProvider}.java
 platform-spi/ …/{TransportFactory,CommandRegistrar,CommandContext}.java
 platform-bukkit/ …/net/{BukkitTransport,...} + version/{v1_20,...}/网络注册 + 原生命令(MachineCodeBanCommand)
-platform-{sponge,fabric,forge,neoforge}/（各独立 includeBuild）…/net/<Platform>Transport + 版本注册 + 原生命令(Brigadier/Sponge)
+platform-{sponge,fabric,forge,neoforge}/（均为根构建子模块，ADR-0026）…/net/<Platform>Transport + 版本注册 + 原生命令(Brigadier/Sponge)
 ```
 
 ### 3.9 线程模型与命令归属（依据 ADR-0013/0009）

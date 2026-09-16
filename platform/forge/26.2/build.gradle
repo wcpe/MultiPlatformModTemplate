@@ -1,9 +1,11 @@
 import java.io.DataInputStream
-import java.util.jar.JarFile
+import java.net.Socket
+import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
 import com.github.spotbugs.snom.Confidence
 import com.github.spotbugs.snom.Effort
 import com.github.spotbugs.snom.SpotBugsTask
+
 import org.gradle.api.plugins.quality.Checkstyle
 import org.gradle.api.plugins.quality.Pmd
 import org.gradle.api.tasks.PathSensitivity
@@ -11,124 +13,41 @@ import org.gradle.testing.jacoco.tasks.JacocoReport
 
 plugins {
     id 'java'
-    id 'net.minecraftforge.gradle' version '7.0.31'
-    id 'com.github.spotbugs' version '6.0.26'
-    id 'org.jlleitschuh.gradle.ktlint' version '12.1.1'
-    id 'io.gitlab.arturbosch.detekt' version '1.23.7'
-    id 'org.jetbrains.kotlinx.kover' version '0.8.3'
+    // EGT 迁移（ADR-0025 后续）： Forge 26.2 改用本地 wcpe loom fork（architectury-loom 系，
+    // 为无混淆 Forge 补齐 mcp merge 预补丁管线）；版本由 settings pluginManagement 钉在 mavenLocal。
+    id 'top.wcpe.loom-no-remap'
 }
 
-// FG7 强制 Gradle >= 9.3.0；且 Gradle 8.x 无法解析 Java 25 版本号
-if (gradle.gradleVersion != '9.6.1') {
-    throw new GradleException("Forge 26.2 车道只允许 Gradle 9.6.1，当前为 ${gradle.gradleVersion}")
-}
-// MC 26.2 的 javaVersion.majorVersion=25，ForgeGradle 6 强制 toolchain >= 25
+// MC 26.2 的 loom 配置期要求守护 JVM 25（loom 对 MC 26.2 有版本硬校验）
 if (JavaVersion.current().majorVersion.toInteger() < 25) {
     throw new GradleException("Forge 26.2 配置期必须使用 Java 25 及以上，当前为 ${System.getProperty('java.version')}")
 }
 
-// 本工程已提升为仓库根下独立目录 platform-forge-26.2（不再嵌套 platform-forge/modern-1_21）
-def repositoryRoot = file('../../..').canonicalFile
-def versionFile = new File(repositoryRoot, 'VERSION')
-if (!versionFile.isFile()) {
-    throw new GradleException("缺少仓库版本文件：${versionFile}")
-}
-def repositoryVersion = versionFile.getText('UTF-8').trim()
-// 26.2 车道跟随仓库 VERSION 真源（不再钉死 0.1.0）
-
-group = 'top.wcpe.mc.mpmt'
-version = repositoryVersion
+// 本工程为根构建的普通子模块（platform/forge/26.2）；group / version 由根 allprojects 统一提供。
 
 ext {
     minecraftVersion = '26.2'
     forgeVersion = '26.2-65.0.9'
-    forgeGradleVersion = '7.0.31'
+    loomVersion = '1.17.1'
     productChannel = 'mpmt:main'
     acceptanceChannel = 'mpmt-test:acceptance'
-    sharedModules = [
-        'core-domain',
-        'core-runtime',
-        'core-client',
-        'core-server',
-        'protocol',
-        'platform-spi',
-        'acceptance'
-    ]
-    productSharedModules = sharedModules.findAll { it != 'acceptance' }
-    sharedRequiredClasses = [
-        'core-domain': 'top/wcpe/mc/mpmt/core/domain/port/TransportPort.class',
-        'core-runtime': 'top/wcpe/mc/mpmt/core/runtime/MpmtRuntime.class',
-        'core-client': 'top/wcpe/mc/mpmt/core/client/ClientNetworkFeature.class',
-        'core-server': 'top/wcpe/mc/mpmt/core/server/ServerNetworkFeature.class',
-        'protocol': 'top/wcpe/mc/mpmt/protocol/PacketCodec.class',
-        'platform-spi': 'top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class',
-        'acceptance': 'top/wcpe/mc/mpmt/acceptance/report/AcceptanceReportV2Factory.class'
-    ]
-    // 物理收纳后 jar 不在仓库根直下，按模块映射目录
-    sharedModuleDirs = [
-        'core-domain': 'core/domain',
-        'core-runtime': 'core/runtime',
-        'core-client': 'core/client',
-        'core-server': 'core/server',
-        'protocol': 'core/protocol',
-        'platform-spi': 'core/spi',
-        'acceptance': 'modules/acceptance',
-    ]
-    // Gradle 默认以工程名命名产物；逻辑模块名与工程名不同时显式映射。
-    sharedModuleArchives = [
-        'core-domain': 'domain',
-        'core-runtime': 'runtime',
-        'core-client': 'client',
-        'core-server': 'server',
-        'protocol': 'protocol',
-        'platform-spi': 'spi',
-        'acceptance': 'acceptance',
-    ]
-    sharedJars = sharedModules.collectEntries { module ->
-        def dir = sharedModuleDirs[module] ?: module
-        def archive = sharedModuleArchives[module] ?: module
-        [(module): new File(repositoryRoot, "${dir}/build/libs/${archive}-${repositoryVersion}.jar")]
-    }
 }
 
-def verifySharedJar = { String module, File jarFile ->
-    if (!jarFile.isFile()) {
-        throw new GradleException("缺少共享 JAR：${jarFile}。独立车道不会 includeBuild 根工程，请先由调用方准备 ${repositoryVersion} JAR。")
-    }
-    def expectedArchive = sharedModuleArchives[module] ?: module
-    if (jarFile.name != "${expectedArchive}-${repositoryVersion}.jar") {
-        throw new GradleException("共享 JAR 文件名不匹配：${jarFile.name}，期望 ${expectedArchive}-${repositoryVersion}.jar")
-    }
-    JarFile jar = new JarFile(jarFile)
-    try {
-        String requiredClass = sharedRequiredClasses[module]
-        if (jar.getJarEntry(requiredClass) == null) {
-            throw new GradleException("共享 JAR 缺少必需类：${module} -> ${requiredClass}")
-        }
-        jar.entries().each { entry ->
-            if (!entry.directory && entry.name.endsWith('.class')) {
-                DataInputStream input = new DataInputStream(jar.getInputStream(entry))
-                try {
-                    if (input.readInt() != (int) 0xCAFEBABE) {
-                        throw new GradleException("共享 JAR 类文件魔数错误：${module}!/${entry.name}")
-                    }
-                    input.readUnsignedShort()
-                    int major = input.readUnsignedShort()
-                    if (major > 52) {
-                        throw new GradleException("共享 L0-L2 JAR 超过 Java 8 字节码：${module}!/${entry.name} major=${major}")
-                    }
-                } finally {
-                    input.close()
-                }
-            }
-        }
-    } finally {
-        jar.close()
-    }
+// 共享模块已为根构建子模块：按工程路径取各模块 jar 任务产物（FileCollection，自带任务依赖）
+def moduleJar = { String projectPath ->
+    files(project(projectPath).tasks.withType(org.gradle.jvm.tasks.Jar).matching { it.name == 'jar' })
 }
 
-// 独立车道在配置期冻结全部本地共享输入，不复合加载根工程。
-sharedJars.each(verifySharedJar)
+// 共享模块（L0-L2）项目路径；platform-spi 项目名为 core:spi；acceptance 仅进验收伴侣，不进产品
+def productSharedProjects = [
+    ':core:domain',
+    ':core:runtime',
+    ':core:client',
+    ':core:server',
+    ':core:protocol',
+    ':core:spi'
+]
+def acceptanceSharedProjects = productSharedProjects + [':modules:acceptance']
 
 base {
     archivesName = 'mpmt-forge-26.2'
@@ -192,27 +111,27 @@ configurations.contractTestImplementation.extendsFrom(configurations.testImpleme
 configurations.contractTestRuntimeOnly.extendsFrom(configurations.testRuntimeOnly)
 
 repositories {
-    // FG7：Mavenizer 生成的本地 maven 必须置于首位，其后为 Forge 与 MC 依赖库仓库
-    minecraft.mavenizer(it)
-    maven fg.forgeMaven
-    maven fg.minecraftLibsMaven
+    // loom：Mojang libraries 由 loom 自动注入；这里补 Forge 制品（universal/userdev/binarypatcher 等）与常规仓库
     mavenCentral()
+    maven { url = 'https://maven.minecraftforge.net/' }
 }
 
 dependencies {
-    // FG7 取消 minecraft 配置项，改为 minecraft.dependency(...) 产出的 module 依赖
-    implementation minecraft.dependency("net.minecraftforge:forge:${forgeVersion}")
+    // arch-loom 三段式声明：原版 MC 本体（26.2 无混淆、无官方 mappings，走 disableObfuscation 管线）
+    // + Forge（arch-loom 自行解析 userdev）；共享 JAR 消费与 FG7 时代保持一致
+    minecraft "com.mojang:minecraft:${minecraftVersion}"
+    forge "net.minecraftforge:forge:${forgeVersion}"
 
-    // 共享 JAR 仅 compileOnly：1.21 FML 模块层会把 runtime 上的 jar 当自动模块，
+    // 共享 JAR 仅 compileOnly：FML 模块层会把 runtime 上的 jar 当自动模块，
     // 与 SecureJar 内嵌同名包冲突（split package，如 acceptance vs mpmt_acceptance）。
     // 运行期由 embed* / jar shade 把类放进 mod 目录，不进 module path。
-    compileOnly files(productSharedModules.collect { sharedJars[it] })
-    productBundle files(productSharedModules.collect { sharedJars[it] })
+    compileOnly files(productSharedProjects.collect { moduleJar(it) })
+    productBundle files(productSharedProjects.collect { moduleJar(it) })
 
-    acceptanceCompileOnly files(sharedModules.collect { sharedJars[it] })
-    acceptanceBundle files(sharedJars['acceptance'])
+    acceptanceCompileOnly files(acceptanceSharedProjects.collect { moduleJar(it) })
+    acceptanceBundle files(moduleJar(':modules:acceptance'))
 
-    testImplementation files(sharedModules.collect { sharedJars[it] })
+    testImplementation files(acceptanceSharedProjects.collect { moduleJar(it) })
     testImplementation platform('org.junit:junit-bom:5.10.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -242,7 +161,8 @@ def archiveExcludes = [
 ]
 
 tasks.named('jar', Jar) {
-    archiveClassifier = ''
+    // disableObfuscation 下 loom 不注册 remapJar（NonRemappedJarTaskConfiguration）：
+    // jar 任务保持默认输出 build/libs/<name>-<v>.jar，自身即权威产品 jar（loom 仅追加清单服务）。
     from {
         configurations.productBundle.collect { zipTree(it) }
     }
@@ -290,7 +210,7 @@ def realServerHostRequested = gradle.startParameter.taskNames.any {
 apply plugin: 'checkstyle'
 checkstyle {
     toolVersion = '10.17.0'
-    configFile = file('../../../config/checkstyle/checkstyle.xml')
+    configFile = rootProject.file('config/checkstyle/checkstyle.xml')
     ignoreFailures = false
     maxWarnings = 0
 }
@@ -298,7 +218,7 @@ apply plugin: 'pmd'
 pmd {
     toolVersion = '7.16.0'
     consoleOutput = true
-    ruleSetConfig = resources.text.fromFile(file('../../../config/pmd/ruleset.xml'))
+    ruleSetConfig = resources.text.fromFile(rootProject.file('config/pmd/ruleset.xml'))
     ruleSets = []
     ignoreFailures = false
 }
@@ -314,14 +234,10 @@ spotbugs {
     ignoreFailures = false
     effort.set(Effort.valueOf('MAX'))
     reportLevel.set(Confidence.valueOf('MEDIUM'))
-    excludeFilter.set(file('../../../config/spotbugs/exclude.xml'))
+    excludeFilter.set(rootProject.file('config/spotbugs/exclude.xml'))
 }
 dependencies.add('spotbugsPlugins', 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0')
-tasks.withType(JavaCompile).configureEach {
-    inputs.file(file('../../../lombok.config'))
-            .withPropertyName('lombokConfig')
-            .withPathSensitivity(PathSensitivity.RELATIVE)
-}
+// lombok.config 由根构建 subprojects{} 统一登记为编译输入（ADR-0026），此处不再重复。
 def analysisLauncher = javaToolchains.launcherFor {
     languageVersion = JavaLanguageVersion.of(25)
 }
@@ -346,40 +262,54 @@ def staticQualityTasks = [
 def acceptanceServerRunDirectory =
         realServerHostRequested ? 'run-realserver' : 'run-acceptance-server'
 
-minecraft {
+loom {
     runs {
-        // Forge 26.2 的 launcher metadata 不消费 FG7 生成的 source_roots，因此 mods/source
-        // 不会进入实际启动参数。独立验收 JAR 在启动前安装到各自 mods 目录。
-        register('server') {
-            workingDir = layout.projectDirectory.dir(acceptanceServerRunDirectory)
-            systemProperty 'forge.logging.console.level', 'info'
-            systemProperty 'mpmt.acceptance', 'true'
-            systemProperty 'mpmt.acceptance.report',
+        // 配置名决定任务名：acceptanceServer -> runAcceptanceServer（主类由 forge 运行模板注入，
+        // userdev config runs.main = net.minecraftforge.bootstrap.ForgeBootstrap）。
+        // source 指定任务 classpath 基底；mods 声明经 ForgeModClassesService 写入 MOD_CLASSES
+        //（等价 FG7 时代 dev SecureJar 的 source_roots 语义）。
+        acceptanceServer {
+            server()
+            configName = 'Acceptance Server'
+            source sourceSets.acceptance
+            runDir acceptanceServerRunDirectory
+            property 'forge.logging.console.level', 'info'
+            property 'mpmt.acceptance', 'true'
+            property 'mpmt.acceptance.report',
                     project.file("${acceptanceServerRunDirectory}/acceptance-report.txt").absolutePath
             // 允许 -Pmpmt.acceptance.deadlineMs 覆盖；默认 600s 覆盖慢机冷启动
-            systemProperty 'mpmt.acceptance.deadlineMs', (project.findProperty('mpmt.acceptance.deadlineMs') ?: '600000')
-            args '--nogui'
+            property 'mpmt.acceptance.deadlineMs', (project.findProperty('mpmt.acceptance.deadlineMs') ?: '600000')
+            // loom 的 forge server 模板已自带 nogui 程序参数，无需（不可）重复声明
+            mods {
+                mpmt {
+                    sourceSet sourceSets.main
+                }
+                mpmt_acceptance {
+                    sourceSet sourceSets.acceptance
+                }
+            }
         }
-        register('client') {
-            workingDir = layout.projectDirectory.dir('run-acceptance-client')
-            systemProperty 'forge.logging.console.level', 'info'
+        acceptanceClient {
+            client()
+            configName = 'Acceptance Client'
+            source sourceSets.acceptance
+            runDir 'run-acceptance-client'
+            property 'forge.logging.console.level', 'info'
             // quickPlay 作辅；主路径由伴侣 tryAutoConnect 读系统属性 mpmt.acceptance.server
-            args '--quickPlayMultiplayer', (project.findProperty('mpmt.acceptance.server') ?: '127.0.0.1')
+            programArgs '--quickPlayMultiplayer', (project.findProperty('mpmt.acceptance.server') ?: '127.0.0.1')
+            mods {
+                mpmt {
+                    sourceSet sourceSets.main
+                }
+                mpmt_acceptance {
+                    sourceSet sourceSets.acceptance
+                }
+            }
         }
-    }
-}
-
-def verifySharedInputs = tasks.register('verifySharedInputs') {
-    group = 'verification'
-    description = '校验独立车道全部当前版本共享 JAR 输入'
-    inputs.files files(sharedJars.values())
-    doLast {
-        sharedJars.each(verifySharedJar)
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
-    dependsOn verifySharedInputs
     options.encoding = 'UTF-8'
     options.release = 25
     options.compilerArgs += ['-Xlint:all']
@@ -391,7 +321,7 @@ tasks.withType(JavaCompile).configureEach {
 def embedProductSharedIntoMain = tasks.register('embedProductSharedIntoMain', Copy) {
     group = 'build'
     description = '将产品共享 JAR 嵌入 main classes，供 FG6 SecureJar 发现 @Mod 与依赖类'
-    dependsOn classes, processResources, verifySharedInputs
+    dependsOn classes, processResources
     from {
         configurations.productBundle.collect { zipTree(it) }
     }
@@ -404,7 +334,7 @@ def embedProductSharedIntoMain = tasks.register('embedProductSharedIntoMain', Co
 def embedAcceptanceSharedIntoAcceptance = tasks.register('embedAcceptanceSharedIntoAcceptance', Copy) {
     group = 'build'
     description = '将验收共享 JAR 嵌入 acceptance classes，供 FG6 SecureJar 加载验收伴侣'
-    dependsOn acceptanceClasses, processAcceptanceResources, verifySharedInputs
+    dependsOn acceptanceClasses, processAcceptanceResources
     from {
         configurations.acceptanceBundle.collect { zipTree(it) }
     }
@@ -456,7 +386,9 @@ def classMajor = { ZipFile zip, String name ->
 def verifyPackaging = tasks.register('verifyPackaging') {
     group = 'verification'
     description = '校验产品与验收 JAR 隔离、入口、共享核心和 Java 25 平台字节码'
-    dependsOn tasks.named('jar'), acceptanceJar
+    // 产品 jar 即 loom jar 任务输出（26.2 无混淆无 remapJar，见 NonRemappedJarTaskConfiguration），
+    // jar 依赖 embed 链；disableObfuscation 下 loom 不接管 jar 产物路径。
+    dependsOn tasks.named('jar', Jar), acceptanceJar
     doLast {
         File product = tasks.named('jar', Jar).get().archiveFile.get().asFile
         File acceptance = acceptanceJar.get().archiveFile.get().asFile
@@ -517,11 +449,11 @@ tasks.withType(Test).configureEach {
 }
 
 test {
-    systemProperty 'mpmt.test.repositoryRoot', repositoryRoot.absolutePath
+    systemProperty 'mpmt.test.repositoryRoot', rootProject.projectDir.absolutePath
     systemProperty 'mpmt.test.projectDir', projectDir.absolutePath
     systemProperty 'mpmt.test.minecraftVersion', minecraftVersion
     systemProperty 'mpmt.test.forgeVersion', forgeVersion
-    systemProperty 'mpmt.test.forgeGradleVersion', forgeGradleVersion
+    systemProperty 'mpmt.test.loomVersion', loomVersion
     systemProperty 'mpmt.test.gradleVersion', gradle.gradleVersion
 }
 
@@ -532,11 +464,11 @@ def contractTest = tasks.register('contractTest', JavaExec) {
     classpath = sourceSets.contractTest.runtimeClasspath
     mainClass = 'top.wcpe.mc.mpmt.platform.forge.modern.contract.Forge262ContractMain'
     javaLauncher = java25Launcher
-    systemProperty 'mpmt.test.repositoryRoot', repositoryRoot.absolutePath
+    systemProperty 'mpmt.test.repositoryRoot', rootProject.projectDir.absolutePath
     systemProperty 'mpmt.test.projectDir', projectDir.absolutePath
     systemProperty 'mpmt.test.minecraftVersion', minecraftVersion
     systemProperty 'mpmt.test.forgeVersion', forgeVersion
-    systemProperty 'mpmt.test.forgeGradleVersion', forgeGradleVersion
+    systemProperty 'mpmt.test.loomVersion', loomVersion
     systemProperty 'mpmt.test.gradleVersion', gradle.gradleVersion
     systemProperty 'mpmt.test.productJar', tasks.named('jar', Jar).flatMap { it.archiveFile }.get().asFile.absolutePath
     systemProperty 'mpmt.test.acceptanceJar', acceptanceJar.flatMap { it.archiveFile }.get().asFile.absolutePath
@@ -551,12 +483,18 @@ def requiredRunProperty = { String name ->
 }
 
 def configureReportProperties = { task ->
-    File serverRuntime = file(requiredRunProperty('mpmt.acceptance.artifact.server-runtime'))
+    File product = tasks.named('jar', Jar).get().archiveFile.get().asFile
+    File acceptance = acceptanceJar.get().archiveFile.get().asFile
+    // server-runtime 与其余角色同口径（镜像 fabric 26.2 的 artifactOrProduct）：
+    // 显式传入时必须是真实文件（真实专用服路径），未传入则回落产品 jar——dev 编排起的是 loom dev 服务端，
+    // 其"运行期制品"即产品 jar；否则 dev 编排会被迫依赖一个不存在的外部服务端 jar。
+    Object serverRuntimeProperty = project.findProperty('mpmt.acceptance.artifact.server-runtime')
+    File serverRuntime = serverRuntimeProperty == null || serverRuntimeProperty.toString().isEmpty()
+            ? product
+            : file(serverRuntimeProperty.toString())
     if (!serverRuntime.isFile()) {
         throw new GradleException("server-runtime 必须是调用方显式提供的实际文件：${serverRuntime}")
     }
-    File product = tasks.named('jar', Jar).get().archiveFile.get().asFile
-    File acceptance = acceptanceJar.get().archiveFile.get().asFile
     task.systemProperty 'mpmt.acceptance.runId', requiredRunProperty('mpmt.acceptance.runId')
     task.systemProperty 'mpmt.acceptance.matrix', requiredRunProperty('mpmt.acceptance.matrix')
     task.systemProperty 'mpmt.acceptance.startEpochMs', requiredRunProperty('mpmt.acceptance.startEpochMs')
@@ -611,8 +549,8 @@ def prepareAcceptanceServerProperties = { File runDir ->
     propertiesFile.setText(updatedLines.join(System.lineSeparator()) + System.lineSeparator(), 'UTF-8')
 }
 
-tasks.matching { it.name == 'runServer' }.configureEach {
-    // packageArtifacts 供报告属性取 jar 路径；prepareDevModOutputs 供 SecureJar 实际加载
+tasks.matching { it.name == 'runAcceptanceServer' }.configureEach {
+    // packageArtifacts 供报告属性取 jar 路径；prepareDevModOutputs 供 MOD_CLASSES 实际加载
     dependsOn packageArtifacts, prepareDevModOutputs
     if (it instanceof JavaExec) {
         it.javaLauncher = java25Launcher
@@ -641,7 +579,7 @@ tasks.matching { it.name == 'runServer' }.configureEach {
     }
 }
 
-tasks.matching { it.name == 'runClient' }.configureEach {
+tasks.matching { it.name == 'runAcceptanceClient' }.configureEach {
     dependsOn packageArtifacts, prepareDevModOutputs
     if (it instanceof JavaExec) {
         it.javaLauncher = java25Launcher
@@ -694,11 +632,135 @@ tasks.register('verifyAcceptanceReport') {
     }
 }
 
-/** 仅起真实 Forge 专用服（须 -Pmpmt.acceptance.artifact.server-runtime=…）；客户端请另开终端 runClient。 */
+/** 仅起真实 Forge 专用服（须 -Pmpmt.acceptance.artifact.server-runtime=…）；客户端请另开终端 runAcceptanceClient。 */
+/** 单 Gradle 编排：起服 → 等端口 → 起客户端伴侣 → 等同轮报告（镜像 fabric lane 的 launchAcceptanceProcess 模式）。 */
+tasks.register('runForgeRealServer262Acceptance') {
+    group = 'verification'
+    description = '单 Gradle 编排 Forge 26.2 REALSERVER262 服务端与客户端验收'
+    // 同 fabric 26.2：本任务用 ProcessBuilder 直接拉起 run 任务命令行、绕过任务图，
+    // 必须显式依赖 loom 的 generateDLIConfig（写出 dev-launch-injector 的 launch.cfg），
+    // 否则 dev 启动不注入任何 mod、验收场景不执行 → 超时无报告。
+    dependsOn packageArtifacts, prepareDevModOutputs, 'generateDLIConfig'
+    doLast {
+        def runId = requiredRunProperty('mpmt.acceptance.runId')
+        requiredRunProperty('mpmt.acceptance.matrix')
+        requiredRunProperty('mpmt.acceptance.startEpochMs')
+        def report = file('run-acceptance-server/acceptance-report.txt')
+        def logDir = new File(buildDir, 'acceptance-logs')
+        logDir.mkdirs()
+
+        // 编排模式下 run 任务的 doFirst 不会执行，这里等价执行其准备工作
+        def serverTask = tasks.named('runAcceptanceServer', JavaExec).get()
+        def clientTask = tasks.named('runAcceptanceClient', JavaExec).get()
+        installDevAcceptanceMod(file('run-acceptance-server'))
+        prepareAcceptanceServerProperties(file('run-acceptance-server'))
+        configureReportProperties(serverTask)
+        installDevAcceptanceMod(file('run-acceptance-client'))
+        clientTask.systemProperty 'mpmt.acceptance.javaExecutable', java25Launcher.get().executablePath.asFile.absolutePath
+        clientTask.systemProperty 'mpmt.acceptance.server',
+                (project.findProperty('mpmt.acceptance.server') ?: '127.0.0.1:25566').toString()
+
+        // 进程命令行复刻 gradle JavaExec 启动（镜像 fabric launchAcceptanceProcess）：
+        // jvmArguments = @argfile（classpath）+ internal vmArgs（-Dfabric.dli.* 与全部 -D 属性）；
+        // 本轮系统属性去重后重注，保证编排注入值覆盖 loom 配置期默认值
+        def launchAcceptanceProcess = { JavaExec task, File logFile, File workDir ->
+            def command = [task.javaLauncher.get().executablePath.asFile.absolutePath]
+            def systemPropertyPrefixes = task.systemProperties.keySet().collect { "-D$it=" }
+            // 必须用 allJvmArgs（镜像 fabric lane）：Windows 下长类路径由 Gradle 写成 argfile，
+            // 该 @argfile 只出现在 allJvmArgs 里、不在 jvmArguments 中；漏掉它会导致 java 拿不到类路径，
+            // 报 "找不到或无法加载主类 net.fabricmc.devlaunchinjector.Main"。
+            command += task.allJvmArgs.findAll { arg ->
+                arg != null && !systemPropertyPrefixes.any { arg.startsWith(it) }
+            }
+            command += task.systemProperties.collect { k, v -> "-D$k=$v" }
+            command += task.mainClass.get()
+            command += task.args
+            task.argumentProviders.each { provider -> command += provider.asArguments().toList() }
+            // ProcessBuilder(List<String>) 会做一次底层 arraycopy；执行期由 argumentProviders 惰性产出的
+            // 参数可能不是 String（如 File / Path），此时抛 ArrayStoreException：
+            // "arraycopy: element type mismatch ... to java.lang.String"。
+            // 命令行元素统一按其字符串形式归一，并打印非 String 元素类型以便定位。
+            def nonStringTypes = command.findAll { it != null && !(it instanceof String) }
+                    .collect { it.getClass().name }.unique()
+            if (!nonStringTypes.isEmpty()) {
+                logger.lifecycle("[realserver] ${task.name} 命令行含非 String 参数，已按字符串归一：${nonStringTypes}")
+            }
+            command = command.findAll { it != null }.collect { it.toString() }
+            logger.lifecycle("[realserver] 启动 ${task.name}…")
+            logFile.parentFile.mkdirs()
+            return new ProcessBuilder(command)
+                .directory(workDir)
+                .redirectErrorStream(true)
+                .redirectOutput(logFile)
+                .start()
+        }
+
+        def server = null
+        def client = null
+        try {
+            // ① 起 dev 服务端
+            server = launchAcceptanceProcess(serverTask, new File(logDir, 'realserver262-server.log'), file(acceptanceServerRunDirectory))
+
+            // ② 等服务端监听 25566（Java 25 冷启动窗口）
+            def portDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(300)
+            def portOpen = false
+            while (System.nanoTime() < portDeadline) {
+                if (!server.isAlive()) break
+                try {
+                    new Socket('127.0.0.1', 25566).close()
+                    portOpen = true
+                    break
+                } catch (Exception ignored) {
+                    Thread.sleep(500)
+                }
+            }
+            if (!portOpen) {
+                def tail = serverLogFile0(logDir)
+                throw new GradleException("[realserver] 服务端未监听 25566：" + System.lineSeparator() + "$tail")
+            }
+
+            // ③ 起客户端伴侣（自连 127.0.0.1:25566；GUI 窗口在用户桌面，场景全自动）
+            client = launchAcceptanceProcess(clientTask, new File(logDir, 'realserver262-client.log'), file('run-acceptance-client'))
+
+            // ④ 等同轮报告（驱动看门狗 600s；此处留 660s 余量）
+            def deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(660_000)
+            def reportLine = "RUN_ID" + "	" + "$runId"
+            while (System.nanoTime() < deadline) {
+                if (report.isFile() && report.getText('UTF-8').contains(reportLine)) break
+                if (!server.isAlive() && !(report.isFile() && report.getText('UTF-8').contains(reportLine))) break
+                Thread.sleep(500)
+            }
+            if (!report.isFile() || !report.getText('UTF-8').contains(reportLine)) {
+                def tail = new File(logDir, 'realserver262-server.log').isFile()
+                        ? new File(logDir, 'realserver262-server.log').readLines().takeRight(30).join(System.lineSeparator()) : ''
+                throw new GradleException("[realserver] REALSERVER262 未在截止前生成当前运行报告（$runId）：${report.absolutePath}" + System.lineSeparator() + "$tail")
+            }
+            def lines = report.getText('UTF-8').readLines().collect { it.trim() }.findAll { it }
+            def last = lines.last()
+            if (last != 'RESULT PASS') {
+                throw new GradleException("[realserver] 验收未通过（$last）：${report.absolutePath}")
+            }
+            logger.lifecycle("[realserver] Forge 26.2 REALSERVER262 报告 PASS：${report.absolutePath}")
+        } finally {
+            [client, server].each { proc ->
+                if (proc != null && proc.isAlive()) {
+                    proc.destroy()
+                    if (!proc.waitFor(10, TimeUnit.SECONDS)) proc.destroyForcibly()
+                }
+            }
+        }
+    }
+}
+
+def serverLogFile0(File logDir) {
+    def f = new File(logDir, 'realserver262-server.log')
+    return f.isFile() ? f.readLines().takeRight(30).join(System.lineSeparator()) : '无服务端日志'
+}
+
 tasks.register('runRealServerAcceptanceHost') {
     group = 'verification'
-    description = '通过 Forge runServer 启动真实专用服（不含客户端伴侣；不含报告门）'
-    dependsOn tasks.named('runServer')
+    description = '通过 Forge runAcceptanceServer 启动真实专用服（不含客户端伴侣；不含报告门）'
+    dependsOn tasks.named('runAcceptanceServer')
 }
 
 /** 报告门：须先完成「服 + 客户端伴侣」并落 RESULT PASS 报告。 */
@@ -719,13 +781,13 @@ tasks.register('printRealServerAcceptanceRecipe') {
             |1) 本目录构建产物：
             |   ./gradlew --no-daemon packageArtifacts
             |2) 起服（二选一）：
-            |   a) dev 服：./gradlew --no-daemon runServer
+            |   a) dev 服：./gradlew --no-daemon runAcceptanceServer
             |   b) 真实专用服：./gradlew --no-daemon runRealServerAcceptanceHost \\
             |        -Pmpmt.acceptance.artifact.server-runtime=<forge-server.jar> \\
             |        -Pmpmt.acceptance.runId=... -Pmpmt.acceptance.matrix=... \\
             |        -Pmpmt.acceptance.startEpochMs=...
             |3) 另开终端客户端伴侣：
-            |   ./gradlew --no-daemon runClient -Pmpmt.acceptance.server=127.0.0.1:<port>
+            |   ./gradlew --no-daemon runAcceptanceClient -Pmpmt.acceptance.server=127.0.0.1:<port>
             |4) 报告门：
             |   ./gradlew --no-daemon runRealServerAcceptance
             |   # 或 ./gradlew --no-daemon verifyAcceptanceReport
@@ -734,5 +796,7 @@ tasks.register('printRealServerAcceptanceRecipe') {
     }
 }
 
-check.dependsOn verifySharedInputs, test, contractTest, verifyPackaging, staticQualityTasks, 'koverXmlReport'
+check.dependsOn test, contractTest, verifyPackaging, staticQualityTasks, 'koverXmlReport'
 build.dependsOn packageArtifacts
+
+

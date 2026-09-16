@@ -10,7 +10,7 @@
 | [0004](0004-java8-core-lombok.md) | 核心层 Java 8 + Lombok，平台胶水随各 loader JDK | 已接受 |
 | [0005](0005-build-toolchain.md) | 构建用自定义多模块 Gradle，不用 Architectury | 已被 [0007](0007-composite-build-loader-isolation.md) 取代 |
 | [0006](0006-cross-end-protocol.md) | 跨端通信用自定义协议 + 版本协商，经 TransportPort 适配 | 已接受 |
-| [0007](0007-composite-build-loader-isolation.md) | 用 Gradle 复合构建隔离各加载器工具链，Bukkit 家族按系列收敛 | 已接受 |
+| [0007](0007-composite-build-loader-isolation.md) | 用 Gradle 复合构建隔离各加载器工具链，Bukkit 家族按系列收敛 | 已接受（决策 2 已被 [0026](0026-single-build-subproject-unification.md) 取代） |
 | [0008](0008-hybrid-server-active-platform.md) | 融合服务端支持与"活跃平台"语义细化（细化 ADR-0002） | 已接受 |
 | [0009](0009-command-config-framework.md) | 命令框架策略：各平台用各自原生命令框架（不引入 TabooLib），入口 L3、执行抽到共享 | 已接受 |
 | [0010](0010-config-and-resource-paths.md) | 配置与资源路径：平台无关共享模块（YAML/JSON 加载 + 预设目录/资源位置） | 已接受 |
@@ -24,9 +24,12 @@
 | [0018](0018-forge-mixin-raw-payload.md) | Forge 端用 Mixin 拦截裸 CustomPayload 统一裸字节收发（取代 SimpleChannel，打通 Forge 客户端↔Bukkit 服） | 已接受 |
 | [0019](0019-bukkit-paper-api-baseline.md) | Bukkit 家族编译基线改用 paper-api（compileOnly）以接 Folia 区域调度 API（细化 ADR-0007） | 已接受 |
 | [0020](0020-sponge-rc1365-runtime-baseline.md) | Sponge 第一期开箱运行基线固定为 RC1365 与 Java 17（细化 ADR-0004/0007/0014） | 已接受 |
-| [0021](0021-p2-version-matrix-toolchain-isolation.md) | P2 有效版本矩阵、工具链隔离与严格验收入口（本仓 ADR-0021；勿与 AllinCore-New ADR-0020 混淆） | 已接受 |
+| [0021](0021-p2-version-matrix-toolchain-isolation.md) | P2 有效版本矩阵、工具链隔离与严格验收入口（本仓 ADR-0021；勿与 AllinCore-New ADR-0020 混淆） | 已接受（决策 2 已被 [0025](0025-wcpe-loom-toolchain-unification.md)/[0026](0026-single-build-subproject-unification.md) 取代） |
 | [0022](0022-unobfuscated-minecraft-naming-policy.md) | Minecraft 26.1+ 使用无混淆原始命名，并按加载器采用非映射构建链路（取代 0016） | 已接受 |
 | [0023](0023-p3-r7-automated-release-authority.md) | P3 R7 严格自动化验收作为 FR-16 的最终发布权威（细化 0014） | 已接受 |
+| [0024](0024-github-actions-remote-gate-separation.md) | GitHub Actions 远端质量门与真服验收分离 | 已接受 |
+| [0025](0025-wcpe-loom-toolchain-unification.md) | 构建插件统一 WCPE Loom（`top.wcpe.loom` 1.17.1）并收敛 Gradle 车道至 9.6.1（部分取代 0021 的工具链隔离） | 已接受 |
+| [0026](0026-single-build-subproject-unification.md) | 平台车道统一为根构建子模块（取消加载器插件隔离，取代 0007 决策 2、0021 决策 2） | 已接受 |
 
 > 模板：状态 / 背景 / 决策 / 理由 / 后果 / 备选方案，见 [`_template.md`](_template.md)。
 

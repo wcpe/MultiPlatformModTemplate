@@ -4,7 +4,7 @@
 
 ## 状态
 
-当前正式版 **v0.2.0**：第一期 MVP 与第二期多版本矩阵（FR-12，1.21.1 / 1.12.2）已交付。第三期（FR-16 26.2 / FR-17 模板发布 / FR-18 上手文档）仍在开发：仓库已启用为公开 GitHub Template；当前候选提交已以冻结 Paper build 71 生成 Paper、Fabric、Forge 三车道同轮 R7 报告，并通过 `:runP3R7Gate`（`p3-r7-1787686232087`）。该严格门依 [ADR-0023](docs/adr/0023-p3-r7-automated-release-authority.md) 是 FR-16 的最终自动化验收。当前候选提交的干净克隆已复现换名和 Counter 纯 JVM 测试（使用本机预热缓存）；尚无 `v0.3.0` 或 GitHub Release。
+当前正式版 **v0.2.0**：第一期 MVP 与第二期多版本矩阵（FR-12，1.21.1 / 1.12.2）已交付。第三期（FR-16 26.2 / FR-17 模板发布 / FR-18 上手文档）仍在开发：仓库已启用为公开 GitHub Template；当前候选提交已以冻结 Paper build 71 生成 Paper、Fabric、Forge 三车道同轮 REALSERVER262 报告，并通过 `:runRealServerGate262`（`p3-r7-1787686232087`）。该严格门依 [ADR-0023](docs/adr/0023-p3-r7-automated-release-authority.md) 是 FR-16 的最终自动化验收。第四期治理需求（FR-32）正在补齐 GitHub Actions 的远端构建、手动 Release、安全与依赖维护；CI 绿灯不替代本机真服门。当前候选提交的干净克隆已复现换名和 Counter 纯 JVM 测试（使用本机预热缓存）；尚无 `v0.3.0` 或 GitHub Release。
 
 **从模板起步**：本仓库已启用 GitHub Template；在 GitHub 选择 `Use this template` 创建新仓库后，见 [`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`](docs/HOWTO-CLONE-AND-WRITE-PLAY.md)（含 Counter 示例域）。版本节奏见 [`docs/VERSIONING.md`](docs/VERSIONING.md)。
 
@@ -16,7 +16,7 @@
 L0 core-domain   功能域：玩法规则 + 领域模型 + 端口(Port) + 自有 EventBus(域间解耦)   ← 玩法只写这里
 L1 core-runtime / core-server / core-client / protocol            框架编排 / 端逻辑 / 跨端协议
 L2 platform-spi  平台抽象 SPI + PlatformProvider + FeatureGate     平台可插拔的唯一机制
-L3 平台胶水：Bukkit 为根多模块；兼容车道经 includeBuild，Gradle 不兼容车道用自有 wrapper + 受控 JAR
+L3 平台胶水：Bukkit 为根多模块；全部平台车道（fabric/forge/neoforge/sponge）均为根构建子模块，核心经 project(...) 依赖（构建插件统一 top.wcpe.loom 1.17.1、Gradle 全车道 9.6.1，见 ADR-0025 / ADR-0026）
      各版本内 common / server / client（或仅 server）分目录，平台只做胶水
 L4 版本差异只在「该版本构建」内，禁止单工程多源集堆多版本
 ```
@@ -55,9 +55,11 @@ L0/L1 不含任何平台 / 版本代码；跨平台、跨版本的差异全部�
 
 ## 快速开始
 
-P1/P2 已交付，P3 以 [`docs/PRD.md`](docs/PRD.md) 的 FR 状态为准。根 wrapper 为 Gradle **9.6.1**；L0–L2 编译为 Java 8 字节码，26.2 三车道须准备 Java 25。
+P1/P2 已交付，P3 以 [`docs/PRD.md`](docs/PRD.md) 的 FR 状态为准。根 wrapper 为 Gradle **9.6.1**（全车道统一，ADR-0025；mod 平台构建插件为 WCPE Loom `top.wcpe.loom` 1.17.1）；全部平台车道为**单一根构建的子模块**（ADR-0026），任何 Gradle 调用都在仓库根执行（车道无自有 wrapper）；L0–L2 编译为 Java 8 字节码，**根构建守护 JVM 须 ≥25**（26.2 两条车道在配置期硬校验）。
 
 > 当前上游 `mc-testkit` plugin marker 不可用时，根构建仅会从本机 Maven 缓存回退解析该插件及实现模块；首次配置失败时，先按 [`docs/OPERATIONS.md`](docs/OPERATIONS.md) 准备对应本地制品。该临时前提不等于冷缓存或新机器验证已通过。
+
+GitHub Actions 的 `ci.yml` 会固定从公开源码构建 `mc-testkit v0.5.1` 到 Runner Maven Local，再以 JDK 25 守护执行单一根构建的 `:buildAll`。`release.yml` 仅接受维护者对已推送 tag 的手动触发；使用与边界见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md) 和 [ADR-0024](docs/adr/0024-github-actions-remote-gate-separation.md)。
 
 **物理布局（不拍平到仓库根）**：
 
@@ -80,18 +82,18 @@ modules/       smoke acceptance
 ./gradlew :platform:bukkit:1.20.1:shadowJar
 ./gradlew :platform:bukkit:1.12.2:shadowJar
 ./gradlew :platform:bukkit:1.21.1:shadowJar
-# Fabric / Forge（-p 指向物理目录；跨代 Forge 用自有 wrapper）
-./gradlew -p platform/fabric/1.20.1 remapJar
-./gradlew -p platform/fabric/1.21.1 remapJar
-./gradlew -p platform/forge/1.20.1 reobfShadowJar
+# Fabric / Forge / Sponge（平台车道均为根构建子模块，用绝对工程路径）
+./gradlew :platform:fabric:fabric-1.20.1:remapJar
+./gradlew :platform:fabric:fabric-1.21.1:remapJar
+./gradlew :platform:forge:forge-1.20.1:reobfShadowJar
 
-# 26.2（P3 在制车道；Java 25）
+# 26.2（P3 在制车道；根构建须以 JDK 25 守护）
 ./gradlew :platform:bukkit:26.2:shadowJar
-./gradlew :buildFabric262
-./platform/forge/26.2/gradlew --no-daemon packageArtifacts
+./gradlew :platform:fabric:fabric-26.2:build
+./gradlew :platform:forge:forge-26.2:packageArtifacts
 ```
 
-26.2 的三个命令只构建车道；严格 R7 门要求冻结 Paper build 71 下 Paper、Fabric、Forge 的同轮报告，再运行 `./gradlew :runP3R7Gate`。当前候选提交的 `p3-r7-1787686232087` 已通过该门；依 ADR-0023，该门是 FR-16 的最终自动化验收。当前候选提交已在干净克隆中复现脚手架换名与 Counter 纯 JVM 测试（使用本机预热缓存），但这不替代使用者将自己的玩法接入 L3 后的真服验证。P3 正式交付仍须 `v0.3.0` 对外 Release。产物放入对应服务端 `plugins/` 或双端 `mods/`；运维见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)。
+26.2 的三个命令只构建车道；REALSERVER262 严格真服门要求冻结 Paper build 71 下 Paper、Fabric、Forge 的同轮报告，再运行 `./gradlew :runRealServerGate262`。依 ADR-0023，该门是 FR-16 的最终自动化验收。当前候选提交已在干净克隆中复现脚手架换名与 Counter 纯 JVM 测试（使用本机预热缓存），但这不替代使用者将自己的玩法接入 L3 后的真服验证。P3 正式交付仍须 `v0.3.0` 对外 Release。产物放入对应服务端 `plugins/` 或双端 `mods/`；运维见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)。
 
 ### 克隆后换名（脚手架）
 

@@ -33,3 +33,7 @@ ADR-0014 确立了 realserver 的服务端驱动、客户端验证与单一权�
 
 - 保留人工实机最终确认：提供额外主观观察，但与已具备双端断言和哈希约束的 R7 自动化门重复，已否决。
 - 以普通 `BUILD SUCCESSFUL` 或单车道报告放行：不能证明真实网络、全矩阵和制品一致性，否决。
+
+## 术语更新
+
+实现命名已去里程碑编号：任务 `:runP3R7Gate` 更名 `:runRealServerGate262`（`runP3R7Build` → `buildRealServerArtifacts262`，`runP3R7RealServerAcceptance` → `runRealServerAcceptance262`，`verifyP3R7ReportsStrict` → `verifyRealServerReportsStrict`）；验收矩阵值 `R7` 更名 `REALSERVER262`（报告 `MATRIX` 行随之变化）。本决策的实质（同轮三车道严格报告门作为 FR-16 最终自动化验收）不变；本文写作时的证据 run-id `p3-r7-1787686232087` 按历史记录保留。
