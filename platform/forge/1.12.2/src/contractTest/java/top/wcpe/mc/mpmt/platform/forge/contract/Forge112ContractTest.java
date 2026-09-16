@@ -74,7 +74,7 @@ public final class Forge112ContractTest {
         File repositoryRoot = propertyFile("mpmt.test.repositoryRoot");
         // 布局收纳后：platform/forge/1.12.2（ADR-0007 / 目录即工程）
         File lane = new File(repositoryRoot, "platform/forge/1.12.2");
-        String build = read(new File(lane, "build.gradle"));
+        String build = read(new File(lane, "build.gradle.kts"));
         String rootSettings = read(new File(repositoryRoot, "settings.gradle.kts"));
 
         // ADR-0026：车道为根构建子模块——不再持有独立 settings / 自有 wrapper / 反向 includeBuild
@@ -83,7 +83,7 @@ public final class Forge112ContractTest {
         require(!build.contains("includeBuild"), "子模块车道不得复合加载根构建");
 
         // ADR-0025：构建插件统一 top.wcpe.loom，版本在根 settings 单点 pin
-        require(build.contains("top.wcpe.loom"), "未应用 top.wcpe.loom 插件");
+        require(build.contains("id(\"top.wcpe.loom\")"), "未应用 top.wcpe.loom 插件");
         require(
                 rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.1"),
                 "根 settings 未冻结 top.wcpe.loom 1.17.1");

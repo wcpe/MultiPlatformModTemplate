@@ -19,8 +19,9 @@ public final class Forge262ContractMain {
 
     private static final Pattern ENCODED =
             Pattern.compile("\\\"encoded\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+    // 车道脚本为 Kotlin DSL：mappings 声明形态为 mappings(...)（Groovy 时代为 mappings channel:）
     private static final Pattern MAPPINGS_DECLARATION =
-            Pattern.compile("(?m)^\\s*mappings\\s+channel\\s*:");
+            Pattern.compile("(?m)^\\s*(mappings\\s+channel\\s*:|mappings\\s*\\()");
 
     private Forge262ContractMain() {
         // 契约入口不实例化
@@ -54,7 +55,7 @@ public final class Forge262ContractMain {
 
     private static void verifyIndependentBuild(Path repositoryRoot, Path projectDir)
             throws IOException {
-        String build = read(projectDir.resolve("build.gradle"));
+        String build = read(projectDir.resolve("build.gradle.kts"));
         String properties = read(projectDir.resolve("gradle.properties"));
         String rootSettings = read(repositoryRoot.resolve("settings.gradle.kts"));
         // ADR-0026：车道为根构建子模块——不再持有独立 settings / 自有 wrapper / 反向 includeBuild
@@ -63,7 +64,7 @@ public final class Forge262ContractMain {
         require(!Files.exists(projectDir.resolve("gradlew")),
                 "子模块车道不得再持有自有 wrapper");
         require(!build.contains("includeBuild"), "子模块车道不得复合加载根构建");
-        require(build.contains("options.release = 25"), "Java 编译目标必须为 25");
+        require(build.contains("options.release.set(25)"), "Java 编译目标必须为 25");
         require(!MAPPINGS_DECLARATION.matcher(build).find(),
                 "Minecraft 26.2 不得声明 mappings（无混淆版本走 disableObfuscation 管线）");
         // ADR-0025：插件统一为 top.wcpe.loom（WCPE Loom），版本在根 settings 单点 pin
@@ -76,23 +77,24 @@ public final class Forge262ContractMain {
         // ADR-0026 决策 6：共享核心经同根构建项目产物消费，不再按 build/libs 路径硬编码
         require(build.contains("moduleJar("), "共享模块必须经同根构建项目产物消费");
         require(!build.contains("sharedJars"), "不得再按 build/libs 路径硬编码共享 JAR");
-        require(build.contains("acceptanceServer {")
-                        && build.contains("acceptanceClient {")
+        require(build.contains("create(\"acceptanceServer\")")
+                        && build.contains("create(\"acceptanceClient\")")
                         && build.contains("runRealServerAcceptance"),
                 "缺少要求的验收运行入口");
         require(build.contains("mpmt.acceptance.artifact.server-runtime"),
                 "真实服务端运行文件必须由调用方显式传入");
-        require(build.contains("def realServerHostRequested"),
+        require(build.contains("val realServerHostRequested"),
                 "真实服务端入口必须显式识别主机任务");
-        require(build.contains("tasks.register('runRealServerAcceptanceHost')")
-                        && build.contains("dependsOn tasks.named('runAcceptanceServer')"),
+        require(build.contains("tasks.register(\"runRealServerAcceptanceHost\")")
+                        && build.contains("dependsOn(tasks.named(\"runAcceptanceServer\"))"),
                 "真实服务端入口必须复用 loom runAcceptanceServer 启动链路");
-        require(build.contains("def acceptanceServerRunDirectory")
-                        && build.contains("realServerHostRequested ? 'run-realserver' : 'run-acceptance-server'")
-                        && build.contains("runDir acceptanceServerRunDirectory")
-                        && build.contains("project.file(\"${acceptanceServerRunDirectory}/acceptance-report.txt\").absolutePath"),
+        require(build.contains("val acceptanceServerRunDirectory")
+                        && build.contains("if (realServerHostRequested) \"run-realserver\" else \"run-acceptance-server\"")
+                        && build.contains("runDir(acceptanceServerRunDirectory)")
+                        && build.contains("project.file(\"$acceptanceServerRunDirectory/acceptance-report.txt\").absolutePath"),
                 "真实服务端入口必须写入独立运行目录的报告");
-        require(!build.contains("tasks.register('runRealServerAcceptanceHost', Exec)"),
+        require(!build.contains("tasks.register(\"runRealServerAcceptanceHost\", Exec::class.java)")
+                        && !build.contains("tasks.register<Exec>(\"runRealServerAcceptanceHost\")"),
                 "真实服务端入口不得直接以原版 server.jar 启动");
         require(projectDir.endsWith(Paths.get("platform", "forge", "26.2")),
                 "车道工程目录必须为 platform/forge/26.2");
@@ -124,24 +126,24 @@ public final class Forge262ContractMain {
     }
 
     private static void verifyDevRunClasspath(Path projectDir) throws IOException {
-        String build = read(projectDir.resolve("build.gradle"));
+        String build = read(projectDir.resolve("build.gradle.kts"));
         String properties = read(projectDir.resolve("gradle.properties"));
-        int serverStart = build.indexOf("acceptanceServer {");
-        int clientStart = build.indexOf("acceptanceClient {");
+        int serverStart = build.indexOf("create(\"acceptanceServer\")");
+        int clientStart = build.indexOf("create(\"acceptanceClient\")");
         require(serverStart >= 0 && clientStart > serverStart, "缺少 server/client 运行配置");
-        require(build.contains("def installDevAcceptanceMod")
-                        && build.contains("from acceptanceJar")
-                        && build.contains("into modsDir"),
+        require(build.contains("fun installDevAcceptanceMod")
+                        && build.contains("from(acceptanceJar")
+                        && build.contains("into(modsDir)"),
                 "必须提供将独立验收 JAR 安装到运行目录的最小适配");
-        require(build.contains("include 'mpmt-*.jar'") && build.contains("!candidate.delete()"),
+        require(build.contains("include(\"mpmt-*.jar\")") && build.contains("!candidate.delete()"),
                 "验收运行目录必须清理旧版 MPMT JAR，避免重复加载");
-        require(build.contains("def prepareAcceptanceServerProperties")
-                        && build.contains("'online-mode': 'false'")
-                        && build.contains("'enforce-secure-profile': 'false'")
+        require(build.contains("fun prepareAcceptanceServerProperties")
+                        && build.contains("\"online-mode\" to \"false\"")
+                        && build.contains("\"enforce-secure-profile\" to \"false\"")
                         && build.contains("prepareAcceptanceServerProperties(runDir)"),
                 "真实服务端验收必须关闭线上认证，允许本地 Dev 客户端连接");
         require(build.contains("installDevAcceptanceMod(runDir)")
-                        && build.contains("installDevAcceptanceMod(project.file('run-acceptance-client'))"),
+                        && build.contains("installDevAcceptanceMod(project.file(\"run-acceptance-client\"))"),
                 "runAcceptanceServer/runAcceptanceClient 均须安装验收伴侣 JAR");
         require(!properties.contains("net.minecraftforge.gradle.merge-source-sets"),
                 "不得重新启用已被实机证伪的 merge-source-sets 推测配置");

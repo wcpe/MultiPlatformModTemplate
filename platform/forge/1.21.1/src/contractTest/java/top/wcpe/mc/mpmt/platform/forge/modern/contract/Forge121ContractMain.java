@@ -51,7 +51,7 @@ public final class Forge121ContractMain {
 
     private static void verifyIndependentBuild(Path repositoryRoot, Path projectDir)
             throws IOException {
-        String build = read(projectDir.resolve("build.gradle"));
+        String build = read(projectDir.resolve("build.gradle.kts"));
         String rootSettings = read(repositoryRoot.resolve("settings.gradle.kts"));
         // ADR-0026：车道为根构建子模块——不再持有独立 settings / 自有 wrapper / 反向 includeBuild
         require(!Files.exists(projectDir.resolve("settings.gradle.kts")),
@@ -60,11 +60,11 @@ public final class Forge121ContractMain {
                 "子模块车道不得再持有自有 wrapper");
         require(!build.contains("includeBuild"), "子模块车道不得复合加载根构建");
         // ADR-0025：构建插件统一 top.wcpe.loom，版本在根 settings 单点 pin
-        require(build.contains("id 'top.wcpe.loom'"), "构建插件必须为 top.wcpe.loom（WCPE Loom）");
+        require(build.contains("id(\"top.wcpe.loom\")"), "构建插件必须为 top.wcpe.loom（WCPE Loom）");
         require(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.1"),
                 "根 settings 未冻结 top.wcpe.loom 1.17.1");
         require(build.contains("officialMojangMappings()"), "映射必须为 Mojang 官方映射");
-        require(build.contains("options.release = 21"), "Java 编译目标必须为 21");
+        require(build.contains("options.release.set(21)"), "Java 编译目标必须为 21");
         // ADR-0026 决策 6：共享核心经同根构建项目产物消费，不再按 build/libs 路径硬编码
         require(build.contains("moduleJar("), "共享模块必须经同根构建项目产物消费");
         require(!build.contains("sharedJars"), "不得再按 build/libs 路径硬编码共享 JAR");

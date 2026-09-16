@@ -201,15 +201,16 @@ class RealServerGateContractTest {
 
     @Test
     fun `Forge 26_2 与真服编排接入静态质量门`() {
-        val forgeBuild = readRootFile("platform/forge/26.2/build.gradle")
+        val forgeBuild = readRootFile("platform/forge/26.2/build.gradle.kts")
         val acceptanceBuild = readRootFile("build-logic/realserver-acceptance/build.gradle.kts")
 
         assertTrue(forgeBuild.contains("com.github.spotbugs"))
-        assertTrue(forgeBuild.contains("apply plugin: 'checkstyle'"))
-        assertTrue(forgeBuild.contains("apply plugin: 'pmd'"))
+        assertTrue(forgeBuild.contains("apply(plugin = \"checkstyle\")"))
+        assertTrue(forgeBuild.contains("apply(plugin = \"pmd\")"))
         assertTrue(forgeBuild.contains("findsecbugs-plugin"))
-        assertTrue(forgeBuild.contains("def staticQualityTasks"))
-        assertFalse(forgeBuild.contains("dependsOn check, verifyPackaging"))
+        assertTrue(forgeBuild.contains("val staticQualityTasks"))
+        assertFalse(forgeBuild.contains("dependsOn(check, verifyPackaging)"))
+        assertFalse(forgeBuild.contains("dependsOn(\"check\", \"verifyPackaging\")"))
         assertTrue(acceptanceBuild.contains("org.jlleitschuh.gradle.ktlint"))
         assertTrue(acceptanceBuild.contains("io.gitlab.arturbosch.detekt"))
         assertTrue(acceptanceBuild.contains("org.jetbrains.kotlinx.kover"))

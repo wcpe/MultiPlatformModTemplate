@@ -30,7 +30,7 @@
 - **L0–L2 严格编译为 Java 8 字节码**（`sourceCompatibility = 8`），不得使用 Java 9+ 语法 / API——须以 `javac --release 8` 或 animal-sniffer **强制**（仅锁 sourceCompatibility 不够，依据 ADR-0004）；Lombok 仅用于 L0/L1 Java 模块。
 - 平台胶水（L3/L4）按各 loader 最低 JDK 编译，但仍依赖 Java 8 核心。
 - 第三方运行期依赖（snakeyaml/gson 等）**统一 relocate 到 `top.wcpe.mc.mpmt.libs.*`**；core 打进各 loader 产物的方式逐平台明确、core 不被 remap（依据 ADR-0012）。
-- 构建为**单一根构建 + 平台子模块**（Kotlin DSL / Groovy）：核心、Bukkit 家族与**全部加载器平台**（fabric / forge / neoforge / sponge）均为根构建子模块，构建插件统一为 `top.wcpe.loom` 1.17.1（WCPE Loom，ADR-0025）、Gradle 全车道 9.6.1——**禁止**把平台车道做成独立构建 / 自有 wrapper / 反向 `includeBuild`（ADR-0026）；`build-logic/realserver-acceptance` 作为 **Gradle 插件工程**经 `pluginManagement` 的 includeBuild 引入，不属平台隔离，**不得**删除。**不引入 Architectury 统包框架** 或与之冲突的统包框架（`top.wcpe.loom` 为 architectury-loom fork 的**单车道构建插件**，经 ADR-0025 采纳，不在此限）；换构建框架 = 架构决策，走新 ADR。
+- 构建为**单一根构建 + 平台子模块**（Gradle Kotlin DSL，全仓脚本语言统一，无 Groovy 构建脚本）：核心、Bukkit 家族与**全部加载器平台**（fabric / forge / neoforge / sponge）均为根构建子模块，构建插件统一为 `top.wcpe.loom` 1.17.1（WCPE Loom，ADR-0025）、Gradle 全车道 9.6.1——**禁止**把平台车道做成独立构建 / 自有 wrapper / 反向 `includeBuild`（ADR-0026）；`build-logic/realserver-acceptance` 作为 **Gradle 插件工程**经 `pluginManagement` 的 includeBuild 引入，不属平台隔离，**不得**删除。**不引入 Architectury 统包框架** 或与之冲突的统包框架（`top.wcpe.loom` 为 architectury-loom fork 的**单车道构建插件**，经 ADR-0025 采纳，不在此限）；换构建框架 = 架构决策，走新 ADR。
 
 ## 5. 跨端协议单一真源（依据 ADR-0006）
 - 协议包定义 / 字节布局 / 版本号**只在 `protocol` 一处权威定义**，客户端与服务端共用，禁止双源各自定义。
