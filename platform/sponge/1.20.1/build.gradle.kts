@@ -1,3 +1,4 @@
+import buildconventions.acceptanceReportFrom
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.github.spotbugs.snom.Confidence
@@ -327,10 +328,7 @@ tasks.named("check") {
 }
 
 // realserver 门禁：Sponge 服 + Fabric gametest 客户端进服写报告后校验。
-val spongeRealserverReport =
-    providers.gradleProperty("mpmt.acceptance.report")
-        .map { file(it) }
-        .orElse(provider { file("run/acceptance-report.txt") })
+val spongeRealserverReport = provider { acceptanceReportFrom("run/acceptance-report.txt") }
 
 tasks.register("runRealServerAcceptance") {
     group = "verification"

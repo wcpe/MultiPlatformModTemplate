@@ -1,3 +1,4 @@
+import buildconventions.acceptanceReportFrom
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.github.spotbugs.snom.Confidence
@@ -391,10 +392,7 @@ val acceptanceContractTest by tasks.registering(Test::class) {
 }
 
 val simAcceptanceReport = layout.buildDirectory.file("acceptance/sim-report-v2.txt")
-val realAcceptanceReport =
-    providers.gradleProperty("mpmt.acceptance.report")
-        .map { file(it) }
-        .orElse(provider { file("run-server/acceptance-report.txt") })
+val realAcceptanceReport = provider { acceptanceReportFrom("run-server/acceptance-report.txt") }
 
 val runSimNetworkAcceptance by tasks.registering(JavaExec::class) {
     group = "verification"

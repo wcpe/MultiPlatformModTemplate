@@ -44,6 +44,22 @@ fun Project.acceptanceReportFile(matrixId: String): File {
 }
 
 /**
+ * 报告文件（候选回溯式）：`-Pmpmt.acceptance.report` 覆盖优先；
+ * 否则取第一个已存在的候选；都存在不了时取**最后一个**候选（失败文案将指向它，
+ * 与各车道"dev 编排目录优先、真实专用服目录兜底"的既有语义一致）。
+ *
+ * 用于真实专用服 / dev 编排两套运行目录共存的场景（forge / neoforge / sponge）。
+ */
+fun Project.acceptanceReportFrom(vararg candidates: String): File {
+    val custom = (findProperty(AcceptanceRound.REPORT_PROPERTY) as String?)?.trim().orEmpty()
+    if (custom.isNotEmpty()) {
+        return file(custom)
+    }
+    val resolved = candidates.map { file(it) }
+    return resolved.firstOrNull { it.isFile } ?: resolved.last()
+}
+
+/**
  * 校验权威报告：v2 头、MATRIX 命中、RUN_ID 属于本轮、末行 RESULT PASS、公共场景各一次 PASS。
  * 判定顺序与失败文案与各车道原实现一致。
  */

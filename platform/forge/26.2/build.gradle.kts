@@ -1,3 +1,4 @@
+import buildconventions.acceptanceReportFrom
 import com.github.spotbugs.snom.Confidence
 import com.github.spotbugs.snom.Effort
 import com.github.spotbugs.snom.SpotBugsExtension
@@ -609,17 +610,11 @@ tasks.matching { it.name == "runAcceptanceClient" }.configureEach {
     }
 }
 
-fun forge262ReportFile(): File {
-    val custom = project.findProperty("mpmt.acceptance.report")
-    if (custom != null && custom.toString().trim().isNotEmpty()) {
-        return file(custom.toString())
-    }
-    val real = project.file("run-realserver/acceptance-report.txt")
-    if (real.isFile) {
-        return real
-    }
-    return project.file("run-acceptance-server/acceptance-report.txt")
-}
+fun forge262ReportFile(): File =
+    acceptanceReportFrom(
+        "run-realserver/acceptance-report.txt",
+        "run-acceptance-server/acceptance-report.txt",
+    )
 
 val verifyAcceptanceReport =
     tasks.register("verifyAcceptanceReport") {
