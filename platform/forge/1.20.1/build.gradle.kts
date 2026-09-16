@@ -2,25 +2,14 @@ import buildconventions.ForgeLaneExtension
 import buildconventions.configureForgeShadowProductChain
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import com.github.spotbugs.snom.Confidence
-import com.github.spotbugs.snom.Effort
-import com.github.spotbugs.snom.SpotBugsExtension
-import com.github.spotbugs.snom.SpotBugsTask
 import net.fabricmc.loom.task.RemapJarTask
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository
-import org.gradle.api.plugins.quality.Checkstyle
-import org.gradle.api.plugins.quality.CheckstyleExtension
-import org.gradle.api.plugins.quality.Pmd
-import org.gradle.api.plugins.quality.PmdExtension
-import org.gradle.jvm.toolchain.JavaToolchainService
 import java.security.MessageDigest
 
-// platform-forge（L3）：根构建普通子模块，仅应用 arch-loom（top.wcpe.loom，ADR-0007）。
-// 打包链路（ADR-0012）：shade platform-spi + core + relocate snakeyaml 进 mod jar，再经 remapJar remap 到
-// SRG 供真实 Forge 运行。映射用官方（ADR-0016）。core/snakeyaml 为纯 Java、无 MC 引用，remap 不改写之。
-// Mixin（ADR-0018）：Forge 端裸 CustomPayload 收包经 Mixin 拦截原版 handleCustomPayload 路由到我方 receiver，
-// 打通 Forge↔Forge 与 Forge↔Bukkit。Mixin AP 由 arch-loom 内建提供（useLegacyMixinAp + add 注册 main 源集），
-// 取代旧 MixinGradle（buildscript classpath + apply）。
+// Forge 1.20.1 车道（根构建子模块）：common + server + client 分目录 → mpmt-forge-1.20.1-<version>.jar。
+// 不可变契约：产物名与路径（remapJar 无 classifier 输出即最终产品 jar）、SRG remap 链路与 Mixin 配置
+// （mpmt.mixins.json / mpmt.refmap.json，ADR-0018）、mods.toml 与 services 断言、打包链路（ADR-0012）、
+// realserver 报告路径与判定强度（ADR-0014）。质量门禁真源在 build-conventions.quality（ADR-0027）。
 
 plugins {
     id("build-conventions.quality")
@@ -28,19 +17,15 @@ plugins {
     id("top.wcpe.loom")
     // 8.3.11：修复 RelocatorRemapper.mapValue 与 loom 依赖树上新 ASM（visitLdcInsn 传 Type）的不兼容
     id("com.gradleup.shadow") version "8.3.11"
-    // 静态分析 / 质量工具链由根构建 subprojects{} 统一提供（含 spotbugs/ktlint/detekt/kover，见 ADR-0026）。
-    // 车道内重复声明会分裂插件类加载器并破坏 loom 清单服务，故此处不再声明。
-    // 历史说明：静态分析 / 质量工具链（严格门禁，static-analysis.md）——与根构建同一套，共享 ../config 规则集。
-    // 核心 Gradle 插件（checkstyle/pmd/jacoco）直接 apply；外部分析插件经 plugins{} 声明。
-    checkstyle
-    pmd
-    jacoco
+    // 静态分析插件（checkstyle / pmd / spotbugs+findsecbugs / jacoco / ktlint / detekt / kover）一律由
+    // build-conventions.quality 应用：版本与类路径由根 plugins{} 单点 pin，车道内重复声明会分裂插件类加载器
+    // 并破坏 loom 的清单服务。
     id("build-conventions.forge")
 }
 
 val forgeVersion = "1.20.1-47.4.2"
 
-// forge 车道参数：本车道走 shadow 打包链路（无 dev SecureJar 嵌入），只声明 lane 标签与 FG 时代 reobf 兼容路径
+// forge 车道参数：本车道走 shadow 打包链路（无 dev SecureJar 嵌入），只声明 lane 标签与 reobf 兼容任务映射
 val forge = extensions.getByType(ForgeLaneExtension::class.java)
 forge.mcVersion.set("1.20.1")
 forge.targetJavaVersion.set(17)
@@ -48,7 +33,7 @@ forge.laneLabel.set("Forge 1.20.1")
 forge.reobfCopyTasks.put("reobfShadowJar", "remapJar")
 forge.reobfCopyTasks.put("reobfAcceptanceJar", "remapAcceptanceJar")
 val snakeyamlVersion = "2.2"
-// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经根构建项目依赖消费
+// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经项目依赖消费
 val platformApiProject = project(":platform:forge:forge-api")
 val spiProject = project(":core:spi")
 // 服务端公共网络特性（经 api 传递 protocol + core-runtime），各平台注入 TransportPort 后复用同一份装配
@@ -83,27 +68,26 @@ sourceSets.named("test") {
 }
 
 // ============================================================================
-// loom 配置：Mixin AP + Forge mixin 配置 + dev run（替代 FG minecraft{} 与 MixinGradle）
+// loom 配置：Mixin AP + Forge mixin 配置 + dev run
 // ============================================================================
 loom {
     // Mixin（ADR-0018）：显式启用 legacy Mixin AP（arch-loom 1.13 默认关闭，而 Forge 生产期需要 compile 期
     // refmap：Mojmap→SRG，dev↔dev 运行期再经 disableRefMap 直解 Mojmap 名——静态 remap 会把注解值写成 SRG，
-    // 破坏 dev run）；注册 main 源集并固定 refmap 名，等价旧 MixinGradle 的 add(...)。
+    // 破坏 dev run）；注册 main 源集并固定 refmap 名。
     mixin {
         useLegacyMixinAp.set(true)
         add(sourceSets["main"], "mpmt.refmap.json")
     }
-    // dev run 需要知道本 mod 的 mixin 配置；同时 loom 会把配置名写进 jar 清单 MixinConfigs 属性，
-    // 等价旧 MixinGradle 的 config(...)。
+    // dev run 需要知道本 mod 的 mixin 配置；同时 loom 会把配置名写进 jar 清单 MixinConfigs 属性。
     forge {
         mixinConfigs("mpmt.mixins.json")
     }
     runs {
-        // loom 已为 forge 预建默认 client/server 运行配置（client()/server() 模板已应用），这里只做等价移植。
-        // realserver 验收用客户端运行配置：loom 负责 dev MC 客户端 + 原生 + 资源（headless 可渲染，同 FG）。
-        // 不声明 loom.mods dev 源（MOD_CLASSES 留空、FML 不注入 dev 源集，与 FG 不声明 mods{} 等价；
-        // dev 源会撞 FML 不暴露 core 的 classpath 墙）；改把 remap 后的 shaded jar（core 在 jar 内）
-        // 放进 run-client/mods/，让 FML 当真实 jar mod 加载，绕过 dev classpath 墙。
+        // loom 已为 forge 预建默认 client/server 运行配置（client()/server() 模板已应用），这里只补齐本车道取值。
+        // realserver 验收用客户端运行配置：loom 负责 dev MC 客户端 + 原生 + 资源（headless 可渲染）。
+        // 不声明 loom.mods dev 源（MOD_CLASSES 留空、FML 不注入 dev 源集；dev 源会撞 FML 不暴露 core 的
+        // classpath 墙）；改把 remap 后的 shaded jar（core 在 jar 内）放进 run-client/mods/，
+        // 让 FML 当真实 jar mod 加载，绕过 dev classpath 墙。
         getByName("client") {
             configName = "Forge Client"
             runDir("run-client")
@@ -173,8 +157,8 @@ repositories.find { it.name == "Forge" }?.let { repo ->
 val shadowBundle: Configuration by configurations.creating
 
 dependencies {
-    // FG 单坐标拆分（arch-loom）：原版 MC + 官方 Mojang 映射（ADR-0016）+ Forge（arch-loom forge 配置，
-    // 由其解析 userdev 并产出 patched MC dev jar）
+    // userdev 单坐标拆分（arch-loom）：原版 MC + 官方 Mojang 映射（ADR-0016）+ Forge（arch-loom 的 forge
+    // 配置，由其解析 userdev 并产出 patched MC dev jar）
     minecraft("com.mojang:minecraft:1.20.1")
     mappings(loom.officialMojangMappings())
     "forge"("net.minecraftforge:forge:$forgeVersion")
@@ -193,7 +177,7 @@ dependencies {
     // 第三方运行期依赖：shade 并 relocate（ADR-0012）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
-    // Mixin 注解处理器由 arch-loom 内建提供（loom.mixin.useLegacyMixinAp），无需手工挂 0.8.5:processor
+    // Mixin 注解处理器由 arch-loom 内建提供（loom.mixin.useLegacyMixinAp），无需再声明 processor 依赖
 
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -202,7 +186,7 @@ dependencies {
 }
 
 // 打包链路：shadowJar（shade core/spi + relocate snakeyaml，产物名 -dev-shadow）→ remapJar（named → SRG，
-// arch-loom 承担 FG reobf 的 forge 生产命名，产出无 classifier 的最终产品 jar）由 build-conventions.forge 接线
+// 产出无 classifier 的最终产品 jar）由 build-conventions.forge 接线
 configureForgeShadowProductChain(project, "shadowBundle", "mpmt.mixins.json")
 
 // 打包校验：mod jar 内核心 shade、snakeyaml relocate、mods.toml 与 services 在位、未误打入 Minecraft
@@ -244,67 +228,6 @@ tasks.named("assemble") {
 
 tasks.named("build") {
     dependsOn("reobfShadowJar", verifyPackaging)
-}
-
-// ============================================================================
-// 静态分析 / 质量工具链配置（严格门禁，static-analysis.md）——照根构建 subprojects 同一套，
-// 共享根 config 规则集（经 rootProject.file("config/...") 引用）；
-// 违规即失败构建（isIgnoreFailures=false）。本工程为单模块工程，故直接 apply、不用 subprojects 块。
-// ============================================================================
-// 样式审查：Checkstyle（共享裁剪规则集）
-configure<CheckstyleExtension> {
-    toolVersion = "10.17.0"
-    configFile = rootProject.file("config/checkstyle/checkstyle.xml")
-    isIgnoreFailures = false
-    maxWarnings = 0
-}
-// 代码异味 / 源码规则：PMD（共享裁剪规则集）
-configure<PmdExtension> {
-    toolVersion = "7.0.0"
-    isConsoleOutput = true
-    ruleSetConfig = resources.text.fromFile(rootProject.file("config/pmd/ruleset.xml"))
-    ruleSets = emptyList()
-    isIgnoreFailures = false
-}
-// 测试覆盖率：JaCoCo（报告 only——平台胶水覆盖率由 realserver 验收门保障，此处不设覆盖率底线、不并入 check）
-tasks.withType(org.gradle.testing.jacoco.tasks.JacocoReport::class.java).configureEach {
-    reports {
-        xml.required.set(true)
-        html.required.set(true)
-    }
-}
-tasks.withType(Test::class.java).configureEach {
-    finalizedBy(tasks.matching { it.name == "jacocoTestReport" })
-}
-// 缺陷检测（字节码）+ 安全审查：SpotBugs + FindSecBugs（挂在 SpotBugs 上）
-configure<SpotBugsExtension> {
-    ignoreFailures.set(false)
-    effort.set(Effort.MAX)
-    // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
-    reportLevel.set(Confidence.MEDIUM)
-    excludeFilter.set(rootProject.file("config/spotbugs/exclude.xml"))
-}
-dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
-// lombok.config 由根构建 subprojects{} 统一登记为编译输入（ADR-0026），此处不再重复。
-// 分析工具运行 JVM 与被测模块目标字节码无关：Checkstyle 10.x 需 JDK 11+，故把 Checkstyle/Pmd 分析任务
-// 固定到 JDK 17 启动器运行。afterEvaluate：JavaToolchainService 由 java 插件注册、晚于本配置块。
-afterEvaluate {
-    val toolchains = extensions.getByType(JavaToolchainService::class.java)
-    val analysisLauncher =
-        toolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(17)) }
-    tasks.withType(Checkstyle::class.java).configureEach {
-        javaLauncher.set(analysisLauncher)
-    }
-    tasks.withType(Pmd::class.java).configureEach {
-        javaLauncher.set(analysisLauncher)
-    }
-    // SpotBugs worker 默认用守护 JVM（JDK 17），无需固定 launcher。
-    // 仅生产码（spotbugsMain）严格门禁；test / acceptance 等非 main 源集宽松（含 mock/反射等 SpotBugs 噪声）。
-    tasks.withType(SpotBugsTask::class.java).configureEach {
-        if (name != "spotbugsMain") {
-            ignoreFailures = true
-        }
-    }
 }
 
 // ============================================================================
@@ -354,7 +277,7 @@ val acceptanceJar by tasks.registering(ShadowJar::class) {
     from(acceptance.output)
     configurations = listOf(acceptanceShadowBundle)
     exclude("META-INF/maven/**")
-    // 与旧 MixinGradle 产物一致的 MixinConfigs 清单属性（值指向产品 jar 内的 mpmt.mixins.json，逐项等价）
+    // MixinConfigs 清单属性指向产品 jar 内的 mpmt.mixins.json（验收 mod 与产品 mod 共用同一 Mixin 配置）
     manifest {
         attributes("MixinConfigs" to "mpmt.mixins.json")
     }
