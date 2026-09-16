@@ -1,4 +1,3 @@
-import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.github.spotbugs.snom.Confidence
 import com.github.spotbugs.snom.Effort
@@ -13,6 +12,8 @@ import org.gradle.api.tasks.JavaExec
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
 import java.security.MessageDigest
+import java.util.zip.ZipFile
+import buildconventions.packagingVerification
 
 // platform-fabric-1.20.1（L3）：根构建子模块（ADR-0026）；MC 1.20.1，common/server/client 分目录，Loom 根打包。
 // 关键链路（ADR-0012）：core 纯 Java 经 shadow shade 进产物（不被 remap），snakeyaml relocate；
