@@ -21,7 +21,8 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion
  *
  * 车道的"参数"经 [NeoForgeLaneExtension] 声明；不可变契约仍逐字留在车道脚本与插件里：
  * 任务名与任务路径、发布 jar 名与字节、报告路径、`-Pmpmt.acceptance.*` 属性名、`verifyPackaging` 断言清单与
- * 真服门禁判定文案、dev run 用的 `coreLibJar`（本插件不触碰，仍由车道脚本定义）。
+ * 真服门禁判定文案。dev run 用的 coreLibJar（FMLModType:GAMELIBRARY 绕 dev classpath 墙）因无调用方、
+ * 且交付走真服路径，已按 ADR-0027 的收敛删除。
  *
  * loom / shadow 的类型不在本插件工程编译类路径内，相关取值与配置经 [invokeGroovy] / [groovyValue] 动态表达。
  */

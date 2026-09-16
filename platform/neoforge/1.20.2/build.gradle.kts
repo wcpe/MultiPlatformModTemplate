@@ -1,12 +1,10 @@
 import buildconventions.NeoForgeLaneExtension
-import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 // NeoForge 1.20.2 车道（根构建子模块）：common + server + client 分目录 → mpmt-neoforge-1.20.2-<version>.jar。
 // 不可变契约：产物名与路径、打包链路（shade 共享核心 + relocate snakeyaml，ADR-0012）、remapJar 恒等重映射
 // （NeoForge 运行期用官方 Mojmap、无 SRG）、mods.toml 的 Mixin 声明（内置、无 refmap）、真服报告路径与判定强度
 // （ADR-0014）；锚点 MC 1.20.2（NeoForge 无 1.20.1，PRD §7）。
 // loader 层（依赖接线、dev run、mods.toml 展开、打包、验收接入与门禁）由 build-conventions.neoforge 承担（ADR-0027）。
-// dev run classpath 墙：受控 JAR 不自动进 dev mod 运行期类路径，经 coreLibJar（FMLModType:GAMELIBRARY）放 run-*/mods 暴露。
 plugins {
     id("build-conventions.quality")
     `java-library`
@@ -66,20 +64,4 @@ dependencies {
     minecraft("com.mojang:minecraft:${neoforgeLane.mcVersion.get()}")
     mappings(loom.officialMojangMappings())
     "neoForge"("net.neoforged:neoforge:${neoforgeLane.neoForgeVersion.get()}")
-}
-
-// dev run 用 core 库 jar：shade core/spi（含传递 protocol/core-domain）+ relocate snakeyaml，带
-// FMLModType:GAMELIBRARY manifest，放 run-*/mods 让 FML 当 game library 暴露给 mod（绕 dev classpath 墙）。
-// 仅 dev run 用、不发布、不入产品 mod jar。
-val coreLibJar by tasks.registering(ShadowJar::class) {
-    group = "build"
-    description = "dev run 用 core 库 jar（FMLModType:GAMELIBRARY，放 run-*/mods 绕 dev classpath 墙）"
-    archiveBaseName.set("mpmt-neoforge-corelib")
-    archiveClassifier.set("")
-    configurations = listOf(shadowBundle)
-    relocate("org.yaml.snakeyaml", "top.wcpe.mc.mpmt.libs.org.yaml.snakeyaml")
-    exclude("META-INF/maven/**")
-    manifest { attributes("FMLModType" to "GAMELIBRARY") }
-    outputs.upToDateWhen { false }
-    outputs.cacheIf { false }
 }
