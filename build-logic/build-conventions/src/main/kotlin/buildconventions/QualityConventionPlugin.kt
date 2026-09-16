@@ -28,42 +28,51 @@ import org.gradle.testing.jacoco.tasks.JacocoReport
  */
 class QualityConventionPlugin : Plugin<Project> {
     override fun apply(project: Project) {
-        applyStyleAndBugs(project)
+        val quality = project.extensions.create("quality", QualityExtension::class.java)
+        quality.checkstyleToolVersion.convention("10.17.0")
+        quality.pmdToolVersion.convention("7.0.0")
+        quality.analysisJavaVersion.convention(17)
+        applyStyleAndBugs(project, quality)
         applyCoverage(project)
         applyKotlinToolchain(project)
         wireCompileInputs(project)
-        pinAnalysisLaunchers(project)
+        pinAnalysisLaunchers(project, quality)
     }
 
     /** 样式审查：Checkstyle（导入卫生/命名/结构）与 PMD（未用/空块/吞异常/线程等真实坏味道）。 */
-    private fun applyStyleAndBugs(project: Project) {
+    private fun applyStyleAndBugs(project: Project, quality: QualityExtension) {
         project.pluginManager.apply("checkstyle")
-        project.extensions.configure<CheckstyleExtension> {
-            toolVersion = "10.17.0"
+        project.pluginManager.apply("pmd")
+        project.pluginManager.apply("com.github.spotbugs")
+        // 工具版本与排除过滤器在 afterEvaluate 读取：车道 `quality { … }` 块晚于插件 apply，
+        // 在 apply 期 get() 只会拿到约定值，覆盖项会被丢掉。
+        project.afterEvaluate {
+            configure<CheckstyleExtension> {
+            toolVersion = quality.checkstyleToolVersion.get()
             configFile = project.rootProject.file("config/checkstyle/checkstyle.xml")
             isIgnoreFailures = false
             maxWarnings = 0
         }
 
-        project.pluginManager.apply("pmd")
-        project.extensions.configure<PmdExtension> {
-            toolVersion = "7.0.0"
+            configure<PmdExtension> {
+            toolVersion = quality.pmdToolVersion.get()
             isConsoleOutput = true
             ruleSetConfig = project.resources.text.fromFile(project.rootProject.file("config/pmd/ruleset.xml"))
             ruleSets = emptyList()
             isIgnoreFailures = false
         }
 
-        // 缺陷检测（字节码）+ 安全审查：SpotBugs + FindSecBugs（挂在 SpotBugs 上）
-        project.pluginManager.apply("com.github.spotbugs")
-        project.extensions.configure<SpotBugsExtension> {
+            // 缺陷检测（字节码）+ 安全审查：SpotBugs + FindSecBugs（挂在 SpotBugs 上）
+            configure<SpotBugsExtension> {
+            quality.spotbugsToolVersion.orNull?.let { version -> toolVersion.set(version) }
             ignoreFailures.set(false)
             effort.set(Effort.MAX)
             // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
             reportLevel.set(Confidence.MEDIUM)
             excludeFilter.set(project.rootProject.file("config/spotbugs/exclude.xml"))
         }
-        project.dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
+            dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
+        }
     }
 
     /**
@@ -151,10 +160,13 @@ class QualityConventionPlugin : Plugin<Project> {
      * 在 afterEvaluate 配置：JavaToolchainService 由模块自身 java 插件注册、晚于插件应用；
      * 无业务源码的聚合壳可能没有 java 插件，此时跳过。
      */
-    private fun pinAnalysisLaunchers(project: Project) {
+    private fun pinAnalysisLaunchers(project: Project, quality: QualityExtension) {
         project.afterEvaluate {
             val toolchains = extensions.findByType(JavaToolchainService::class.java) ?: return@afterEvaluate
-            val analysisLauncher = toolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(17)) }
+            val analysisLauncher =
+                toolchains.launcherFor {
+                    languageVersion.set(JavaLanguageVersion.of(quality.analysisJavaVersion.get()))
+                }
             tasks.withType(Checkstyle::class.java).configureEach { javaLauncher.set(analysisLauncher) }
             tasks.withType(Pmd::class.java).configureEach { javaLauncher.set(analysisLauncher) }
             // SpotBugs worker 默认用守护 JVM，无需固定 launcher。
