@@ -25,6 +25,14 @@ gradlePlugin {
             id = "build-conventions.fabric"
             implementationClass = "buildconventions.FabricLanePlugin"
         }
+        register("bukkitLane") {
+            id = "build-conventions.bukkit"
+            implementationClass = "buildconventions.BukkitLanePlugin"
+        }
+        register("spongeLane") {
+            id = "build-conventions.sponge"
+            implementationClass = "buildconventions.SpongeLanePlugin"
+        }
     }
 }
 
