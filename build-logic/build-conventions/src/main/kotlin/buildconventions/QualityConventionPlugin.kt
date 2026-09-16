@@ -48,29 +48,29 @@ class QualityConventionPlugin : Plugin<Project> {
         // 在 apply 期 get() 只会拿到约定值，覆盖项会被丢掉。
         project.afterEvaluate {
             configure<CheckstyleExtension> {
-            toolVersion = quality.checkstyleToolVersion.get()
-            configFile = project.rootProject.file("config/checkstyle/checkstyle.xml")
-            isIgnoreFailures = false
-            maxWarnings = 0
-        }
+                toolVersion = quality.checkstyleToolVersion.get()
+                configFile = project.rootProject.file("config/checkstyle/checkstyle.xml")
+                isIgnoreFailures = false
+                maxWarnings = 0
+            }
 
             configure<PmdExtension> {
-            toolVersion = quality.pmdToolVersion.get()
-            isConsoleOutput = true
-            ruleSetConfig = project.resources.text.fromFile(project.rootProject.file("config/pmd/ruleset.xml"))
-            ruleSets = emptyList()
-            isIgnoreFailures = false
-        }
+                toolVersion = quality.pmdToolVersion.get()
+                isConsoleOutput = true
+                ruleSetConfig = project.resources.text.fromFile(project.rootProject.file("config/pmd/ruleset.xml"))
+                ruleSets = emptyList()
+                isIgnoreFailures = false
+            }
 
             // 缺陷检测（字节码）+ 安全审查：SpotBugs + FindSecBugs（挂在 SpotBugs 上）
             configure<SpotBugsExtension> {
-            quality.spotbugsToolVersion.orNull?.let { version -> toolVersion.set(version) }
-            ignoreFailures.set(false)
-            effort.set(Effort.MAX)
-            // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
-            reportLevel.set(Confidence.MEDIUM)
-            excludeFilter.set(project.rootProject.file("config/spotbugs/exclude.xml"))
-        }
+                quality.spotbugsToolVersion.orNull?.let { version -> toolVersion.set(version) }
+                ignoreFailures.set(false)
+                effort.set(Effort.MAX)
+                // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
+                reportLevel.set(Confidence.MEDIUM)
+                excludeFilter.set(project.rootProject.file("config/spotbugs/exclude.xml"))
+            }
             dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
         }
     }
