@@ -4,6 +4,8 @@ import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.language.jvm.tasks.ProcessResources
+import java.io.IOException
+import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.zip.ZipFile
@@ -25,6 +27,15 @@ val paperRuntimeSizeBytes = 61_744_713L
 val paperRuntimeSha256 = "36fee4f3a7020eb2e2d6f8d70d849beaf0f024d86f09302b9ccf2d96f266127e"
 val apiCoordinate = "io.papermc.paper:paper-api:26.2.build.72-beta"
 val apiSha256 = "ff4dd8b88beb95e990a900f587da3644d44345ce2bc6e8a11b851f6dfb98742b"
+
+// 冻结 paper-api 不入库（`.gitignore` 忽略 `*.jar`）：由坐标推出 Paper Maven 直链，
+// 缺失时交给 downloadApiSnapshot 取回并核 SHA-256，干净克隆无需手工放置。
+val apiUrl =
+    run {
+        val (apiGroup, apiArtifact, apiRevision) = apiCoordinate.split(":")
+        "https://repo.papermc.io/repository/maven-public/" +
+            "${apiGroup.replace('.', '/')}/$apiArtifact/$apiRevision/$apiArtifact-$apiRevision.jar"
+    }
 val compilerJavaVersion = 25 // 读 paper-api major 69
 val targetJavaVersion = 21 // 产物字节码：Shadow 8 仅支持到 major 65
 val apiVersion = "26.2"
@@ -250,14 +261,48 @@ fun sha256(file: File): String {
     return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
 }
 
+val downloadApiSnapshot by tasks.registering {
+    group = "verification"
+    description = "冻结 paper-api 缺失时从 Paper Maven 下载并核对 SHA-256"
+    val artifact = paperApiJar.asFile
+    outputs.file(paperApiJar)
+    onlyIf { !artifact.isFile && !gradle.startParameter.isOffline }
+    doLast {
+        artifact.parentFile.mkdirs()
+        logger.lifecycle("下载冻结 paper-api：$apiUrl")
+        try {
+            val connection = URI(apiUrl).toURL().openConnection()
+            connection.connectTimeout = 30_000
+            connection.readTimeout = 300_000
+            connection.getInputStream().use { input ->
+                artifact.outputStream().use { output -> input.copyTo(output) }
+            }
+        } catch (e: IOException) {
+            artifact.delete()
+            throw GradleException(
+                "冻结 paper-api 下载失败：$apiUrl（离线或网络不可达时请手工放到 libs/ 并核对 SHA-256）",
+                e,
+            )
+        }
+        val actual = sha256(artifact)
+        if (actual != apiSha256) {
+            artifact.delete()
+            throw GradleException("冻结 paper-api 校验失败：expected=$apiSha256, actual=$actual")
+        }
+        logger.lifecycle("冻结 paper-api 已就位：${artifact.name} $actual")
+    }
+}
+
 val verifyApiSnapshotFreeze by tasks.registering {
     group = "verification"
     description = "验证 Bukkit $minecraftVersion 冻结 paper-api 本地 jar 与 SHA-256 一致"
+    dependsOn(downloadApiSnapshot)
     doLast {
         val artifact = paperApiJar.asFile
         if (!artifact.isFile) {
             throw GradleException(
-                "缺少冻结 paper-api：" + artifact + "；请从 Paper Maven 下载 " + apiCoordinate + " 放到 libs/ 并核对 SHA-256",
+                "缺少冻结 paper-api：" + artifact + "；自动下载未生效（离线或下载失败），" +
+                    "请从 Paper Maven 下载 " + apiCoordinate + " 放到 libs/ 并核对 SHA-256",
             )
         }
         val actual = sha256(artifact)
