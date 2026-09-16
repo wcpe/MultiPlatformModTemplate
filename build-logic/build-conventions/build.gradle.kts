@@ -41,6 +41,10 @@ gradlePlugin {
             id = "build-conventions.neoforge"
             implementationClass = "buildconventions.NeoForgeLanePlugin"
         }
+        register("release") {
+            id = "build-conventions.release"
+            implementationClass = "buildconventions.ReleaseConventionPlugin"
+        }
     }
 }
 

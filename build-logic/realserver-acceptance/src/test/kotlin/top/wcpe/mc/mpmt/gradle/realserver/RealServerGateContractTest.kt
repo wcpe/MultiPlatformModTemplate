@@ -10,22 +10,24 @@ import java.nio.file.Path
 class RealServerGateContractTest {
     @Test
     fun `版本矩阵门不混入 26_2 且 262 三车道有独立入口`() {
-        val build = readRootFile("build.gradle.kts")
-        val matrixBuild = block(build, "tasks.register(\"verifyVersionMatrixBuild\")")
-        val matrixAcceptance = block(build, "tasks.register(\"runVersionMatrixRealServerAcceptance\")")
+        val laneGates = orchestrationSource("RealServerLaneGates.kt")
+        val matrixGates = orchestrationSource("VersionMatrixGates.kt")
+        val gates262 = orchestrationSource("RealServer262Gates.kt")
+        val matrixBuild = block(matrixGates, "tasks.register(\"verifyVersionMatrixBuild\")")
+        val matrixAcceptance = block(matrixGates, "tasks.register(\"runVersionMatrixRealServerAcceptance\")")
 
         assertFalse(matrixBuild.contains("26.2"))
         assertFalse(matrixAcceptance.contains("262"))
-        assertTrue(build.contains("tasks.register(\"buildRealServerArtifacts262\")"))
-        assertTrue(build.contains("tasks.register(\"runRealServerAcceptance262\")"))
-        assertTrue(build.contains("runRealServerAcceptanceBukkit262"))
-        assertTrue(build.contains("runRealServerAcceptanceFabric262"))
-        assertTrue(build.contains("runRealServerAcceptanceForge262"))
+        assertTrue(gates262.contains("tasks.register(\"buildRealServerArtifacts262\")"))
+        assertTrue(gates262.contains("tasks.register(\"runRealServerAcceptance262\")"))
+        assertTrue(laneGates.contains("runRealServerAcceptanceBukkit262"))
+        assertTrue(laneGates.contains("runRealServerAcceptanceFabric262"))
+        assertTrue(laneGates.contains("runRealServerAcceptanceForge262"))
     }
 
     @Test
     fun `发布聚合收集全部平台产物且全部车道为根子模块`() {
-        val build = readRootFile("build.gradle.kts")
+        val build = orchestrationSource("ReleaseArtifacts.kt")
 
         // ADR-0026：13 个发布 jar 均由 project(...) 的 buildDirectory 解析，任务依赖补齐
         assertTrue(build.contains("platform:fabric:fabric-26.2"))
@@ -51,7 +53,7 @@ class RealServerGateContractTest {
     @Test
     fun `Fabric 26_2 为根子模块并经同名构建项目产物消费核心`() {
         val build = readRootFile("platform/fabric/26.2/build.gradle.kts")
-        val rootBuild = readRootFile("build.gradle.kts")
+        val releaseGates = orchestrationSource("ReleasePackagingGates.kt")
         val rootSettings = readRootFile("settings.gradle.kts")
 
         // ADR-0026：车道不再持有独立 settings / 自有 wrapper / 反向 includeBuild
@@ -65,8 +67,8 @@ class RealServerGateContractTest {
         assertTrue(build.contains("fun moduleJar("))
         assertTrue(build.contains("moduleJar(\":core:domain\")"))
         assertFalse(build.contains("verifyInternalJars"))
-        assertFalse(rootBuild.contains("prepareFabric262Inputs"))
-        assertTrue(rootBuild.contains("dependsOn(\":platform:fabric:fabric-26.2:build\")"))
+        assertFalse(releaseGates.contains("prepareFabric262Inputs"))
+        assertTrue(releaseGates.contains("dependsOn(\":platform:fabric:fabric-26.2:build\")"))
         assertFalse(build.contains("tasks.named<RemapJarTask>(\"remapJar\")"))
         // Loom run 与报告路径由车道约定插件承担：车道只声明"run 报告跟随 -Pmpmt.acceptance.report 覆盖"，
         // 覆盖解析（-P 优先，否则 build/acceptance/server-report.txt）与 run 属性注入在插件单点实现，属性名不变。
@@ -156,6 +158,7 @@ class RealServerGateContractTest {
             )
         val bukkitBuild = readRootFile("platform/bukkit/26.2/build.gradle.kts")
         val rootBuild = readRootFile("build.gradle.kts")
+        val gates262 = orchestrationSource("RealServer262Gates.kt")
 
         assertTrue(extension.contains("paperJavaVersion"))
         assertTrue(extension.contains("acceptanceRunId"))
@@ -178,12 +181,12 @@ class RealServerGateContractTest {
         assertTrue(bukkitBuild.contains("paperJavaVersion.set(compilerJavaVersion)"))
         assertTrue(bukkitBuild.contains("acceptanceClientProductJar.set(fabric262Product)"))
         assertTrue(rootBuild.contains("top.wcpe.mc.mpmt.realserver-report-gate"))
-        assertTrue(rootBuild.contains("verifyRealServerReportsStrict"))
+        assertTrue(gates262.contains("verifyRealServerReportsStrict"))
     }
 
     @Test
     fun `真服门使用严格报告校验器与本轮实际制品`() {
-        val rootBuild = readRootFile("build.gradle.kts")
+        val gates262 = orchestrationSource("RealServer262Gates.kt")
         val gate =
             readRootFile(
                 "build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/RealServerReportGatePlugin.kt",
@@ -191,7 +194,7 @@ class RealServerGateContractTest {
         val forgeRuntimeProperty = "mpmt.acceptance.forge.serverRuntime"
         val forgeRuntimeExpression = "required(project, \"$forgeRuntimeProperty\")"
 
-        assertTrue(rootBuild.contains("verifyRealServerReportsStrict"))
+        assertTrue(gates262.contains("verifyRealServerReportsStrict"))
         assertTrue(gate.contains("RealServerReportValidator.verify"))
         assertTrue(gate.contains(forgeRuntimeProperty))
         assertTrue(gate.contains("File($forgeRuntimeExpression)"))
@@ -202,8 +205,8 @@ class RealServerGateContractTest {
 
     @Test
     fun `严格报告校验在三个车道完成后执行`() {
-        val rootBuild = readRootFile("build.gradle.kts")
-        val ordering = block(rootBuild, "tasks.named(\"verifyRealServerReportsStrict\")")
+        val gates262 = orchestrationSource("RealServer262Gates.kt")
+        val ordering = block(gates262, "tasks.named(\"verifyRealServerReportsStrict\")")
 
         assertTrue(ordering.contains("mustRunAfter("))
         assertTrue(ordering.contains("runRealServerAcceptanceBukkit262"))
@@ -252,6 +255,13 @@ class RealServerGateContractTest {
 
     private fun readRootFile(name: String): String =
         Files.readString(repositoryRoot().resolve(name), StandardCharsets.UTF_8)
+
+    /**
+     * 根侧编排实现（发布聚合、真服与版本矩阵门禁注册）已搬入 build-conventions.release：
+     * 这些契约按文本断言任务名/依赖/文案，迁移后目标指向插件源码，断言强度不变。
+     */
+    private fun orchestrationSource(name: String): String =
+        readRootFile("build-logic/build-conventions/src/main/kotlin/buildconventions/$name")
 
     private fun repositoryRoot(): Path = Path.of(System.getProperty("user.dir")).parent.parent
 
