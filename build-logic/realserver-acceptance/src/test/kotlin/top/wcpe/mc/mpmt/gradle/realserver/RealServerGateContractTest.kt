@@ -121,7 +121,11 @@ class RealServerGateContractTest {
         assertFalse(rootBuild.contains("verifyNeoForge1202ProductArtifact"))
         assertFalse(rootBuild.contains("verifyNeoForge1202CurrentReport"))
         assertFalse(rootBuild.contains("根构建不会嵌套调用该 Gradle 9.6.1 wrapper"))
-        assertTrue(neoBuild.contains("fun moduleJar("))
+        // 受控内部 JAR 经同根构建项目任务产物消费：helper 由 build-conventions.neoforge 单点实现，车道只应用插件
+        assertTrue(neoBuild.contains("id(\"build-conventions.neoforge\")"))
+        val neoForgeDependencies =
+            readRootFile("build-logic/build-conventions/src/main/kotlin/buildconventions/NeoForgeDependencies.kt")
+        assertTrue(neoForgeDependencies.contains("fun neoforgeModuleJar(project: Project, projectPath: String)"))
         assertFalse(neoBuild.contains("verifyInternalJars"))
         assertFalse(neoBuild.contains("includeBuild"))
     }

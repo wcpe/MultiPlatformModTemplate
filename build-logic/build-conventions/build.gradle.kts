@@ -33,6 +33,14 @@ gradlePlugin {
             id = "build-conventions.sponge"
             implementationClass = "buildconventions.SpongeLanePlugin"
         }
+        register("forgeLane") {
+            id = "build-conventions.forge"
+            implementationClass = "buildconventions.ForgeLanePlugin"
+        }
+        register("neoforgeLane") {
+            id = "build-conventions.neoforge"
+            implementationClass = "buildconventions.NeoForgeLanePlugin"
+        }
     }
 }
 
