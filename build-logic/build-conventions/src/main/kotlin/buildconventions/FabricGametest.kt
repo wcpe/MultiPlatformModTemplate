@@ -126,6 +126,8 @@ private fun Task.verifySimulatorReport(report: File, scenarios: List<String>) {
 }
 
 /** 元数据校验：必需项齐全、platform 为 sim-fabric、产品 jar SHA 合法、场景声明与车道清单一致。 */
+// 报告校验按契约逐项失败即抛：各项判据独立且失败文案不同，合并判定会丢失具体原因，故抑制该规则。
+@Suppress("ThrowsCount")
 private fun verifySimulatorMetadata(lines: List<String>, scenarios: List<String>) {
     val metadata =
         lines.filter { it.startsWith("META ") }.associate { line ->
@@ -149,6 +151,8 @@ private fun verifySimulatorMetadata(lines: List<String>, scenarios: List<String>
 }
 
 /** 结果校验：唯一末行 RESULT PASS，且场景集合与车道清单完全一致、逐项 PASS。 */
+// 同 verifySimulatorMetadata：三项判据（唯一结果行 / 场景集合 / 逐项 PASS）各有独立失败文案，故抑制该规则。
+@Suppress("ThrowsCount")
 private fun verifySimulatorResults(lines: List<String>, scenarios: List<String>) {
     val resultLines = lines.filter { it.startsWith("RESULT ") }
     if (resultLines != listOf("RESULT PASS") || lines.last() != "RESULT PASS") {

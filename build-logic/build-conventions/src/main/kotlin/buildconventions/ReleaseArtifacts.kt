@@ -65,13 +65,20 @@ private fun copyReleaseArtifacts(project: Project, version: String, dist: File) 
     requiredArtifacts.forEach { artifact ->
         val destination = File(File(dist, artifact.loader), artifact.targetName)
         artifact.source.copyTo(destination, overwrite = true)
-        project.logger.lifecycle("[dist] ${artifact.loader}/${artifact.targetName}  (${artifact.source.length()} bytes)")
+        project.logger.lifecycle(
+            "[dist] ${artifact.loader}/${artifact.targetName}  (${artifact.source.length()} bytes)",
+        )
     }
 
     project.logger.lifecycle("[dist] 完成：${dist.absolutePath}")
 }
 
-/** 13 个发布制品的来源与目标名；列表顺序即复制与 `[dist]` 日志顺序。 */
+/**
+ * 13 个发布制品的来源与目标名；列表顺序即复制与 `[dist]` 日志顺序。
+ */
+// 本表是逐行对照的契约清单（车道路径 / 构建相对路径 / 目标名 / loader），拆行后无法逐行比对；
+// 行长对此类数据表不是有效信号（.editorconfig 对 .kt/.kts 亦已禁用 ktlint 的 max-line-length）。
+@Suppress("MaxLineLength")
 private fun releaseArtifacts(project: Project, version: String): List<ReleaseArtifact> =
     listOf(
         laneArtifact(project, ":platform:bukkit:1.12.2", "libs/mpmt-bukkit-1.12.2-$version.jar", "mpmt-bukkit-1.12.2-$version.jar", "bukkit"),

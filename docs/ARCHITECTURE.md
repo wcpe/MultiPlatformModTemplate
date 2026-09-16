@@ -168,7 +168,7 @@ flowchart LR
     PROTO2 <--> TPS
 ```
 
-**图 4 · 构建组成（单一根构建，平台车道均为子模块）**（依据 ADR-0026 / ADR-0025）
+**图 4 · 构建组成（单一根构建，平台车道均为子模块 · 公共流程在约定插件）**（依据 ADR-0026 / ADR-0025 / ADR-0027）
 
 ```mermaid
 flowchart TB
@@ -180,7 +180,8 @@ flowchart TB
         NEOB["platform-neoforge 1.20.2 · top.wcpe.loom"]
         SPOB["platform-sponge 1.20.1 · SpongeGradle"]
     end
-    PLUG["build-logic/realserver-acceptance<br/>Gradle 插件工程（pluginManagement includeBuild）"]
+    PLUG["build-logic/realserver-acceptance<br/>真服验收编排约定插件（pluginManagement includeBuild）"]
+    CONV["build-logic/build-conventions<br/>构建约定插件：quality / platform / loader / release<br/>（车道脚本只做配置）"]
 
     BUKM --> CORE
     FABB -->|"project(\":core:…\") 项目依赖"| CORE
@@ -188,9 +189,12 @@ flowchart TB
     NEOB -->|"项目依赖"| CORE
     SPOB -->|"项目依赖"| CORE
     ROOT -. pluginManagement includeBuild .-> PLUG
+    ROOT -. pluginManagement includeBuild .-> CONV
 ```
 
-> 关键：全部平台车道都是**同一个根构建的普通子模块**，由根 `settings.gradle.kts` 直接 `include`，不再有复合构建隔离——加载器插件冲突的前提已由 [ADR-0025](adr/0025-wcpe-loom-toolchain-unification.md)（mod 平台构建插件统一为 `top.wcpe.loom` 1.17.1）消除，故 [ADR-0026](adr/0026-single-build-subproject-unification.md) 取消车道级独立构建。车道消费核心一律用 `project(":core:domain")` 这类**项目依赖**（原经复合构建依赖替换 / 受控内部 JAR）；车道不再有 `settings.gradle.kts`、自有 wrapper、反向 `includeBuild`。唯一保留的 `includeBuild` 是 **Gradle 插件工程** `build-logic/realserver-acceptance`（经 `pluginManagement` 引入，属构建基础设施，不属平台隔离）。Bukkit 家族无专属冲突插件，作根构建常规模块；SpongeGradle 与 loom 同处一个构建已实测共存。
+> 关键：全部平台车道都是**同一个根构建的普通子模块**，由根 `settings.gradle.kts` 直接 `include`，不再有复合构建隔离——加载器插件冲突的前提已由 [ADR-0025](adr/0025-wcpe-loom-toolchain-unification.md)（mod 平台构建插件统一为 `top.wcpe.loom` 1.17.1）消除，故 [ADR-0026](adr/0026-single-build-subproject-unification.md) 取消车道级独立构建。车道消费核心一律用 `project(":core:domain")` 这类**项目依赖**（原经复合构建依赖替换 / 受控内部 JAR）；车道不再有 `settings.gradle.kts`、自有 wrapper、反向 `includeBuild`。保留的 `includeBuild` 只有两个 **Gradle 插件工程**（经 `pluginManagement` 引入，属构建基础设施，不属平台隔离）：`build-logic/realserver-acceptance`（真服验收编排）与 `build-logic/build-conventions`（构建约定插件）。Bukkit 家族无专属冲突插件，作根构建常规模块；SpongeGradle 与 loom 同处一个构建已实测共存。
+>
+> **构建逻辑分层**（[ADR-0027](adr/0027-build-convention-plugins.md)）：车道的公共流程不再写在各车道脚本里，而是集中在 `build-conventions` 的分层插件中——`build-conventions.quality`（静态分析与覆盖率门禁）、`build-conventions.platform`（平台公共层）、`build-conventions.<loader>`（fabric / bukkit / forge / neoforge / sponge 五层 loader 流程）、`build-conventions.release`（根侧发布聚合与真服/版本矩阵门禁编排）。插件 id 用功能语义、不含项目身份。**车道脚本只留"本车道是什么"的参数与偏离项**：MC / loader 版本、目标 JDK、L4 选择、报告路径、确有差异的依赖与断言；重复出现的 loader 流程性代码即为设计异味。任务名与路径、13 个发布 jar 的名称与字节、报告路径与 `SERVER-GAMETEST-REPORT v2` 格式、`-Pmpmt.acceptance.*` 属性名与默认值、门禁判定强度与失败文案属**不可变契约**，抽取只搬实现、不动契约。
 
 ### 2.5 P2 已交付：版本矩阵与工具链隔离
 
@@ -239,7 +243,7 @@ P2 采用非笛卡尔积版本矩阵、按版本隔离的 Forge 工具链、L4 �
 ## 6. 部署
 
 - **构建产物**：每个目标平台产出各自的可加载件——Bukkit 家族为插件 jar（含 `plugin.yml`），Fabric 的旧混淆版本为 Loom 重映射 mod jar、26.1+ 为无混淆链路产物（`fabric.mod.json`），Forge/NeoForge 为对应 mod jar（`mods.toml` / `neoforge.mods.toml`）。各产物内打包 L0–L2 核心 + 对应 L3/L4 胶水。
-- **构建工具**：Gradle **9.6.1** 单一根构建（Kotlin DSL，平台车道为根构建子模块）；L0–L2、Bukkit 家族（`platform-bukkit`）与全部平台车道（fabric / forge / neoforge / sponge）同处一个根构建 —— mod 平台构建插件统一为 WCPE Loom（`top.wcpe.loom` 1.17.1，26.2 两车道用 no-remap 变体），Sponge 车道用 SpongeGradle，加载器插件由根 `pluginManagement` 单点 pin，见 [ADR-0025](adr/0025-wcpe-loom-toolchain-unification.md) / [ADR-0026](adr/0026-single-build-subproject-unification.md)。车道消费核心经 `project(":core:domain")` 项目依赖（无依赖替换 / 无受控内部 JAR）；根构建**硬要求守护 JVM ≥ 25**（26.2 两车道在配置期硬校验）。第三方依赖统一 relocate、core 打进各产物的方式见 [ADR-0012](adr/0012-packaging-and-dependency-isolation.md)。Minecraft 26.1+ 使用无混淆原始命名和加载器构建链路，见 [ADR-0022](adr/0022-unobfuscated-minecraft-naming-policy.md)（已取代 ADR-0016；旧版本继续按其规则）。平台车道隔离的旧方案见 [ADR-0007](adr/0007-composite-build-loader-isolation.md) 决策 2（已被 ADR-0026 取代；ADR-0007 取代 [ADR-0005](adr/0005-build-toolchain.md)）。
+- **构建工具**：Gradle **9.6.1** 单一根构建（Kotlin DSL，平台车道为根构建子模块）；L0–L2、Bukkit 家族（`platform-bukkit`）与全部平台车道（fabric / forge / neoforge / sponge）同处一个根构建 —— mod 平台构建插件统一为 WCPE Loom（`top.wcpe.loom` 1.17.1，26.2 两车道用 no-remap 变体），Sponge 车道用 SpongeGradle，加载器插件由根 `pluginManagement` 单点 pin，见 [ADR-0025](adr/0025-wcpe-loom-toolchain-unification.md) / [ADR-0026](adr/0026-single-build-subproject-unification.md)。车道消费核心经 `project(":core:domain")` 项目依赖（无依赖替换 / 无受控内部 JAR）；根构建**硬要求守护 JVM ≥ 25**（26.2 两车道在配置期硬校验）。**构建逻辑分层**：静态分析 / 平台公共层 / 各 loader 流程 / 根侧发布编排集中在 `build-logic/build-conventions` 的分层约定插件（`quality` / `platform` / `<loader>` / `release`），**车道脚本只做配置**（参数与偏离项），见 [ADR-0027](adr/0027-build-convention-plugins.md)。第三方依赖统一 relocate、core 打进各产物的方式见 [ADR-0012](adr/0012-packaging-and-dependency-isolation.md)。Minecraft 26.1+ 使用无混淆原始命名和加载器构建链路，见 [ADR-0022](adr/0022-unobfuscated-minecraft-naming-policy.md)（已取代 ADR-0016；旧版本继续按其规则）。平台车道隔离的旧方案见 [ADR-0007](adr/0007-composite-build-loader-isolation.md) 决策 2（已被 ADR-0026 取代；ADR-0007 取代 [ADR-0005](adr/0005-build-toolchain.md)）。
   - **当前落地**（进度以 PRD §4 FR 状态为权威）：根 Gradle wrapper 为 **9.6.1**（全车道统一），mod 平台构建插件统一为 `top.wcpe.loom` 1.17.1（ADR-0025），全部平台车道为根构建子模块（ADR-0026）；L0–L2 仍是 Java 8 的平台无关核心，P1 与 P2（FR-12）分别已在 v0.1.0、v0.2.0 交付。P3 的 26.2 仅有 Bukkit、Fabric、Forge 三条在制车道，均为根构建子模块（工程路径 `:platform:fabric:fabric-26.2`、`:platform:forge:forge-26.2`）。26.1+ 的无混淆命名策略由 ADR-0022 裁决；REALSERVER262 只覆盖三个公共场景，且 ADR-0023 将该严格门定为 FR-16 的最终自动化验收；FR-17 的远端发布尚未执行，故三项仍保持开发中。
 - **P3 当前边界**：26.2 仅有 `platform/bukkit/26.2`、`platform/fabric/26.2` 与 `platform/forge/26.2` 三条有效车道，三者均为根构建子模块、均在开发中。REALSERVER262 只要求 `product-handshake`、`product-roundtrip` 与 `client-hud` 三个公共场景；同轮 REALSERVER262 报告经严格门验证是 FR-16 交付前置条件。版本矩阵（STANDARD/HYBRID/SCHEDULER）不覆盖 26.2。
 - **远端交付治理**：GitHub Actions（FR-32）在 Hosted Runner 固定 mc-testkit 本地 Maven 回退后，以 **JDK 25 守护**运行单一根构建的 `:buildAll`（Java 8/17/21/25 均显式安装，8/17/21 仅供 toolchain 解析），并提供手动 Release、依赖审查和 CodeQL。它属于交付治理层，不加入产品依赖图；CI 构建结果不能替代 ADR-0014 / ADR-0023 的本机 realserver/REALSERVER262 证据，详见 ADR-0024。
@@ -272,6 +276,7 @@ P2 采用非笛卡尔积版本矩阵、按版本隔离的 Forge 工具链、L4 �
 - [ADR-0024] GitHub Actions 远端质量门与真服验收分离。
 - [ADR-0025] 构建插件统一 WCPE Loom（`top.wcpe.loom` 1.17.1）并收敛 Gradle 车道至 9.6.1；部分取代 ADR-0021 的工具链隔离。
 - [ADR-0026] 平台车道统一为根构建子模块（取消加载器插件隔离）；取代 ADR-0007 决策 2，部分取代 ADR-0021 决策 2，并规定根构建硬要求守护 JVM ≥ 25。
+- [ADR-0027] 构建约定插件分层：公共构建流程进插件工程（`build-conventions.quality` / `.platform` / `.<loader>` / `.release`）、车道脚本只做配置、插件 id 不含项目身份。
 
 **当前不做（明确边界）**：
 - 不含产品级玩法，仅 `smoke` 冒烟特性验证架构（交付形态 = 脚手架 / 模板，克隆复用而非发布为依赖库）。

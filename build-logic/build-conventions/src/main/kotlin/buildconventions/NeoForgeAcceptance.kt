@@ -162,7 +162,8 @@ private fun registerNeoForgeAcceptanceReportGate(
     lane: NeoForgeLaneExtension,
     acceptance: SourceSet,
 ) {
-    val realAcceptanceReport = project.provider { project.acceptanceReportFrom(lane.acceptanceReport.get()) }
+    val realAcceptanceReport =
+        project.provider { project.acceptanceReportFrom(listOf(lane.acceptanceReport.get())) }
     project.tasks.register(NEOFORGE_VERIFY_ACCEPTANCE_TASK, JavaExec::class.java) {
         group = "verification"
         description = "严格校验 NeoForge acceptance v2 报告，缺元数据、场景或 PASS 均失败"

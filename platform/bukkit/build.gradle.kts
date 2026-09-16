@@ -5,6 +5,11 @@ plugins {
     java
 }
 
+// ktlint / detekt 的报告与规则制品需从 mavenCentral 解析（本壳工程无其它依赖来源）
+repositories {
+    mavenCentral()
+}
+
 // 壳工程无源码
 sourceSets.named("main") {
     java.setSrcDirs(emptyList<Any>())
@@ -20,7 +25,10 @@ tasks.named("jar") {
 }
 tasks.matching { it.name.startsWith("compile") || it.name.startsWith("process") || it.name.startsWith("classes") }
     .configureEach { enabled = false }
-tasks.matching { it.name.startsWith("checkstyle") || it.name.startsWith("pmd") || it.name.startsWith("spotbugs") || it.name.startsWith("jacoco") }
+tasks.matching {
+    it.name.startsWith("checkstyle") || it.name.startsWith("pmd") || it.name.startsWith("spotbugs") ||
+        it.name.startsWith("jacoco")
+}
     .configureEach { enabled = false }
 tasks.matching { it.name == "test" || it.name == "check" }.configureEach { enabled = false }
 

@@ -14,11 +14,10 @@ import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.compile.JavaCompile
 import java.io.File
 
-// platform-forge（L3）：根构建普通子模块，仅应用 arch-loom（top.wcpe.loom，ADR-0007）。
-// Gradle 版本统一到根 9.6.1（wrapper 已对齐）；守护 JVM 须 ≥21（unpick 运行期要求），
-// 目标 Java 21 由下方 toolchain 承担，不再做配置期版本守卫。
-// 打包、dev SecureJar 嵌入链、验收报告门与契约测试由 build-conventions.forge 承担；
-// 本脚本只保留"参数与差异"：版本坐标、loom run 配置、依赖与门禁接线。
+// Forge 1.21.1 车道（根构建子模块）：common + server + client 分目录 → mpmt-forge-1.21.1-<version>.jar。
+// 不可变契约：产物名与路径、SRG 重映射链路与 mods.toml/services 断言、dev SecureJar 嵌入链、
+// 验收报告门与判定强度（ADR-0014）；打包链路与 dev 链路集中在 build-conventions.forge（ADR-0027）。
+// 守护 JVM 须 ≥ 21（unpick 运行期要求）；目标 Java 21 由下方 toolchain 承担。
 
 plugins {
     id("build-conventions.quality")
@@ -62,7 +61,7 @@ tasks.withType<JavaCompile>().configureEach {
 configurations.create("productBundle")
 configurations.create("acceptanceBundle")
 
-// forge 车道参数：版本、产物名与"本车道特有的接线差异"在此声明；
+// forge 车道参数：版本、产物名与本车道接线差异在此声明；
 // 源集、dev SecureJar 嵌入、验收 jar 与报告门、打包校验、契约测试由插件承担。
 val forge = extensions.getByType(ForgeLaneExtension::class.java)
 forge.mcVersion.set(minecraftVersion)
@@ -149,7 +148,7 @@ loom {
     runs {
         // 配置名决定任务名：acceptanceServer -> runAcceptanceServer（主类由 forge 运行模板注入）。
         // source 指定任务 classpath 基底（acceptance.runtimeClasspath）；mods 声明经
-        // ForgeModClassesService 写入 MOD_CLASSES（等价于 FG6 的 mods { source } SecureJar 路径）。
+        // ForgeModClassesService 写入 MOD_CLASSES（mods { source } 的 SecureJar 路径）。
         create("acceptanceServer") {
             server()
             source(acceptance)

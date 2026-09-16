@@ -6,7 +6,7 @@
     <ID>CyclomaticComplexMethod:PaperHostService.kt$PaperHostService$private fun startPaper()</ID>
     <ID>LongMethod:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$private fun configureHostWiring(target: Project, ext: MpmtRealServerAcceptanceExtension)</ID>
     <ID>LongMethod:PaperHostService.kt$PaperHostService$private fun startPaper()</ID>
-    <ID>LongParameterList:PlatformLane.kt$PlatformLane$( val id: String, val displayName: String, val serverKind: ServerKind, val clientKind: ClientKind, /** composite includeBuild 名；null = 根多模块或自有 launcher 车道 */ val includedBuildName: String?, /** 平台/模块内门禁任务名 */ val verifyTaskName: String, val defaultReportHint: String, /** 可选：默认矩阵（HYBRID/SCHEDULER/REALSERVER262）；空=默认轨 */ val defaultMatrix: String = "", /** * 根工程内任务路径（仅 includedBuildName==null 时用）。 * 例：`:platform:bukkit:1.20.1:runRealServerAcceptance` */ val rootProjectTaskPath: String? = null, )</ID>
+    <ID>LongParameterList:PlatformLane.kt$PlatformLane$( val id: String, val displayName: String, val serverKind: ServerKind, val clientKind: ClientKind, /** 根工程内该车道的真服门任务全路径；例：`:platform:fabric:fabric-1.20.1:runRealServerAcceptance` */ val rootTaskPath: String, /** 平台/模块内门禁任务名 */ val verifyTaskName: String, val defaultReportHint: String, /** 可选：默认矩阵（HYBRID/SCHEDULER/REALSERVER262）；空=默认轨 */ val defaultMatrix: String = "", )</ID>
     <ID>LoopWithTooManyJumpStatements:PaperHostService.kt$PaperHostService$while</ID>
     <ID>MagicNumber:FillV3Downloads.kt$FillV3Downloads$200</ID>
     <ID>MagicNumber:FillV3Downloads.kt$FillV3Downloads$299</ID>
@@ -16,26 +16,26 @@
     <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$25599</ID>
     <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$64</ID>
     <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$8</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$10</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$3</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$5</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$7</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$9</ID>
     <ID>MagicNumber:PaperHostService.kt$PaperHostService$1000</ID>
     <ID>MagicNumber:PaperHostService.kt$PaperHostService$1024</ID>
     <ID>MagicNumber:PaperHostService.kt$PaperHostService$1_000</ID>
     <ID>MagicNumber:PaperHostService.kt$PaperHostService$30</ID>
     <ID>MagicNumber:PaperHostService.kt$PaperHostService$60_000L</ID>
     <ID>MagicNumber:PaperHostService.kt$PaperHostService$80</ID>
+    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$10</ID>
+    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$3</ID>
+    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$5</ID>
+    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$7</ID>
+    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$9</ID>
+    <ID>MaxLineLength:PaperHostService.kt$PaperHostService$val metadataUrl = "${FillV3Downloads.ENDPOINT}projects/paper/versions/${frozen.mcVersion}/builds/${frozen.build}"</ID>
     <ID>MaxLineLength:RealServerGateContractTest.kt$RealServerGateContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/MpmtRealServerAcceptanceExtension.kt"</ID>
     <ID>MaxLineLength:RealServerGateContractTest.kt$RealServerGateContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/MpmtRealServerAcceptancePlugin.kt"</ID>
-    <ID>MaxLineLength:RealServerGateContractTest.kt$RealServerGateContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/RealServerReportGatePlugin.kt"</ID>
     <ID>MaxLineLength:RealServerGateContractTest.kt$RealServerGateContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/PaperHostService.kt"</ID>
+    <ID>MaxLineLength:RealServerGateContractTest.kt$RealServerGateContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/RealServerReportGatePlugin.kt"</ID>
     <ID>MaxLineLength:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$line.startsWith("START_EPOCH_MS\t") -&gt; startEpochMs = unique("START_EPOCH_MS", startEpochMs, fields(line, 2)[1].toLong())</ID>
-    <ID>MaxLineLength:PaperHostService.kt$PaperHostService$val metadataUrl = "${FillV3Downloads.ENDPOINT}projects/paper/versions/${frozen.mcVersion}/builds/${frozen.build}"</ID>
     <ID>ThrowsCount:AcceptanceReportGate.kt$AcceptanceReportGate$fun verify(reportFile: File)</ID>
-    <ID>ThrowsCount:RealServerReportGatePlugin.kt$RealServerReportGatePlugin$private fun verify(project: Project)</ID>
     <ID>ThrowsCount:PaperHostService.kt$PaperHostService$private fun resolveFrozenPaperJar(cacheDir: File, frozen: FrozenPaperArtifact): File</ID>
+    <ID>ThrowsCount:RealServerReportGatePlugin.kt$RealServerReportGatePlugin$private fun verify(project: Project)</ID>
     <ID>TooGenericExceptionCaught:PaperHostService.kt$PaperHostService$failure: Throwable</ID>
     <ID>TooGenericExceptionCaught:PaperHostService.kt$PaperHostService$t: Throwable</ID>
     <ID>TooManyFunctions:PaperHostService.kt$PaperHostService : BuildServiceAutoCloseable</ID>

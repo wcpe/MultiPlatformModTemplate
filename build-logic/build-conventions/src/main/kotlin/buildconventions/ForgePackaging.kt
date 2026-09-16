@@ -95,7 +95,8 @@ fun registerForgeModernSourceSets(project: Project) {
         sourceSet.output.setResourcesDir(sourceSet.java.destinationDirectory.get().asFile)
     }
     // acceptance 编译需要 main 的 compileOnly 共享类；不 extends implementation（已无 runtime 共享 jar）
-    project.configurations.getByName("acceptanceCompileOnly").extendsFrom(project.configurations.getByName("compileOnly"))
+    project.configurations.getByName("acceptanceCompileOnly")
+        .extendsFrom(project.configurations.getByName("compileOnly"))
     project.configurations.getByName("contractTestImplementation")
         .extendsFrom(project.configurations.getByName("testImplementation"))
     project.configurations.getByName("contractTestRuntimeOnly")

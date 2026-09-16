@@ -44,7 +44,11 @@ fun configureForgeReportProperties(
     serverRuntimeRequired: Boolean,
 ) {
     val javaVersion = lane.targetJavaVersion.get()
-    val product = project.tasks.named(lane.productTaskName.get(), AbstractArchiveTask::class.java).get().archiveFile.get().asFile
+    val product =
+        project.tasks.named(
+            lane.productTaskName.get(),
+            AbstractArchiveTask::class.java,
+        ).get().archiveFile.get().asFile
     val acceptanceJarFile =
         project.tasks.named(FORGE_ACCEPTANCE_JAR_TASK, AbstractArchiveTask::class.java).get().archiveFile.get().asFile
     val serverRuntimeProperty = project.findProperty("mpmt.acceptance.artifact.server-runtime")
@@ -60,19 +64,22 @@ fun configureForgeReportProperties(
     }
     task.systemProperty("mpmt.acceptance.runId", requiredForgeRunProperty(project, AcceptanceRound.RUN_ID_PROPERTY))
     task.systemProperty("mpmt.acceptance.matrix", requiredForgeRunProperty(project, AcceptanceRound.MATRIX_PROPERTY))
-    task.systemProperty("mpmt.acceptance.startEpochMs", requiredForgeRunProperty(project, AcceptanceRound.START_EPOCH_PROPERTY))
-    task.systemProperty("mpmt.acceptance.javaExecutable", forgeJavaLauncher(project, javaVersion).get().executablePath.asFile.absolutePath)
+    task.systemProperty(
+        "mpmt.acceptance.startEpochMs",
+        requiredForgeRunProperty(project, AcceptanceRound.START_EPOCH_PROPERTY),
+    )
+    task.systemProperty(
+        "mpmt.acceptance.javaExecutable",
+        forgeJavaLauncher(project, javaVersion).get().executablePath.asFile.absolutePath,
+    )
     task.systemProperty("mpmt.acceptance.artifact.server-runtime", serverRuntime.absolutePath)
     task.systemProperty("mpmt.acceptance.artifact.server-product", product.absolutePath)
     task.systemProperty("mpmt.acceptance.artifact.server-acceptance", acceptanceJarFile.absolutePath)
-    task.systemProperty(
-        "mpmt.acceptance.artifact.client-product",
-        (project.findProperty("mpmt.acceptance.artifact.client-product") ?: product.absolutePath).toString(),
-    )
-    task.systemProperty(
-        "mpmt.acceptance.artifact.client-acceptance",
-        (project.findProperty("mpmt.acceptance.artifact.client-acceptance") ?: acceptanceJarFile.absolutePath).toString(),
-    )
+    val clientProduct = project.findProperty("mpmt.acceptance.artifact.client-product") ?: product.absolutePath
+    task.systemProperty("mpmt.acceptance.artifact.client-product", clientProduct.toString())
+    val clientAcceptance =
+        project.findProperty("mpmt.acceptance.artifact.client-acceptance") ?: acceptanceJarFile.absolutePath
+    task.systemProperty("mpmt.acceptance.artifact.client-acceptance", clientAcceptance.toString())
 }
 
 /**
@@ -80,13 +87,15 @@ fun configureForgeReportProperties(
  *
  * 判定顺序与失败文案与迁移前车道脚本逐条一致（仅车道标签与补跑提示由车道参数派生）。
  */
+// 报告门按契约逐项失败即抛（无报告 / 空报告 / 非 RESULT 行 / 未 PASS 各有独立文案），合并会丢失具体原因。
+@Suppress("ThrowsCount")
 internal fun registerForgeAcceptanceReportGate(project: Project, lane: ForgeLaneExtension) {
     val laneLabel = lane.laneLabel.get()
     project.tasks.register("verifyAcceptanceReport") {
         group = "verification"
         description = "校验 $laneLabel 真服/验收报告末行 RESULT PASS"
         doLast {
-            val report = project.acceptanceReportFrom(*lane.acceptanceReportCandidates.get().toTypedArray())
+            val report = project.acceptanceReportFrom(lane.acceptanceReportCandidates.get())
             if (!report.isFile) {
                 throw GradleException("未找到 $laneLabel 验收报告：${report.absolutePath}\n" + lane.acceptanceReportHint.get())
             }
@@ -99,7 +108,9 @@ internal fun registerForgeAcceptanceReportGate(project: Project, lane: ForgeLane
                 throw GradleException("验收报告末行不是 RESULT 行：${report.absolutePath}\n$last")
             }
             if (last != "RESULT PASS") {
-                throw GradleException("验收未通过（$last）：${report.absolutePath}\n—— 报告全文 ——\n${report.readText(Charsets.UTF_8)}")
+                throw GradleException(
+                    "验收未通过（$last）：${report.absolutePath}\n—— 报告全文 ——\n${report.readText(Charsets.UTF_8)}",
+                )
             }
             logger.lifecycle("[realserver] $laneLabel 报告 PASS：${report.absolutePath}")
         }

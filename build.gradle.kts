@@ -1,9 +1,10 @@
 // 根构建脚本：只做配置——插件声明、根级坐标与版本、A 车道 mc-testkit 接线。
-// 发布聚合与真服/版本矩阵门禁的编排实现集中在 build-conventions.release（ADR-0027）。
-//
-// 版本号唯一来源 = 根目录 VERSION 文件（testing-and-quality §3：VERSION 是版本号唯一来源）。
+// 不可变契约：根目录 VERSION 是版本号唯一来源（testing-and-quality §3）、根侧入口任务名
+// （runMcTestkitSmoke / runMcTestkitFoliaSmoke）、发布聚合与真服/版本矩阵门禁的编排入口。
+// 流程实现集中在 build-conventions.release 与各 loader 约定插件，见 docs/adr/0027-build-convention-plugins.md。
 
-// 外部分析插件挂 buildscript classpath（apply false），供 subprojects 统一 apply。
+// 外部分析插件以 apply false 声明：由 build-conventions.quality 在运行期按 id 应用，
+// 在根声明可保证全构建只有一份插件类路径（避免按子树分裂类加载器）。
 plugins {
     id("com.github.spotbugs") version "6.0.26" apply false
     // Kotlin 工具链（现接、前瞻就绪；当前仅 .gradle.kts 为 Kotlin，第二期引入 Kotlin 源即生效）

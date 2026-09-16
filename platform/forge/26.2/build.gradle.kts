@@ -16,11 +16,15 @@ import java.io.File
 import java.net.Socket
 import java.util.concurrent.TimeUnit
 
+// Forge 26.2 车道（根构建子模块）：common + server + client 分目录 → mpmt-forge-26.2-<version>.jar。
+// 不可变契约：产物名与路径（无 remapJar，jar 即权威产品 jar）、mods.toml / Mixin / services 断言、
+// dev SecureJar 嵌入链、REALSERVER262 报告路径与判定强度（ADR-0014）；MC 26.1+ 无混淆命名（ADR-0022）。
+// 打包链路与 dev 链路集中在 build-conventions.forge（ADR-0027）。
 plugins {
     id("build-conventions.quality")
     id("java")
-    // EGT 迁移（ADR-0025 后续）： Forge 26.2 改用本地 wcpe loom fork（architectury-loom 系，
-    // 为无混淆 Forge 补齐 mcp merge 预补丁管线）；版本由 settings pluginManagement 钉在 mavenLocal。
+    // Forge 26.2 用 WCPE loom 的无混淆变体（architectury-loom 系，为无混淆 Forge 补齐 mcp merge 预补丁管线）；
+    // 版本由根 settings 的 pluginManagement 单点 pin。
     id("top.wcpe.loom-no-remap")
     id("build-conventions.forge")
 }
@@ -65,7 +69,7 @@ java {
 configurations.create("productBundle")
 configurations.create("acceptanceBundle")
 
-// forge 车道参数：版本、产物名与"本车道特有的接线差异"在此声明；
+// forge 车道参数：版本、产物名与本车道接线差异在此声明；
 // 源集、dev SecureJar 嵌入、验收 jar 与报告门、打包校验、契约测试由插件承担。
 val forge = extensions.getByType(ForgeLaneExtension::class.java)
 forge.mcVersion.set(minecraftVersion)
@@ -128,7 +132,7 @@ repositories {
 
 dependencies {
     // arch-loom 三段式声明：原版 MC 本体（26.2 无混淆、无官方 mappings，走 disableObfuscation 管线）
-    // + Forge（arch-loom 自行解析 userdev）；共享 JAR 消费与 FG7 时代保持一致
+    // + Forge（arch-loom 自行解析 userdev）；共享 JAR 消费为 compileOnly 为主
     minecraft("com.mojang:minecraft:$minecraftVersion")
     "forge"("net.minecraftforge:forge:$forgeVersion")
 
@@ -171,7 +175,7 @@ loom {
         // 配置名决定任务名：acceptanceServer -> runAcceptanceServer（主类由 forge 运行模板注入，
         // userdev config runs.main = net.minecraftforge.bootstrap.ForgeBootstrap）。
         // source 指定任务 classpath 基底；mods 声明经 ForgeModClassesService 写入 MOD_CLASSES
-        // （等价 FG7 时代 dev SecureJar 的 source_roots 语义）。
+        // （dev SecureJar 的 source_roots 语义）。
         create("acceptanceServer") {
             server()
             configName = "Acceptance Server"

@@ -12,26 +12,23 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.TimeUnit
 
-// platform-fabric-26.2（L3）：根构建子模块（ADR-0026）；MC 26.2，common/server/client 分目录，Loom 根打包。
-// 关键链路（ADR-0012）：core 纯 Java 经 shadow shade 进产物，snakeyaml relocate；
-// MC 26.1+ 使用 Mojang 无混淆原始命名，shadowJar 直接产出权威产品 jar（ADR-0022）。
-// gametest 接入层、Loom run 与验收注入、模拟服门禁、mod 元数据展开由 build-conventions.fabric 承担。
-
+// Fabric 26.2 车道（根构建子模块）：common + server + client 分目录 → mpmt-fabric-26.2-<version>.jar。
+// 不可变契约：产物名与路径、shadowJar 直接产出产品 jar（MC 26.1+ 无混淆、无 remap，ADR-0022）、
+// 唯一 L4（v26_2）、fabric.mod.json 元数据、realserver REALSERVER262 场景清单与判定强度（ADR-0014）。
+// gametest 接入层 / Loom run / 验收注入 / 模拟服门禁 / 元数据展开集中在 build-conventions.fabric（ADR-0027）。
 plugins {
     id("build-conventions.quality")
     id("top.wcpe.loom-no-remap")
     // 车道约定插件须在 loom 之后应用：gametest 源集要晚于 loom 按现有源集注册 migrate*Mappings 任务的时机创建
     id("build-conventions.fabric")
     id("com.gradleup.shadow") version "8.3.11"
-    // 静态分析 / 质量工具链由根构建 subprojects{} 统一提供（含 spotbugs/ktlint/detekt/kover，见 ADR-0026）。
-    // 车道内重复声明会分裂插件类加载器并破坏 loom 清单服务，故此处不再声明。
-    // 历史说明：静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
-    // 核心 Gradle 插件经 apply(plugin=...) 接入（见下方装配块）；外部插件在此带版本直接 apply。
+    // 分析类插件（spotbugs / ktlint / detekt / kover）不在车道内声明：由 build-conventions.quality 应用，
+    // 版本与类路径由根 plugins{} 单点 pin，重复声明会分裂插件类加载器并破坏 loom 的清单服务。
 }
 
 group = "top.wcpe.mc.mpmt"
 
-// 本子模块仅服务 MC 26.2（每版本一个子模块，废除 -P 选型）
+// 本子模块仅服务 MC 26.2（每版本一个子模块）
 val mcVersion = "26.2"
 val loaderVersion = "0.19.3"
 val fabricApiVersion = "0.155.2+26.2"
@@ -41,8 +38,8 @@ val selectedL4Name = "v26_2"
 val unselectedL4Name = "v1_21"
 val snakeyamlVersion = "2.2"
 
-// 受控内部 JAR 一律经各子模块 jar 任务产物消费：不再按 build/libs 文件路径硬编码（文件输入、
-// 不引入传递依赖），构建顺序由 Gradle 任务依赖保证（ADR-0026），无需文件存在性校验任务。
+// 受控内部 JAR 一律经各子模块 jar 任务产物消费（ADR-0026）：按任务依赖取产物（文件输入、不引入传递依赖），
+// 构建顺序由 Gradle 保证，无需文件存在性校验任务。
 // 用 withType<Jar>().matching 惰性取任务：named("jar") 会在本项目先于生产者配置时立即抛
 // UnknownTaskException（子模块按路径序配置），故不可用。
 fun moduleJar(projectPath: String): FileCollection =
@@ -84,7 +81,7 @@ quality {
     analysisJavaVersion.set(targetJavaVersion)
 }
 
-// fabric 车道参数：版本、产品任务与"原样保留的接线差异"在此声明；
+// fabric 车道参数：版本、产品任务与本车道接线差异在此声明；
 // gametest 源集与依赖接线、Loom run、验收元数据注入、模拟服门禁、mod 元数据展开、单测系统属性均由插件承担。
 val fabric = extensions.getByType(FabricLaneExtension::class.java)
 fabric.mcVersion.set(mcVersion)

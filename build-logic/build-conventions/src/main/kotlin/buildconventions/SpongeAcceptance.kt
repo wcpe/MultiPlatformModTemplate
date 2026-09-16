@@ -123,7 +123,8 @@ private fun registerSpongeAcceptanceJar(project: Project, lane: SpongeLaneExtens
  * 判定逻辑与文案与迁移前车道脚本逐字一致（报告路径由车道参数给出，`-Pmpmt.acceptance.report` 覆盖优先）。
  */
 internal fun registerSpongeRealserverGate(project: Project, lane: SpongeLaneExtension) {
-    val spongeRealserverReport = project.provider { project.acceptanceReportFrom(lane.acceptanceReport.get()) }
+    val spongeRealserverReport =
+        project.provider { project.acceptanceReportFrom(listOf(lane.acceptanceReport.get())) }
     project.tasks.register(SPONGE_REALSERVER_GATE_TASK) {
         group = "verification"
         description = "Sponge realserver 门禁：校验权威报告 RESULT PASS"

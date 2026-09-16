@@ -50,7 +50,7 @@ fun Project.acceptanceReportFile(matrixId: String): File {
  *
  * 用于真实专用服 / dev 编排两套运行目录共存的场景（forge / neoforge / sponge）。
  */
-fun Project.acceptanceReportFrom(vararg candidates: String): File {
+fun Project.acceptanceReportFrom(candidates: List<String>): File {
     val custom = (findProperty(AcceptanceRound.REPORT_PROPERTY) as String?)?.trim().orEmpty()
     if (custom.isNotEmpty()) {
         return file(custom)
@@ -63,6 +63,9 @@ fun Project.acceptanceReportFrom(vararg candidates: String): File {
  * 校验权威报告：v2 头、MATRIX 命中、RUN_ID 属于本轮、末行 RESULT PASS、公共场景各一次 PASS。
  * 判定顺序与失败文案与各车道原实现一致。
  */
+// 报告校验按契约逐项失败即抛：五个判据（头 / 矩阵 / 轮次 / 结果 / 场景）各自独立，判定顺序与文案不可合并，
+// 拆函数只会让契约更难对照，故此处保留单函数多次抛错并抑制该规则。
+@Suppress("ThrowsCount")
 fun Project.verifyAcceptanceRoundReport(report: File, matrixId: String) {
     val lines = report.readLines().map { it.trim() }.filter { it.isNotEmpty() }
     if (lines.firstOrNull() != "SERVER-GAMETEST-REPORT v2") {

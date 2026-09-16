@@ -28,7 +28,11 @@ internal fun registerForgeDevModOutputs(project: Project, lane: ForgeLaneExtensi
             group = "build"
             description = "将产品共享 JAR 嵌入 main classes，供 dev SecureJar 发现 @Mod 与依赖类"
             dependsOn(project.tasks.named("classes"), project.tasks.named("processResources"))
-            from(project.provider { project.configurations.getByName(FORGE_PRODUCT_BUNDLE).map { project.zipTree(it) } })
+            from(
+                project.provider {
+                    project.configurations.getByName(FORGE_PRODUCT_BUNDLE).map { project.zipTree(it) }
+                },
+            )
             into(main.java.destinationDirectory)
             duplicatesStrategy = DuplicatesStrategy.EXCLUDE
             lane.archiveExcludes.get().forEach { exclude(it) }
@@ -39,7 +43,11 @@ internal fun registerForgeDevModOutputs(project: Project, lane: ForgeLaneExtensi
             group = "build"
             description = "将验收共享 JAR 嵌入 acceptance classes，供 dev SecureJar 加载验收伴侣"
             dependsOn(project.tasks.named("acceptanceClasses"), project.tasks.named("processAcceptanceResources"))
-            from(project.provider { project.configurations.getByName(FORGE_ACCEPTANCE_BUNDLE).map { project.zipTree(it) } })
+            from(
+                project.provider {
+                    project.configurations.getByName(FORGE_ACCEPTANCE_BUNDLE).map { project.zipTree(it) }
+                },
+            )
             into(acceptance.java.destinationDirectory)
             duplicatesStrategy = DuplicatesStrategy.EXCLUDE
             lane.archiveExcludes.get().forEach { exclude(it) }
@@ -59,9 +67,10 @@ private fun wireForgeDevModOutputDependencies(
     embedProductTask: String,
     embedAcceptanceTask: String,
 ) {
-    listOf("compileAcceptanceJava", "compileTestJava", "jar", "checkstyleMain", "pmdMain", "spotbugsMain").forEach { name ->
-        project.tasks.named(name).configure { dependsOn(embedProductTask) }
-    }
+    listOf("compileAcceptanceJava", "compileTestJava", "jar", "checkstyleMain", "pmdMain", "spotbugsMain")
+        .forEach { name ->
+            project.tasks.named(name).configure { dependsOn(embedProductTask) }
+        }
     listOf("checkstyleAcceptance", "pmdAcceptance", "spotbugsAcceptance").forEach { name ->
         project.tasks.named(name).configure { dependsOn(embedAcceptanceTask) }
     }

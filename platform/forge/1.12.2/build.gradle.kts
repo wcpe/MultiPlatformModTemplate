@@ -13,6 +13,12 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
+// Forge 1.12.2 车道（根构建子模块）：client-only，legacy 链路经 top.wcpe.loom（ADR-0025）→
+// mpmt-forge-1.12.2-<version>.jar 与验收伴侣 mpmt-forge-acceptance-1.12.2-<version>.jar。
+// 不可变契约：产物名与路径（含 reobfJar / reobfAcceptanceJar 兼容路径）、MCP snapshot 映射与 SRG 重映射链路、
+// mcmod.info 元数据、验收伴侣判定（ADR-0014）；质量门禁真源在 build-conventions.quality（ADR-0027）。
+// 守护 JVM 须 ≥ 21（loom 运行期要求）；目标 Java 8 由下方 toolchain 承担。
+
 buildscript {
     repositories {
         mavenCentral()
@@ -31,10 +37,6 @@ plugins {
     id("build-conventions.forge")
 }
 
-// 本工程为根构建的普通子模块（platform/forge/1.12.2）；group / version 由根 allprojects 统一提供。
-// 已由 ForgeGradle 3 / Gradle 5.6.4 迁移到 top.wcpe.loom（architectury-loom fork）+ 根统一 Gradle 9.6.1：
-// 守护 JVM 须 ≥21（loom 运行期要求），目标 Java 8 由下方 toolchain 承担，不再做配置期 Gradle/Java 版本守卫。
-
 base {
     archivesName.set("mpmt-forge-1.12.2")
 }
@@ -52,7 +54,7 @@ val mappingsVersion = "20171003-1.12"
 val productChannel = "MPMT"
 val acceptanceChannel = "MPMTTEST"
 
-// forge 车道参数：本车道为 client-only + FG 时代 reobf 兼容路径（无 dev SecureJar 嵌入、无报告门）
+// forge 车道参数：本车道为 client-only + reobf 兼容任务映射（无 dev SecureJar 嵌入、无报告门）
 val forge = extensions.getByType(ForgeLaneExtension::class.java)
 forge.mcVersion.set(minecraftVersion)
 forge.targetJavaVersion.set(8)
@@ -299,7 +301,7 @@ repositories.remove(forgeUserdevShim)
 repositories.add(0, forgeUserdevShim)
 
 dependencies {
-    // arch-loom 三段式声明（替代 FG 的 minecraft{mappings{runs}} 单块）：
+    // arch-loom 三段式声明（minecraft / mappings / runs 分开）：
     // 原版 MC 本体 + MCP snapshot 映射（1.12.2 无 Mojang 官方映射，沿用原 snapshot_20171003-1.12）
     // + Forge（arch-loom 自行解析 userdev / binpatches / SRG 数据）
     add("minecraft", "com.mojang:minecraft:$minecraftVersion")
@@ -326,7 +328,7 @@ loom {
         pack200Provider.set(Pack200Adapter())
     }
     runs {
-        // FG3 runs.client 等价移植：工作目录/系统属性/mod 源集逐项对齐；
+        // runs.client 的取值：工作目录 / 系统属性 / mod 源集；
         // legacy forge（LaunchWrapper tweakClass）的启动装配由 arch-loom 运行模板自动完成
         maybeCreate("client").apply {
             runDirectory.set(project.file("run-client"))
@@ -386,7 +388,7 @@ tasks.named<Jar>("jar") {
 // 验收伴侣 dev 命名中间产物（落 devlibs），剔除清单与产物名由车道参数给出
 val acceptanceJar = registerForgeAcceptanceJar(project, forge)
 
-// 验收伴侣生产产物：named(MCP) → srg 重映射（等价原 FG reobfAcceptanceJar），
+// 验收伴侣生产产物：named(MCP) → srg 重映射，
 // 输出保持 build/libs/mpmt-forge-acceptance-1.12.2-<version>.jar（根文档/契约既有预期）
 val remapAcceptanceJar by tasks.registering(RemapJarTask::class) {
     group = "build"
@@ -399,7 +401,7 @@ val remapAcceptanceJar by tasks.registering(RemapJarTask::class) {
     archiveClassifier.set("")
 }
 
-// FG 时代 reobf 产物路径兼容层（reobfJar / reobfAcceptanceJar）由 build-conventions.forge 注册：
+// reobf 兼容任务（reobfJar / reobfAcceptanceJar）由 build-conventions.forge 注册：
 // 根 :collectReleaseArtifacts 硬引用 platform/forge/1.12.2/build/reobfJar/output.jar，
 // 根 realserver 说明沿用 `gradlew reobfJar reobfAcceptanceJar` 命令与产物路径。
 
@@ -448,7 +450,7 @@ val java8Launcher =
         languageVersion.set(JavaLanguageVersion.of(8))
     }
 
-// runClient 逐项等价原 FG3 client run：除 runDir/系统属性外，1.12.2 客户端本体只能在 Java 8 上启动
+// runClient 的取值：除 runDir / 系统属性外，1.12.2 客户端本体只能在 Java 8 上启动
 tasks.matching { it.name == "runClient" }.configureEach {
     val runClientTask = this
     if (runClientTask is JavaExec) {

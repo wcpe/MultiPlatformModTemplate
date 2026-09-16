@@ -31,7 +31,7 @@ class QualityConventionPlugin : Plugin<Project> {
         val quality = project.extensions.create("quality", QualityExtension::class.java)
         quality.checkstyleToolVersion.convention("10.17.0")
         quality.pmdToolVersion.convention("7.0.0")
-        quality.analysisJavaVersion.convention(17)
+        quality.analysisJavaVersion.convention(DEFAULT_ANALYSIS_JAVA_VERSION)
         applyStyleAndBugs(project, quality)
         applyCoverage(project)
         applyKotlinToolchain(project)
@@ -87,7 +87,7 @@ class QualityConventionPlugin : Plugin<Project> {
 
         val isPlatformLane = project.path.startsWith(":platform:") && project.path != ":platform"
         if (isPlatformLane) {
-            val laneCodeExclusions = SHARED_PACKAGES_EXCLUDED_FROM_PLATFORM_LANES.toTypedArray()
+            val laneCodeExclusions = SHARED_PACKAGES_EXCLUDED_FROM_PLATFORM_LANES
             // 必须在 afterEvaluate 应用：java 插件在 afterEvaluate 才填充 classDirectories，
             // 若在 configureEach 里 setFrom，会被随后的默认值覆盖掉。
             project.afterEvaluate {
@@ -95,7 +95,7 @@ class QualityConventionPlugin : Plugin<Project> {
                     classDirectories.setFrom(
                         files(
                             classDirectories.files.map { dir ->
-                                fileTree(dir) { exclude(*laneCodeExclusions) }
+                                fileTree(dir) { exclude(laneCodeExclusions) }
                             },
                         ),
                     )
@@ -104,7 +104,7 @@ class QualityConventionPlugin : Plugin<Project> {
                     classDirectories.setFrom(
                         files(
                             classDirectories.files.map { dir ->
-                                fileTree(dir) { exclude(*laneCodeExclusions) }
+                                fileTree(dir) { exclude(laneCodeExclusions) }
                             },
                         ),
                     )
@@ -181,6 +181,9 @@ class QualityConventionPlugin : Plugin<Project> {
     }
 
     private companion object {
+        /** 分析任务启动 JDK：Checkstyle 10.x 需 JDK 11+，独立于被测模块的编译工具链（可能是 JDK 8）。 */
+        const val DEFAULT_ANALYSIS_JAVA_VERSION: Int = 17
+
         /** 平台车道嵌入的共享模块包：计入车道覆盖率会稀释口径（由各模块自身测试覆盖）。 */
         val SHARED_PACKAGES_EXCLUDED_FROM_PLATFORM_LANES =
             listOf(

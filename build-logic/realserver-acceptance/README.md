@@ -20,3 +20,8 @@ Gradle 编排真服验收（禁 sh）。实例挂到应用插件的平台构建�
 车道表见 `PlatformLane` / `PlatformLaneCatalog`（每条的 `rootTaskPath` 形如
 `:platform:fabric:fabric-1.20.1:runRealServerAcceptance`）。全部 Gradle 调用须在仓库根执行，
 且根构建须以 **JDK 25** 守护运行（ADR-0026 决策 4）。
+
+> 独立调用本插件工程（`./gradlew -p build-logic/realserver-acceptance …`）时守护 JVM 由
+> `gradle/gradle-daemon-jvm.properties` 固定为 **JDK 21**（工具链同为 21）：detekt 1.23 的内嵌 Kotlin
+> 编译器无法在 JDK 25 上运行，本工程的 ktlint / detekt 门禁因此只能跑在 ≤ 24 的 JVM 上（ADR-0027）。
+> 作为根构建的 includeBuild 使用时不受影响。

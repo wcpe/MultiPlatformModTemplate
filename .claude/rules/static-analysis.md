@@ -4,7 +4,7 @@
 
 ## 1. 本项目工具链
 
-本仓库主体是 Java（L0–L4 业务代码）+ Gradle Kotlin DSL（构建脚本）。**以下工具已接入并版本锁定**（根构建经 `subprojects` 统一配置，**包括全部平台车道子模块**，共享仓库根 `config/` 规则集；**严格门禁**——违规即失败构建）：
+本仓库主体是 Java（L0–L4 业务代码）+ Gradle Kotlin DSL（构建脚本）。**以下工具已接入并版本锁定**（由 `build-conventions.quality` 约定插件装配，各工程经 `plugins { id("build-conventions.quality") }` 接入——公共流程不再写在车道脚本里，见 ADR-0027；共享仓库根 `config/` 规则集；**严格门禁**——违规即失败构建）：
 
 - **样式审查（Java）**：`checkstyle` 10.17.0，裁剪规则集 `config/checkstyle/checkstyle.xml`（聚焦导入卫生 / 命名 / 结构，不强制具体格式化；容纳中文测试方法名、L4 `vX_Y` 架构命名、Mixin `$` 注入命名）。
 - **代码异味 / 源码规则（Java）**：`pmd` 7.0.0，裁剪规则集 `config/pmd/ruleset.xml`（未用 / 空块 / 吞异常 / 多线程缺陷等高信号项；不取 `UnusedFormalParameter`——与回调密集设计冲突）。
@@ -13,7 +13,7 @@
 - **分离度 / 分层回归断言**：`ArchUnit` 1.3.0（core-domain 测试）——校验 L0 零平台依赖、功能域互不依赖且无环（ADR-0001/0011）。
 - **Lombok**：仓库根 `lombok.config`（`addLombokGeneratedAnnotation`）使生成代码带 `@lombok.Generated`、避免静态分析误报；并登记为 `JavaCompile` 输入。
 - **L0–L2 Java 8 API 强制**：用 **JDK 8 工具链**编译（API 面即 JDK 8，强于 `--release 8`）——见 ADR-0004。
-- **Kotlin / Gradle Kotlin DSL**：`ktlint` 12.1.1（检 `*.gradle.kts`，规则经 `.editorconfig` 裁剪）；`detekt` 1.23.7 + `kover` 0.8.3 **已前瞻接入**（当前无 Kotlin 源、近空扫 / no-op，第二期引入 Kotlin 源即生效）。
+- **Kotlin / Gradle Kotlin DSL**：`ktlint` 12.1.1（检 `*.gradle.kts`，规则经 `.editorconfig` 裁剪）；`detekt` 1.23.7 + `kover` 0.8.3——业务模块无 Kotlin 源（仅近空扫），Kotlin 源只存在于两个插件工程，其 `ktlintCheck` / `detekt` 门禁实际生效。注：detekt 1.23 的内嵌 Kotlin 编译器无法在 JDK 25 上运行，故插件工程独立调用时守护 JVM 固定 JDK 21（`gradle/gradle-daemon-jvm.properties`）+ 工具链 21（ADR-0027）。
 
 **暂不接入（带原因，需要时再加）**：
 - **Error Prone**：其编译器插件需 JDK 11+ javac，与 L0–L2 刻意的 **JDK 8 工具链**（ADR-0004）直接冲突；编译期缺陷检测由 SpotBugs（字节码）+ PMD（源码）覆盖。

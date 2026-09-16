@@ -26,11 +26,12 @@
 - 平台 / 版本差异不写成散落 if-else/switch，经 `FeatureGate`（能力探测）+ 版本适配接口收敛。
 - 锚点版本 1.12.2 / 1.20.1 / 1.21.1 / 26.2（26.2 为 MC 新版号方案、无 `1.` 前缀，模块 `v26_2`）；新增版本=加一个 `vX_Y` 模块，不改既有版本与公共层。
 
-## 4. 技术栈与 Java 版本锁定（依据 ADR-0004 / ADR-0007）
+## 4. 技术栈与 Java 版本锁定（依据 ADR-0004 / ADR-0026 / ADR-0027）
 - **L0–L2 严格编译为 Java 8 字节码**（`sourceCompatibility = 8`），不得使用 Java 9+ 语法 / API——须以 `javac --release 8` 或 animal-sniffer **强制**（仅锁 sourceCompatibility 不够，依据 ADR-0004）；Lombok 仅用于 L0/L1 Java 模块。
 - 平台胶水（L3/L4）按各 loader 最低 JDK 编译，但仍依赖 Java 8 核心。
 - 第三方运行期依赖（snakeyaml/gson 等）**统一 relocate 到 `top.wcpe.mc.mpmt.libs.*`**；core 打进各 loader 产物的方式逐平台明确、core 不被 remap（依据 ADR-0012）。
-- 构建为**单一根构建 + 平台子模块**（Gradle Kotlin DSL，全仓脚本语言统一，无 Groovy 构建脚本）：核心、Bukkit 家族与**全部加载器平台**（fabric / forge / neoforge / sponge）均为根构建子模块，构建插件统一为 `top.wcpe.loom` 1.17.1（WCPE Loom，ADR-0025）、Gradle 全车道 9.6.1——**禁止**把平台车道做成独立构建 / 自有 wrapper / 反向 `includeBuild`（ADR-0026）；`build-logic/realserver-acceptance` 作为 **Gradle 插件工程**经 `pluginManagement` 的 includeBuild 引入，不属平台隔离，**不得**删除。**不引入 Architectury 统包框架** 或与之冲突的统包框架（`top.wcpe.loom` 为 architectury-loom fork 的**单车道构建插件**，经 ADR-0025 采纳，不在此限）；换构建框架 = 架构决策，走新 ADR。
+- 构建为**单一根构建 + 平台子模块**（Gradle Kotlin DSL，全仓脚本语言统一，无 Groovy 构建脚本）：核心、Bukkit 家族与**全部加载器平台**（fabric / forge / neoforge / sponge）均为根构建子模块，构建插件统一为 `top.wcpe.loom` 1.17.1（WCPE Loom，ADR-0025）、Gradle 全车道 9.6.1——**禁止**把平台车道做成独立构建 / 自有 wrapper / 反向 `includeBuild`（ADR-0026）；`build-logic/realserver-acceptance` 与 `build-logic/build-conventions` 作为 **Gradle 插件工程**经 `pluginManagement` 的 includeBuild 引入，不属平台隔离，**不得**删除。**不引入 Architectury 统包框架** 或与之冲突的统包框架（`top.wcpe.loom` 为 architectury-loom fork 的**单车道构建插件**，经 ADR-0025 采纳，不在此限）；换构建框架 = 架构决策，走新 ADR。
+- **构建流程进插件、车道只做配置**（ADR-0027）：静态分析 / 覆盖率门禁、平台公共层、各 loader 流程、根侧发布编排一律实现在 `build-logic/build-conventions` 的分层约定插件里（`build-conventions.quality` / `.platform` / `.<loader>` / `.release`），**插件 id 用功能语义、不含项目身份**（目录、id、实现类在项目改名后无需改动）；车道脚本只保留"本车道是什么"的参数与偏离项（版本、目标 JDK、L4 选择、报告路径、确有差异的依赖与断言）。任务名与路径、13 个发布 jar 的名称与字节、报告路径与 `SERVER-GAMETEST-REPORT v2` 格式、`-Pmpmt.acceptance.*` 属性名与默认值、门禁判定强度与失败文案是**不可变契约**：抽取只搬实现、契约逐字保留。
 
 ## 5. 跨端协议单一真源（依据 ADR-0006）
 - 协议包定义 / 字节布局 / 版本号**只在 `protocol` 一处权威定义**，客户端与服务端共用，禁止双源各自定义。
@@ -38,4 +39,5 @@
 - 序列化不得依赖平台类型；底层收发只经 `TransportPort`。
 
 ## 红线（出现即停止并先确认）
-L0/L1 出现平台或 MC 版本 import · 公共层硬编码平台/版本 if-else · 绕过 SPI/ServiceLoader 直连平台 · `PlatformProvider` 承载可变业务状态 · L0–L2 用 Java 9+ 特性或破坏 Java 8 兼容 · 把平台车道做成独立构建 / 自有 wrapper / 反向 includeBuild（应：根构建子模块，见 ADR-0026）· 移除 `build-logic/realserver-acceptance` 的 pluginManagement includeBuild（插件工程必需）· 开启 Gradle isolated projects（loom 平台属性会静默失效，见 ADR-0026）· 为 Folia/Paper 各拆独立构建/模块 · 我方多入口在同进程同时激活（融合服上既激活 Bukkit 又激活 Forge）· 在本脚手架自建命令框架或引入 TabooLib，或把命令执行逻辑写进 L3 平台层（应：各平台原生命令框架、入口 L3、执行逻辑抽到共享，见 ADR-0009）· 在共享层硬编码绝对路径而非经 DataDirectoryPort（见 ADR-0010）· 功能域间直接依赖或任何循环依赖（应经 EventBus 解耦，见 ADR-0011）· 用平台事件系统替代自有 EventBus 作域间总线 · 无归属 `runSync` 在 Folia 碰世界/实体态（应经 runForEntity/Location/Global，见 ADR-0013）· 第三方依赖未 relocate 直接打包（Bukkit 必类冲突，见 ADR-0012）· 引入 Architectury/重型 DI 作默认机制 · 协议双源定义或去掉版本协商 · 静默违背任一已接受 ADR。
+L0/L1 出现平台或 MC 版本 import · 公共层硬编码平台/版本 if-else · 绕过 SPI/ServiceLoader 直连平台 · `PlatformProvider` 承载可变业务状态 · L0–L2 用 Java 9+ 特性或破坏 Java 8 兼容 · 把平台车道做成独立构建 / 自有 wrapper / 反向 includeBuild（应：根构建子模块，见 ADR-0026）· 在车道脚本里重复装配 loader 流程（应：流程进 `build-conventions` 插件、车道只留参数与差异，见 ADR-0027）· 移除 `build-logic/realserver-acceptance` / `build-logic/build-conventions` 的 pluginManagement includeBuild（插件工程必需）· 开启 Gradle isolated projects（loom 平台属性会静默失效，见 ADR-0026）
+· 为 Folia/Paper 各拆独立构建/模块 · 我方多入口在同进程同时激活（融合服上既激活 Bukkit 又激活 Forge）· 在本脚手架自建命令框架或引入 TabooLib，或把命令执行逻辑写进 L3 平台层（应：各平台原生命令框架、入口 L3、执行逻辑抽到共享，见 ADR-0009）· 在共享层硬编码绝对路径而非经 DataDirectoryPort（见 ADR-0010）· 功能域间直接依赖或任何循环依赖（应经 EventBus 解耦，见 ADR-0011）· 用平台事件系统替代自有 EventBus 作域间总线 · 无归属 `runSync` 在 Folia 碰世界/实体态（应经 runForEntity/Location/Global，见 ADR-0013）· 第三方依赖未 relocate 直接打包（Bukkit 必类冲突，见 ADR-0012）· 引入 Architectury/重型 DI 作默认机制 · 协议双源定义或去掉版本协商 · 静默违背任一已接受 ADR。

@@ -3,8 +3,10 @@ import buildconventions.frozenApiSnapshot
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
-// Bukkit 1.12.2 独立产品工程：common + v1_12 适配器 → mpmt-bukkit-1.12.2-*.jar
-// 验收源集、打包链路、plugin.yml 元数据、编译工具链、单测属性与 realserver 门禁接线由 build-conventions.bukkit 承担。
+// Bukkit 1.12.2 车道（根构建子模块）：common + v1_12 适配器 → mpmt-bukkit-1.12.2-<version>.jar。
+// 不可变契约：产物名与路径、验收控制通道常量、冻结 spigot-api 坐标与 SHA-256、plugin.yml 断言、
+// 真服门禁的报告路径与判定强度（ADR-0014）。验收源集 / 打包链路 / 编译工具链 / 单测属性 / 门禁接线
+// 由 build-conventions.{quality,platform,bukkit} 承担（ADR-0027），本脚本只留参数与偏离项。
 
 plugins {
     id("build-conventions.quality")
@@ -45,7 +47,7 @@ repositories {
     }
 }
 
-// 验收控制通道常量由 build-conventions.platform 生成（生成内容与原内联实现逐字节一致）
+// 验收控制通道常量的源码由 build-conventions.platform 生成；车道只给版本、通道名与目标类名
 platformLane {
     mcVersion.set(minecraftVersion)
     channelName.set(acceptanceChannel)
@@ -63,14 +65,14 @@ bukkit.foliaSupported.set(foliaMetadata)
 bukkit.productChannel.set(productChannel)
 bukkit.acceptanceChannel.set(acceptanceChannel)
 bukkit.regionSchedulerClass.set(regionSchedulerClass)
-// 本车道原样：无 modern 模块、无 acceptanceTest 源集、Java 8 工具链无 --release、
+// 本车道偏离项：无 modern 模块、无 acceptanceTest 源集、Java 8 工具链无 --release、
 // spigot-api 需排除 bungeecord-chat 并由本地补丁 jar 顶替、mpmt.test.javaVersion 用字面量 1.8
 bukkit.modernProduct.set(false)
 bukkit.releaseTargetVersion.set(false)
 bukkit.bungeeChatFallbackJar.set("platform/bukkit/third-party/bungeecord-chat-1.12-SNAPSHOT.jar")
 bukkit.testJavaVersion.set("1.8")
 
-// 冻结 paper-api：插件负责解析配置与 SHA-256 校验，并把校验挂到编译任务之前
+// 冻结 API 快照（本车道为 spigot-api）：插件解析坐标与 SHA-256，并把校验挂到编译任务之前
 frozenApiSnapshot(
     laneLabel = "Bukkit",
     coordinate = apiCoordinate,

@@ -3,26 +3,23 @@ import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import net.fabricmc.loom.task.RemapJarTask
 
-// platform-fabric-1.20.1（L3）：根构建子模块（ADR-0026）；MC 1.20.1，common/server/client 分目录，Loom 根打包。
-// 关键链路（ADR-0012）：core 纯 Java 经 shadow shade 进产物（不被 remap），snakeyaml relocate；
-// remapJar 消费 shadowJar 产物产出最终 remapped mod jar。映射用 Mojang 官方（ADR-0016）。
-// gametest 接入层、Loom run 与验收注入、模拟服门禁、mod 元数据展开由 build-conventions.fabric 承担。
-
+// Fabric 1.20.1 车道（根构建子模块）：common + server + client 分目录 → mpmt-fabric-1.20.1-<version>.jar。
+// 不可变契约：产物名与路径、jar → shadowJar → remapJar 打包链路（core 不被 remap、snakeyaml relocate，ADR-0012）、
+// 唯一 L4（v1_20）、fabric.mod.json 元数据、realserver 默认轨 REAL_REQUIRED 场景清单与判定强度（ADR-0014）。
+// gametest 接入层 / Loom run / 验收注入 / 模拟服门禁 / 元数据展开集中在 build-conventions.fabric（ADR-0027）。
 plugins {
     id("build-conventions.quality")
     id("top.wcpe.loom")
     // 车道约定插件须在 loom 之后应用：gametest 源集要晚于 loom 按现有源集注册 migrate*Mappings 任务的时机创建
     id("build-conventions.fabric")
     id("com.gradleup.shadow") version "8.3.11"
-    // 静态分析 / 质量工具链由根构建 subprojects{} 统一提供（含 spotbugs/ktlint/detekt/kover，见 ADR-0026）。
-    // 车道内重复声明会分裂插件类加载器并破坏 loom 清单服务，故此处不再声明。
-    // 历史说明：静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
-    // 核心 Gradle 插件经 apply(plugin=...) 接入（见下方装配块）；外部插件在此带版本直接 apply。
+    // 分析类插件（spotbugs / ktlint / detekt / kover）不在车道内声明：由 build-conventions.quality 应用，
+    // 版本与类路径由根 plugins{} 单点 pin，重复声明会分裂插件类加载器并破坏 loom 的清单服务。
 }
 
 group = "top.wcpe.mc.mpmt"
 
-// 本子模块仅服务 MC 1.20.1（每版本一个子模块，废除 -P 选型）
+// 本子模块仅服务 MC 1.20.1（每版本一个子模块）
 val mcVersion = "1.20.1"
 val loaderVersion = "0.16.5"
 val fabricApiVersion = "0.92.2+1.20.1"
@@ -30,7 +27,7 @@ val targetJavaVersion = 17
 val selectedL4Name = "v1_20"
 val unselectedL4Name = "v1_21"
 val snakeyamlVersion = "2.2"
-// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经同根构建项目依赖消费
+// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经项目依赖消费
 val platformApiCoordinate = project(":platform:fabric:fabric-api")
 val spiCoordinate = project(":core:spi")
 // 依赖 core-server（服务端网络装配特性 ServerNetworkFeature；经 api 传递 protocol + core-runtime）
@@ -56,14 +53,14 @@ repositories {
 }
 // 质量工具链：装配由 build-conventions.quality 插件承担（本工程无偏离项）
 
-// fabric 车道参数：版本与"原样保留的接线差异"在此声明；
+// fabric 车道参数：版本与本车道接线差异在此声明；
 // gametest 源集与依赖接线、Loom run、验收元数据注入、模拟服门禁、mod 元数据展开、单测系统属性均由插件承担。
 val fabric = extensions.getByType(FabricLaneExtension::class.java)
 fabric.mcVersion.set(mcVersion)
 fabric.targetJavaVersion.set(targetJavaVersion)
 fabric.loaderVersion.set(loaderVersion)
 fabric.fabricApiVersion.set(fabricApiVersion)
-// 本车道原样：acceptanceServer 不额外依赖 gametestClasses、客户端 run 不写回服务端地址系统属性、无矩阵轨
+// 本车道偏离项：acceptanceServer 不额外依赖 gametestClasses、客户端 run 不写回服务端地址系统属性、无矩阵轨
 fabric.acceptanceServerCompilesGametest.set(false)
 fabric.acceptanceClientExposesServerProperty.set(false)
 

@@ -1,15 +1,12 @@
 import buildconventions.NeoForgeLaneExtension
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
-// platform-neoforge（L3）：根构建子模块，应用 arch-loom（top.wcpe.loom，ADR-0007，隔离加载器专属插件）。
-// 锚点 MC 1.20.2（NeoForge 无 1.20.1；PRD §7）。NeoForge 运行期用官方 Mojmap（arch-loom usesMojangAtRuntime
-// 对 neoforge 平台恒真 → remapJar 恒等重映射、无 SRG，区别于 Forge）；Mixin 内置（mods.toml [[mixins]] 声明、
-// 无 refmap）。打包链路（ADR-0012）：shade 共享核心 + relocate snakeyaml → remapJar 产出最终产品 jar。
-// dev run classpath 墙同 FG：受控 JAR 不会自动进入 dev mod 运行期类路径，经 coreLibJar（FMLModType:GAMELIBRARY）
-// 放 run-*/mods 暴露。
-// loader 层（依赖接线、dev run、mods.toml 展开、打包链路、验收接入与真服门禁）由 build-conventions.neoforge
-// 承担，本脚本只留参数与差异。
-
+// NeoForge 1.20.2 车道（根构建子模块）：common + server + client 分目录 → mpmt-neoforge-1.20.2-<version>.jar。
+// 不可变契约：产物名与路径、打包链路（shade 共享核心 + relocate snakeyaml，ADR-0012）、remapJar 恒等重映射
+// （NeoForge 运行期用官方 Mojmap、无 SRG）、mods.toml 的 Mixin 声明（内置、无 refmap）、真服报告路径与判定强度
+// （ADR-0014）；锚点 MC 1.20.2（NeoForge 无 1.20.1，PRD §7）。
+// loader 层（依赖接线、dev run、mods.toml 展开、打包、验收接入与门禁）由 build-conventions.neoforge 承担（ADR-0027）。
+// dev run classpath 墙：受控 JAR 不自动进 dev mod 运行期类路径，经 coreLibJar（FMLModType:GAMELIBRARY）放 run-*/mods 暴露。
 plugins {
     id("build-conventions.quality")
     `java-library`
@@ -18,10 +15,8 @@ plugins {
     id("com.gradleup.shadow") version "8.3.11"
     // 车道约定插件须晚于 java-library / top.wcpe.loom / shadow：验收源集、打包链路与 dev run 都挂在它们之上
     id("build-conventions.neoforge")
-    // 静态分析 / 质量工具链由根构建 subprojects{} 统一提供（含 spotbugs/ktlint/detekt/kover，见 ADR-0026）。
-    // 车道内重复声明会分裂插件类加载器并破坏 loom 清单服务，故此处不再声明。
-    // 历史说明：静态分析 / 质量工具链（严格门禁，static-analysis.md）：与根构建同一套，共享仓库根 config/ 规则集。
-    // 核心 Gradle 插件经 apply(plugin=...) 接入（见下方装配块）；外部插件在此带版本直接 apply。
+    // 分析类插件（spotbugs / ktlint / detekt / kover）不在车道内声明：由 build-conventions.quality 应用，
+    // 版本与类路径由根 plugins{} 单点 pin，重复声明会分裂插件类加载器并破坏 loom 的清单服务。
 }
 
 group = "top.wcpe.mc.mpmt"
