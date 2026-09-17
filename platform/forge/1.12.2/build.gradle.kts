@@ -51,8 +51,6 @@ java {
 val minecraftVersion = "1.12.2"
 val forgeVersion = "1.12.2-14.23.5.2860"
 val mappingsVersion = "20171003-1.12"
-val productChannel = "MPMT"
-val acceptanceChannel = "MPMTTEST"
 
 // forge 车道参数：本车道为 client-only + reobf 兼容任务映射（无 dev SecureJar 嵌入、无报告门）
 val laneAliasMinecraftVersion = minecraftVersion

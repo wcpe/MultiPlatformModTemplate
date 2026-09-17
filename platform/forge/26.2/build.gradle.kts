@@ -39,8 +39,6 @@ if (JavaVersion.current().majorVersion.toInt() < 25) {
 val minecraftVersion = "26.2"
 val forgeVersion = "26.2-65.0.9"
 val loomVersion = "1.17.1"
-val productChannel = "mpmt:main"
-val acceptanceChannel = "mpmt-test:acceptance"
 
 // 共享模块（L0-L2）项目路径；platform-spi 项目名为 core:spi；acceptance 仅进验收伴侣，不进产品
 val productSharedProjects =
