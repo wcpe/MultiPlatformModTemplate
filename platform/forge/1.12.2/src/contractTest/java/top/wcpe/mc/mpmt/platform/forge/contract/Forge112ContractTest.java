@@ -85,8 +85,8 @@ public final class Forge112ContractTest {
         // ADR-0025：构建插件统一 top.wcpe.loom，版本在根 settings 单点 pin
         require(build.contains("id(\"top.wcpe.loom\")"), "未应用 top.wcpe.loom 插件");
         require(
-                rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.1"),
-                "根 settings 未冻结 top.wcpe.loom 1.17.1");
+                rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.2"),
+                "根 settings 未冻结 top.wcpe.loom 1.17.2");
 
         require(build.contains("1.12.2-14.23.5.2860"), "未冻结 Forge 1.12.2-14.23.5.2860");
 

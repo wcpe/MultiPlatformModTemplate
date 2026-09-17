@@ -3,7 +3,6 @@ import buildconventions.configureForgeShadowProductChain
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import net.fabricmc.loom.task.RemapJarTask
-import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 import java.security.MessageDigest
 
 // Forge 1.20.1 车道（根构建子模块）：common + server + client 分目录 → mpmt-forge-1.20.1-<version>.jar。
@@ -145,16 +144,6 @@ loom {
 
 repositories {
     mavenCentral()
-}
-
-// EGT defaults 同款：loom 声明的 Forge maven 仓库默认元数据源仅 pom，补 artifact() 兜底，
-// 避免 net.minecraftforge:forge 的 userdev 分类器产物解析异常
-repositories.find { it.name == "Forge" }?.let { repo ->
-    (repo as? MavenArtifactRepository)?.metadataSources {
-        mavenPom()
-        artifact()
-        ignoreGradleMetadataRedirection()
-    }
 }
 
 // 专用配置：需 shade 进产物并 relocate 的内容（core/spi + 第三方运行期依赖），不参与 remap

@@ -62,7 +62,7 @@ class RealServerGateContractTest {
         assertFalse(build.contains("includeBuild"))
         // 根 settings 直接 include，且插件版本在根单点 pin
         assertTrue(rootSettings.contains("\"platform:fabric:fabric-26.2\""))
-        assertTrue(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.1"))
+        assertTrue(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.2"))
         // 受控内部 JAR 改为同根构建项目产物
         assertTrue(build.contains("fun moduleJar("))
         assertTrue(build.contains("moduleJar(\":core:domain\")"))
@@ -117,7 +117,7 @@ class RealServerGateContractTest {
         assertFalse(rootSettings.contains("根 Gradle 不加载 NeoForge 1.20.2"))
         // ADR-0025：插件统一 top.wcpe.loom，由根 settings 单点 pin
         assertTrue(neoBuild.contains("id(\"top.wcpe.loom\")"))
-        assertTrue(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.1"))
+        assertTrue(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.2"))
         // ADR-0026：不再有独立 settings / wrapper / 受控输入文件门
         assertFalse(Files.exists(repositoryRoot().resolve("platform/neoforge/1.20.2/settings.gradle.kts")))
         assertFalse(Files.exists(repositoryRoot().resolve("platform/neoforge/1.20.2/gradlew.bat")))

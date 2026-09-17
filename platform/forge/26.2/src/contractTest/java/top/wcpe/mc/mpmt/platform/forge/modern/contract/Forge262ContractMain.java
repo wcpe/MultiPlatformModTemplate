@@ -46,7 +46,7 @@ public final class Forge262ContractMain {
                 "Minecraft 版本未冻结为 26.2");
         require("26.2-65.0.9".equals(System.getProperty("mpmt.test.forgeVersion")),
                 "Forge 版本未冻结为 26.2-65.0.9");
-        require("1.17.1".equals(System.getProperty("mpmt.test.loomVersion")),
+        require("1.17.2".equals(System.getProperty("mpmt.test.loomVersion")),
                 "loom 版本未冻结为 1.17.1（WCPE Loom 正式版，ADR-0025）");
         require("9.6.1".equals(System.getProperty("mpmt.test.gradleVersion")),
                 "Gradle 版本未冻结为 9.6.1");
@@ -69,7 +69,7 @@ public final class Forge262ContractMain {
                 "Minecraft 26.2 不得声明 mappings（无混淆版本走 disableObfuscation 管线）");
         // ADR-0025：插件统一为 top.wcpe.loom（WCPE Loom），版本在根 settings 单点 pin
         require(build.contains("top.wcpe.loom"), "必须使用 WCPE Loom（top.wcpe.loom，ADR-0025）");
-        require(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.1"),
+        require(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.2"),
                 "根 settings 未冻结 top.wcpe.loom 1.17.1");
         require(properties.contains("loom.platform=forge"), "gradle.properties 须声明 loom.platform=forge");
         require(properties.contains("fabric.loom.disableObfuscation=true"),

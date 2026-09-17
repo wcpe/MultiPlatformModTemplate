@@ -28,7 +28,7 @@ plugins {
 
 val minecraftVersion = "1.21.1"
 val forgeVersion = "1.21.1-52.1.0"
-val loomVersion = "1.17.1"
+val loomVersion = "1.17.2"
 
 // 共享模块（L0-L2）项目路径；platform-spi 项目名为 core:spi；acceptance 仅进验收伴侣，不进产品
 val productSharedProjects =

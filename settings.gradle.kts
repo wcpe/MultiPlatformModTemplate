@@ -24,11 +24,11 @@ pluginManagement {
     }
     // 插件版本单点 pin（ADR-0025 / ADR-0026）：车道脚本只写 id，不带版本。
     plugins {
-        id("top.wcpe.loom") version "1.17.1"
+        id("top.wcpe.loom") version "1.17.2"
         // 无混淆变体：loom 的 MixinAPMappingService 遍历全构建 loom 工程，
         // 仅跳过 LoomNoRemapGradlePlugin.isApplied() 的工程；仅靠 fabric.loom.disableObfuscation=true
         // 会让该服务对无 mappings 的工程调用 getMappingConfiguration() 而抛错。
-        id("top.wcpe.loom-no-remap") version "1.17.1"
+        id("top.wcpe.loom-no-remap") version "1.17.2"
         id("org.spongepowered.gradle.plugin") version "2.3.0"
     }
     // 真服验收编排约定插件（Gradle 插件工程，必须经 includeBuild 引入；ADR-0026 决策 2）

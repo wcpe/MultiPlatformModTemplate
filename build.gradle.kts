@@ -15,8 +15,8 @@ plugins {
     // 若只由各车道在自己的 plugins {} 里请求，Gradle 会按子树各建一份插件类加载器，
     // loom 跨工程迭代（MixinAPMappingService → GradleUtils.allLoomProjects →
     // LoomGradleExtension.get(otherProject)）就会因跨 classloader 而转换失败。
-    id("top.wcpe.loom") version "1.17.1" apply false
-    id("top.wcpe.loom-no-remap") version "1.17.1" apply false
+    id("top.wcpe.loom") version "1.17.2" apply false
+    id("top.wcpe.loom-no-remap") version "1.17.2" apply false
     // A 车道：mc-testkit（Bukkit/Folia smoke；与 B 真 mod 客户端分 lane）
     // 仅经 maven.wcpe.top 解析插件坐标；禁止 sibling includeBuild 联调。
     // 只应用在 :e2e:harness（拓扑 / 场景 / 依赖注入随桩同处该子模块），根侧只留入口别名任务。

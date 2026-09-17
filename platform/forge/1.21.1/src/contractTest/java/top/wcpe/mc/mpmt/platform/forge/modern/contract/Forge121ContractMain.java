@@ -42,7 +42,7 @@ public final class Forge121ContractMain {
                 "Minecraft 版本未冻结为 1.21.1");
         require("1.21.1-52.1.0".equals(System.getProperty("mpmt.test.forgeVersion")),
                 "Forge 版本未冻结为 1.21.1-52.1.0");
-        require("1.17.1".equals(System.getProperty("mpmt.test.loomVersion")),
+        require("1.17.2".equals(System.getProperty("mpmt.test.loomVersion")),
                 "WCPE Loom 版本未冻结为 1.17.1");
         require("9.6.1".equals(System.getProperty("mpmt.test.gradleVersion")),
                 "Gradle 版本未冻结为 9.6.1");
@@ -61,7 +61,7 @@ public final class Forge121ContractMain {
         require(!build.contains("includeBuild"), "子模块车道不得复合加载根构建");
         // ADR-0025：构建插件统一 top.wcpe.loom，版本在根 settings 单点 pin
         require(build.contains("id(\"top.wcpe.loom\")"), "构建插件必须为 top.wcpe.loom（WCPE Loom）");
-        require(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.1"),
+        require(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.2"),
                 "根 settings 未冻结 top.wcpe.loom 1.17.1");
         require(build.contains("officialMojangMappings()"), "映射必须为 Mojang 官方映射");
         require(build.contains("options.release.set(21)"), "Java 编译目标必须为 21");
