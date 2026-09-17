@@ -55,35 +55,39 @@ val productChannel = "MPMT"
 val acceptanceChannel = "MPMTTEST"
 
 // forge 车道参数：本车道为 client-only + reobf 兼容任务映射（无 dev SecureJar 嵌入、无报告门）
-val forge = extensions.getByType(ForgeLaneExtension::class.java)
-forge.mcVersion.set(minecraftVersion)
-forge.targetJavaVersion.set(8)
-forge.laneLabel.set("Forge 1.12.2")
-forge.modMetadataResource.set("mcmod.info")
-forge.deduplicateProcessedResources.set(true)
-forge.acceptanceJarVersionedDevLibs.set(true)
-forge.acceptanceJarName.set("mpmt-forge-acceptance-1.12.2")
-forge.acceptanceJarTitle.set("MPMT Forge 1.12.2 客户端验收伴侣")
-forge.acceptanceExcludes.set(
-    listOf(
-        "top/wcpe/mc/mpmt/core/**",
-        "top/wcpe/mc/mpmt/protocol/**",
-        "top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class",
-        "top/wcpe/mc/mpmt/platform/forge/ForgeBuildInfo.class",
-        "top/wcpe/mc/mpmt/platform/forge/client/**",
-        "top/wcpe/mc/mpmt/platform/forge/hud/**",
-        "top/wcpe/mc/mpmt/platform/forge/net/**",
-    ),
-)
-forge.reobfCopyTasks.put("reobfJar", "remapJar")
-forge.reobfCopyTasks.put("reobfAcceptanceJar", "remapAcceptanceJar")
-forge.contractTestMainClass.set("top.wcpe.mc.mpmt.platform.forge.contract.Forge112ContractTest")
-forge.contractTestDescription.set("运行 1.12.2 构建、握手、wire 与双 JAR 隔离契约测试")
-forge.contractTestProductTask.set("remapJar")
-forge.contractTestAcceptanceTask.set("remapAcceptanceJar")
-forge.contractTestDependsOn.set(listOf("remapAcceptanceJar"))
-forge.contractTestProperties.put("mpmt.test.version", project.version.toString())
+val laneAliasMinecraftVersion = minecraftVersion
+forgeLane {
+    mcVersion.set(laneAliasMinecraftVersion)
+    targetJavaVersion.set(8)
+    laneLabel.set("Forge 1.12.2")
+    modMetadataResource.set("mcmod.info")
+    deduplicateProcessedResources.set(true)
+    acceptanceJarVersionedDevLibs.set(true)
+    acceptanceJarName.set("mpmt-forge-acceptance-1.12.2")
+    acceptanceJarTitle.set("MPMT Forge 1.12.2 客户端验收伴侣")
+    acceptanceExcludes.set(
+        listOf(
+            "top/wcpe/mc/mpmt/core/**",
+            "top/wcpe/mc/mpmt/protocol/**",
+            "top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class",
+            "top/wcpe/mc/mpmt/platform/forge/ForgeBuildInfo.class",
+            "top/wcpe/mc/mpmt/platform/forge/client/**",
+            "top/wcpe/mc/mpmt/platform/forge/hud/**",
+            "top/wcpe/mc/mpmt/platform/forge/net/**",
+        ),
+    )
+    reobfCopyTasks.put("reobfJar", "remapJar")
+    reobfCopyTasks.put("reobfAcceptanceJar", "remapAcceptanceJar")
+    contractTestMainClass.set("top.wcpe.mc.mpmt.platform.forge.contract.Forge112ContractTest")
+    contractTestDescription.set("运行 1.12.2 构建、握手、wire 与双 JAR 隔离契约测试")
+    contractTestProductTask.set("remapJar")
+    contractTestAcceptanceTask.set("remapAcceptanceJar")
+    contractTestDependsOn.set(listOf("remapAcceptanceJar"))
+    contractTestProperties.put("mpmt.test.version", project.version.toString())
+}
 
+// 插件公开 API 需要扩展实例（块外传参用），故在块后取回一次
+val forge = extensions.getByType(buildconventions.ForgeLaneExtension::class.java)
 // 共享模块（L0-L2）项目路径；acceptance 仅进验收伴侣，不进产品
 val productSharedProjects = listOf(":core:domain", ":core:runtime", ":core:client", ":core:protocol")
 val acceptanceSharedProjects = productSharedProjects + listOf(":modules:acceptance")

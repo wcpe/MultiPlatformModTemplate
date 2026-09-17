@@ -26,12 +26,16 @@ plugins {
 val forgeVersion = "1.20.1-47.4.2"
 
 // forge 车道参数：本车道走 shadow 打包链路（无 dev SecureJar 嵌入），只声明 lane 标签与 reobf 兼容任务映射
-val forge = extensions.getByType(ForgeLaneExtension::class.java)
-forge.mcVersion.set("1.20.1")
-forge.targetJavaVersion.set(17)
-forge.laneLabel.set("Forge 1.20.1")
-forge.reobfCopyTasks.put("reobfShadowJar", "remapJar")
-forge.reobfCopyTasks.put("reobfAcceptanceJar", "remapAcceptanceJar")
+forgeLane {
+    mcVersion.set("1.20.1")
+    targetJavaVersion.set(17)
+    laneLabel.set("Forge 1.20.1")
+    reobfCopyTasks.put("reobfShadowJar", "remapJar")
+    reobfCopyTasks.put("reobfAcceptanceJar", "remapAcceptanceJar")
+}
+
+// 插件公开 API 需要扩展实例（块外传参用），故在块后取回一次
+val forge = extensions.getByType(buildconventions.ForgeLaneExtension::class.java)
 val snakeyamlVersion = "2.2"
 // 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经项目依赖消费
 val platformApiProject = project(":platform:forge:forge-api")

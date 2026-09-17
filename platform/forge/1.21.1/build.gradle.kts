@@ -63,49 +63,55 @@ configurations.create("acceptanceBundle")
 
 // forge 车道参数：版本、产物名与本车道接线差异在此声明；
 // 源集、dev SecureJar 嵌入、验收 jar 与报告门、打包校验、契约测试由插件承担。
-val forge = extensions.getByType(ForgeLaneExtension::class.java)
-forge.mcVersion.set(minecraftVersion)
-forge.forgeVersion.set(forgeVersion)
-forge.loomVersion.set(loomVersion)
-forge.targetJavaVersion.set(21)
-forge.laneLabel.set("Forge 1.21.1")
-// 产品 jar 由 arch-loom remapJar 以官方映射命名空间输出（Forge 52 生产运行时即 Mojang 命名，重映射为恒等）
-forge.productTaskName.set("remapJar")
-forge.archiveExcludes.add("module-info.class")
-forge.productModClass.set("top/wcpe/mc/mpmt/platform/forge/modern/MpmtForge121Mod.class")
-forge.acceptanceModClass.set("top/wcpe/mc/mpmt/platform/forge/modern/acceptance/MpmtForge121AcceptanceMod.class")
-forge.acceptanceJarName.set("mpmt-forge-acceptance-1.21.1")
-forge.acceptanceJarTitle.set("MPMT Forge 1.21.1 验收伴侣")
-forge.acceptanceExcludes.set(
-    listOf(
-        "top/wcpe/mc/mpmt/core/**",
-        "top/wcpe/mc/mpmt/protocol/**",
-        "top/wcpe/mc/mpmt/platform/spi/**",
-        "top/wcpe/mc/mpmt/platform/forge/modern/MpmtForge121Mod.class",
-        "top/wcpe/mc/mpmt/platform/forge/modern/client/**",
-        "top/wcpe/mc/mpmt/platform/forge/modern/net/**",
-    ),
-)
-forge.devModOutputs.set(true)
-forge.unitTestMetadata.set(true)
-forge.acceptanceReportGate.set(true)
-forge.acceptanceReportCandidates.set(
-    listOf("run-realserver/acceptance-report.txt", "run-acceptance-server/acceptance-report.txt"),
-)
-forge.acceptanceReportHint.set(
-    "先跑 runAcceptanceServer + runAcceptanceClient，或提供 server-runtime 后跑 runRealServerAcceptanceHost + 客户端伴侣。",
-)
-forge.modernPackagingVerification.set(true)
-forge.contractTestMainClass.set("top.wcpe.mc.mpmt.platform.forge.modern.contract.Forge121ContractMain")
-forge.contractTestDependsOn.set(listOf("packageArtifacts"))
-forge.contractTestProductTask.set("remapJar")
-forge.contractTestAcceptanceTask.set("acceptanceJar")
-forge.contractTestProperties.put("mpmt.test.projectDir", projectDir.absolutePath)
-forge.contractTestProperties.put("mpmt.test.minecraftVersion", minecraftVersion)
-forge.contractTestProperties.put("mpmt.test.forgeVersion", forgeVersion)
-forge.contractTestProperties.put("mpmt.test.loomVersion", loomVersion)
-forge.contractTestProperties.put("mpmt.test.gradleVersion", gradle.gradleVersion)
+val laneAliasForgeVersion = forgeVersion
+val laneAliasLoomVersion = loomVersion
+val laneAliasMinecraftVersion = minecraftVersion
+forgeLane {
+    mcVersion.set(laneAliasMinecraftVersion)
+    forgeVersion.set(laneAliasForgeVersion)
+    loomVersion.set(laneAliasLoomVersion)
+    targetJavaVersion.set(21)
+    laneLabel.set("Forge 1.21.1")
+    // 产品 jar 由 arch-loom remapJar 以官方映射命名空间输出（Forge 52 生产运行时即 Mojang 命名，重映射为恒等）
+    productTaskName.set("remapJar")
+    archiveExcludes.add("module-info.class")
+    productModClass.set("top/wcpe/mc/mpmt/platform/forge/modern/MpmtForge121Mod.class")
+    acceptanceModClass.set("top/wcpe/mc/mpmt/platform/forge/modern/acceptance/MpmtForge121AcceptanceMod.class")
+    acceptanceJarName.set("mpmt-forge-acceptance-1.21.1")
+    acceptanceJarTitle.set("MPMT Forge 1.21.1 验收伴侣")
+    acceptanceExcludes.set(
+        listOf(
+            "top/wcpe/mc/mpmt/core/**",
+            "top/wcpe/mc/mpmt/protocol/**",
+            "top/wcpe/mc/mpmt/platform/spi/**",
+            "top/wcpe/mc/mpmt/platform/forge/modern/MpmtForge121Mod.class",
+            "top/wcpe/mc/mpmt/platform/forge/modern/client/**",
+            "top/wcpe/mc/mpmt/platform/forge/modern/net/**",
+        ),
+    )
+    devModOutputs.set(true)
+    unitTestMetadata.set(true)
+    acceptanceReportGate.set(true)
+    acceptanceReportCandidates.set(
+        listOf("run-realserver/acceptance-report.txt", "run-acceptance-server/acceptance-report.txt"),
+    )
+    acceptanceReportHint.set(
+        "先跑 runAcceptanceServer + runAcceptanceClient，或提供 server-runtime 后跑 runRealServerAcceptanceHost + 客户端伴侣。",
+    )
+    modernPackagingVerification.set(true)
+    contractTestMainClass.set("top.wcpe.mc.mpmt.platform.forge.modern.contract.Forge121ContractMain")
+    contractTestDependsOn.set(listOf("packageArtifacts"))
+    contractTestProductTask.set("remapJar")
+    contractTestAcceptanceTask.set("acceptanceJar")
+    contractTestProperties.put("mpmt.test.projectDir", projectDir.absolutePath)
+    contractTestProperties.put("mpmt.test.minecraftVersion", minecraftVersion)
+    contractTestProperties.put("mpmt.test.forgeVersion", forgeVersion)
+    contractTestProperties.put("mpmt.test.loomVersion", loomVersion)
+    contractTestProperties.put("mpmt.test.gradleVersion", gradle.gradleVersion)
+}
 
+// 插件公开 API 需要扩展实例（块外传参用），故在块后取回一次
+val forge = extensions.getByType(buildconventions.ForgeLaneExtension::class.java)
 // 源集形状（common/server/client 分目录 + acceptance/contractTest）与打包内容装配：
 // resources 输出并入 classes 目录，使 dev MOD_CLASSES 每 mod 只剩一条 SecureJar 路径
 registerForgeModernSourceSets(project)
