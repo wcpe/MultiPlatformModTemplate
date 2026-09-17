@@ -390,6 +390,8 @@ public final class ForgeMinecraftTestSupport {
 
     /** 造一个 {@code OptionInstance} 替身并写入固定值（{@code get()} 直读私有 value 字段）。 */
     private static <T> net.minecraft.client.OptionInstance<T> optionOf(T value) {
+        // 替身绕过构造器分配，类字面量拿不到泛型实参；此处按调用方约定填默认值，故就地抑制。
+        @SuppressWarnings("unchecked")
         net.minecraft.client.OptionInstance<T> option = allocateInstance(net.minecraft.client.OptionInstance.class);
         set(option, "value", value);
         return option;
@@ -522,6 +524,8 @@ public final class ForgeMinecraftTestSupport {
         return ResourceKey.create(Registries.DIMENSION, resourceLocation(dimensionId));
     }
 
+    /** 由 {@code namespace:path} 解析资源位置；两参构造器被映射标记为待删除，语义等价故就地抑制。 */
+    @SuppressWarnings("removal")
     private static ResourceLocation resourceLocation(String dimensionId) {
         int split = dimensionId.indexOf(':');
         if (split < 0) {

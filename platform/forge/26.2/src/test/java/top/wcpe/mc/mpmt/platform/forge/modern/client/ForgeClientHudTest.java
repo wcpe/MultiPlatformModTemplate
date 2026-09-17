@@ -273,6 +273,8 @@ class ForgeClientHudTest {
     }
 
     private static net.minecraft.client.OptionInstance<Double> option(double value) {
+        // 替身绕过构造器分配，类字面量拿不到泛型实参；此处按调用方约定只放 Double，故就地抑制。
+        @SuppressWarnings("unchecked")
         net.minecraft.client.OptionInstance<Double> instance =
                 ForgeTestSupport.allocate(net.minecraft.client.OptionInstance.class);
         ForgeTestSupport.set(instance, "value", value);

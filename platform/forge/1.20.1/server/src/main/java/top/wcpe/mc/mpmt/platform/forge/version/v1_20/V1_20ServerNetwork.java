@@ -25,7 +25,7 @@ public final class V1_20ServerNetwork implements ForgeServerNetwork {
 
     private final ResourceLocation channelId;
 
-    public V1_20ServerNetwork(String namespace, String path) {
+    @SuppressWarnings("removal") public V1_20ServerNetwork(String namespace, String path) { // 两参构造器已被映射标记为待删除，替换写法会改动产物字节
         this.channelId = new ResourceLocation(namespace, path);
         registerFmlHandshakeMarker();
     }

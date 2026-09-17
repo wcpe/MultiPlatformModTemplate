@@ -20,7 +20,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.level.Level;
-import sun.misc.Unsafe;
 import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
 import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
 import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
@@ -32,7 +31,7 @@ import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 /**
  * Forge 26.2 测试基座：纯 JVM 下造出可用的服务端 / 客户端 / 玩家 / 连接替身。
  *
- * <p>手法（仓库既有约定）：{@code Bootstrap.bootStrap()} 初始化注册表；{@link Unsafe#allocateInstance}
+ * <p>手法（仓库既有约定）：{@code Bootstrap.bootStrap()} 初始化注册表；{@code sun.misc.Unsafe#allocateInstance}
  * 跳过构造函数造实例；反射写入字段。所有替身共享同一套注入，避免各测试重复实现。
  *
  * <p>注意：{@code Minecraft.instance} 是静态单例，凡改动它的测试必须自行还原。
@@ -241,14 +240,19 @@ public final class ForgeTestSupport {
         };
     }
 
-    /** 用 {@link Unsafe} 跳过构造函数分配实例（随后用 {@link #set} 注入所需字段）。 */
+    /**
+     * 用 {@code sun.misc.Unsafe} 跳过构造函数分配实例（随后用 {@link #set} 注入所需字段）。
+     *
+     * <p>该类型属 JDK 内部专用 API，源码里直接引用会让 {@code --release 25} 编译告警，故按仓库既有约定
+     * （同 1.20.1 / 1.21.1 车道的测试基座）经反射取用，调用语义与直接引用完全一致。
+     */
     public static <T> T allocate(Class<T> type) {
         bootstrapMinecraft();
         try {
-            Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+            Field theUnsafe = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe");
             theUnsafe.setAccessible(true);
-            Unsafe unsafe = (Unsafe) theUnsafe.get(null);
-            return type.cast(unsafe.allocateInstance(type));
+            Object unsafe = theUnsafe.get(null);
+            return type.cast(unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, type));
         } catch (ReflectiveOperationException error) {
             throw new IllegalStateException("无法分配 " + type.getName(), error);
         }

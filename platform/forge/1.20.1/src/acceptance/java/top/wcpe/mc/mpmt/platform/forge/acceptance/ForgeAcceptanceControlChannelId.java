@@ -14,8 +14,8 @@ public final class ForgeAcceptanceControlChannelId {
     public static final String NAMESPACE = "mpmt-test";
     /** 验收控制通道路径。 */
     public static final String PATH = "acceptance";
-    /** 验收控制通道资源位置（namespace:path）。 */
-    public static final ResourceLocation CHANNEL = new ResourceLocation(NAMESPACE, PATH);
+    /** 验收控制通道资源位置（namespace:path）；两参构造器已被映射标记为待删除，替换写法会改动产物字节。 */
+    @SuppressWarnings("removal") public static final ResourceLocation CHANNEL = new ResourceLocation(NAMESPACE, PATH);
 
     private ForgeAcceptanceControlChannelId() {
         // 常量类不实例化

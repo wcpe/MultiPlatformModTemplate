@@ -207,7 +207,7 @@ public final class ForgeAcceptanceClientCompanion {
         }
     }
 
-    private static Object createServerData(String address) {
+    @SuppressWarnings("unchecked") private static Object createServerData(String address) { // 枚举类型运行期才可得，捕获类型必然触发未经检查的调用
         try {
             Class<?> typeClass = Class.forName("net.minecraft.client.multiplayer.ServerData$Type");
             Object other = Enum.valueOf(typeClass.asSubclass(Enum.class), "OTHER");

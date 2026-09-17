@@ -8,7 +8,6 @@ import java.util.concurrent.ExecutorService;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.dedicated.DedicatedServer;
 import org.junit.jupiter.api.Test;
-import sun.misc.Unsafe;
 
 class ForgeSchedulerPortTest {
 
@@ -35,10 +34,13 @@ class ForgeSchedulerPortTest {
         return (ExecutorService) field.get(scheduler);
     }
 
+    /** 跳过构造函数造服务端替身；{@code sun.misc.Unsafe} 属内部专用 API，故经反射取用（同车道既有约定）。 */
     private static MinecraftServer allocateServer() throws Exception {
-        Field field = Unsafe.class.getDeclaredField("theUnsafe");
+        Class<?> unsafeType = Class.forName("sun.misc.Unsafe");
+        Field field = unsafeType.getDeclaredField("theUnsafe");
         field.setAccessible(true);
-        Unsafe unsafe = (Unsafe) field.get(null);
-        return (MinecraftServer) unsafe.allocateInstance(DedicatedServer.class);
+        Object unsafe = field.get(null);
+        return (MinecraftServer)
+                unsafeType.getMethod("allocateInstance", Class.class).invoke(unsafe, DedicatedServer.class);
     }
 }
