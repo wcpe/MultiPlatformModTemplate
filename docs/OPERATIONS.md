@@ -124,6 +124,27 @@ P3 / 26.2 REALSERVER262 三车道（原 `:runP3R7Gate` 与矩阵值 `R7` 已更�
 
 REALSERVER262 必须为 Paper、Fabric、Forge 三车道各提供一份属于**同一轮**的 `SERVER-GAMETEST-REPORT v2`，含 `MATRIX REALSERVER262`、`RUN_ID`、本轮开始毫秒、五个制品 role 的实际 SHA-256、`product-handshake` / `product-roundtrip` / `client-hud` 各一次 PASS、匹配的 `TOTAL` 与唯一末行 `RESULT PASS`。根门会拒绝旧报告、重复记录、额外失败/错误场景与制品漂移；依 ADR-0023，P3 / FR-16 的该严格门即为最终自动化验收。
 
+> **报告门需加 `--no-configuration-cache`**：`org.gradle.configuration-cache` 默认开启后，
+> 下列报告门仍会在配置缓存存储阶段报 problem 并令构建失败（`:buildAll` 与 CI 不经过这些门，故未暴露）：
+>
+> - 根聚合门：`:runVersionMatrixGate`、`:runRealServerAcceptance`、`:runRealServerAcceptance262`、`:runRealServerGate262`、`:buildRealServerArtifacts262`
+> - 单车道门：`:runRealServerAcceptance{Bukkit,Folia,CatServer,Fabric,Fabric1201,Fabric121,Fabric262,Forge,Forge121,Forge262}`
+> - 车道内报告门与宿主门：`:platform:forge:forge-{1.20.1,1.21.1,26.2}:verifyAcceptanceReport`、`ensurePaperRealServerHost`（须同时传 `-P mpmt.realserver.autoHost=true`）
+>
+> 执行时请追加 `--no-configuration-cache`：
+>
+> ```bash
+> ./gradlew --no-configuration-cache :runRealServerGate262 \
+>   -P mpmt.acceptance.matrix=REALSERVER262 \
+>   -P mpmt.acceptance.runId=<同一轮-run-id> \
+>   -P mpmt.acceptance.startEpochMs=<同一轮-开始毫秒> \
+>   -P mpmt.acceptance.forge.serverRuntime=<本轮实际-Forge-服务端-JAR-绝对路径>
+> ```
+>
+> `:listRealServerLanes`、`:verifyVersionMatrixBuild`、`:runRealServerAcceptance{NeoForge,Sponge}`、
+> `:collectReleaseArtifacts`、`:verifyReleasePackaging` 不受影响，无需该标志。
+> 上述清单待这些门完成执行期去 Project 化后即可移除。
+
 Paper 26.2 宿主 + Fabric 26.2 客户端伴侣（REALSERVER262）：
 
 ```bash
