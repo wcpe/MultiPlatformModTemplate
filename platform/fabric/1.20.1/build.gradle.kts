@@ -1,5 +1,6 @@
 import buildconventions.FabricLaneExtension
 import buildconventions.packagingVerification
+import buildconventions.verifyDefaultTrackReport
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import net.fabricmc.loom.task.RemapJarTask
 
@@ -211,56 +212,8 @@ tasks.register("runRealServerAcceptance") {
     description = "严格校验 Fabric realserver acceptance v2 报告与完整默认轨 REAL_REQUIRED"
     doLast {
         val report = fabric.acceptanceReport.get().asFile
-        if (!report.exists()) {
-            throw GradleException(
-                "未找到验收报告（先跑 runAcceptanceServer + runAcceptanceClient）：${report.absolutePath}",
-            )
-        }
-        val text = report.readText()
-        logger.lifecycle("[realserver] 服务端权威验收报告：\n$text")
-        val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
-        if (lines.firstOrNull() != "SERVER-GAMETEST-REPORT v2") {
-            throw GradleException("[realserver] 报告不是 acceptance v2")
-        }
-        val metadata =
-            lines.filter { it.startsWith("META ") }.associate { line ->
-                val entry = line.removePrefix("META ")
-                val separator = entry.indexOf('=')
-                if (separator <= 0) throw GradleException("[realserver] 非法元数据行：$line")
-                entry.substring(0, separator) to entry.substring(separator + 1)
-            }
-        val requiredMetadata =
-            listOf("commit", "VERSION", "platform", "mcVersion", "serverVersion", "productJarSha256", "scenarios")
-        if (requiredMetadata.any { metadata[it].isNullOrBlank() }) {
-            throw GradleException("[realserver] 报告缺少 acceptance v2 必需元数据")
-        }
-        if (metadata["platform"] != "fabric") {
-            throw GradleException("[realserver] platform 元数据必须为 fabric：${metadata["platform"]}")
-        }
-        if (!metadata.getValue("productJarSha256").matches(Regex("[0-9a-fA-F]{64}"))) {
-            throw GradleException("[realserver] productJarSha256 元数据非法")
-        }
-        if (metadata["scenarios"] != realRequiredScenarios.joinToString(",")) {
-            throw GradleException("[realserver] 报告场景声明不完整：${metadata["scenarios"]}")
-        }
-        val resultLines = lines.filter { it.startsWith("RESULT ") }
-        if (resultLines != listOf("RESULT PASS") || lines.last() != "RESULT PASS") {
-            throw GradleException("[realserver] 报告必须仅有一个末行 RESULT PASS")
-        }
-        val scenarioLines =
-            lines.filter {
-                it.startsWith("PASS ") || it.startsWith("FAIL ") || it.startsWith("ERROR ") || it.startsWith("SKIP ")
-            }
-        val scenarios = scenarioLines.associateBy { it.split(' ', limit = 3)[1] }
-        if (scenarios.size != scenarioLines.size || scenarios.keys != realRequiredScenarios.toSet()) {
-            throw GradleException("[realserver] 实际场景与默认轨 REAL_REQUIRED 不一致：${scenarios.keys}")
-        }
-        if (scenarioLines.any { !it.startsWith("PASS ") }) {
-            throw GradleException("[realserver] 默认轨场景存在非 PASS 结果")
-        }
-        logger.lifecycle(
-            "[realserver] 验收通过 ✓ acceptance v2，${realRequiredScenarios.size} 项 REAL_REQUIRED 全部 PASS",
-        )
+        // 校验实现与其余车道共用 build-conventions 的单份实现（判定顺序与失败文案逐字保留）。
+        verifyDefaultTrackReport(project, report, "", "fabric", realRequiredScenarios)
     }
 }
 
