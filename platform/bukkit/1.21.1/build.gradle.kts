@@ -79,9 +79,15 @@ val verifyPackaging by tasks.registering {
     group = "verification"
     description = "校验 Bukkit $minecraftVersion 产品/验收产物"
     dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"))
+    // 断言用到的车道常量在配置期取成局部值：断言 lambda 只捕获这些值，
+    // 不捕获脚本对象（配置缓存要求）；断言内容、顺序与失败文案不变。
+    val laneMcVersion = minecraftVersion
+    val laneAdapterClassPath = adapterClassPath
+    val laneAdapterClass = adapterClass
+    val laneApiVersion = apiVersion
     packagingVerification(
         laneLabel = "Bukkit",
-        mcVersion = minecraftVersion,
+        mcVersion = laneMcVersion,
         product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
         acceptance = tasks.named<ShadowJar>("acceptanceJar").flatMap { it.archiveFile },
     ) { product, acceptance ->
@@ -90,14 +96,14 @@ val verifyPackaging by tasks.registering {
             "META-INF/services/top.wcpe.mc.mpmt.platform.bukkit.version.BukkitVersionAdapter"
         val l4Prefix = "top/wcpe/mc/mpmt/platform/bukkit/version/v1_"
 
-        must(product.file.name.contains(minecraftVersion), "产品产物名未包含 MC 版本")
-        must(acceptanceFile.file.name.contains(minecraftVersion), "验收产物名未包含 MC 版本")
-        mustContain(product, adapterClassPath, "产品缺少选中的 L4 适配器")
+        must(product.file.name.contains(laneMcVersion), "产品产物名未包含 MC 版本")
+        must(acceptanceFile.file.name.contains(laneMcVersion), "验收产物名未包含 MC 版本")
+        mustContain(product, laneAdapterClassPath, "产品缺少选中的 L4 适配器")
         must(
             product.entries.count { it.startsWith(l4Prefix) && it.endsWith("BukkitVersionAdapter.class") } == 1,
             "产品包含零个或多个 L4 适配器",
         )
-        mustServiceEquals(product, adapterService, adapterClass, "产品 adapter services 与目标不符")
+        mustServiceEquals(product, adapterService, laneAdapterClass, "产品 adapter services 与目标不符")
         mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "产品未 shade 核心")
         mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "产品未 shade SPI")
         mustContain(product, "top/wcpe/mc/mpmt/platform/bukkit/MpmtBukkitPlugin.class", "产品缺少入口")
@@ -121,14 +127,14 @@ val verifyPackaging by tasks.registering {
             "产品 metadata 入口错误",
         )
         mustMetadataContains(product, "plugin.yml", "folia-supported: true", "现代产品缺少 folia 字段")
-        mustMetadataContains(product, "plugin.yml", "api-version: '$apiVersion'", "产品 api-version 错误")
+        mustMetadataContains(product, "plugin.yml", "api-version: '$laneApiVersion'", "产品 api-version 错误")
         mustMetadataContains(acceptanceFile, "plugin.yml", "MpmtBukkitAcceptancePlugin", "验收 metadata 入口错误")
         mustContain(
             product,
             "META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap",
             "缺少 PlatformBootstrap services",
         )
-        log("Bukkit $minecraftVersion 打包校验通过：产品=${product.file.name}，验收=${acceptanceFile.file.name}")
+        log("Bukkit $laneMcVersion 打包校验通过：产品=${product.file.name}，验收=${acceptanceFile.file.name}")
     }
 }
 

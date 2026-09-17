@@ -60,10 +60,12 @@ internal fun registerSpongeAcceptancePlumbing(project: Project, lane: SpongeLane
         configurations.getByName("${SPONGE_ACCEPTANCE_TEST_SOURCE_SET}RuntimeOnly")
             .extendsFrom(configurations.getByName("testRuntimeOnly"))
 
-        // 验收插件 sponge_plugins.json 的 ${version} 占位由构建注入
+        // 验收插件 sponge_plugins.json 的 ${version} 占位由构建注入。
+        // 展开用版本在配置期取成字符串：copy-spec 闭包只捕获它，不捕获 project（配置缓存要求）。
+        val injectedVersion = project.version.toString()
         project.tasks.named("processAcceptanceResources", ProcessResources::class.java).configure {
-            inputs.property("version", project.version)
-            filesMatching("META-INF/sponge_plugins.json") { expand(mapOf("version" to project.version)) }
+            inputs.property("version", injectedVersion)
+            filesMatching("META-INF/sponge_plugins.json") { expand(mapOf("version" to injectedVersion)) }
         }
 
         val acceptanceContractTest = registerSpongeAcceptanceContractTest(project, acceptanceTest)

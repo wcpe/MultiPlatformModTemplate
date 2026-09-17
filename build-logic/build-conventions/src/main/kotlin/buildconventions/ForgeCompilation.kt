@@ -14,13 +14,17 @@ import org.gradle.language.jvm.tasks.ProcessResources
  * （Gradle 9 默认对重复条目报错）。
  */
 internal fun expandForgeModMetadata(project: Project, lane: ForgeLaneExtension) {
+    // 展开用版本与元数据资源名在配置期取出：copy-spec 闭包只捕获字符串，
+    // 不捕获 project（否则配置缓存无法序列化任务）。
+    val injectedVersion = project.version.toString()
+    val metadataResource = lane.modMetadataResource.get()
     listOf("processResources", "processAcceptanceResources").forEach { taskName ->
         project.tasks.named(taskName, ProcessResources::class.java).configure {
             if (lane.deduplicateProcessedResources.get()) {
                 duplicatesStrategy = DuplicatesStrategy.EXCLUDE
             }
-            inputs.property("version", project.version)
-            filesMatching(lane.modMetadataResource.get()) { expand(mapOf("version" to project.version)) }
+            inputs.property("version", injectedVersion)
+            filesMatching(metadataResource) { expand(mapOf("version" to injectedVersion)) }
         }
     }
 }

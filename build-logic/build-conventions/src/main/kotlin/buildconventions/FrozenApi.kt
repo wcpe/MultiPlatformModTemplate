@@ -30,8 +30,11 @@ fun Project.frozenApiSnapshot(
         tasks.register("verifyApiSnapshotFreeze") {
             group = "verification"
             description = "验证 $laneLabel $mcVersion API JAR 与冻结 SHA-256 一致"
+            // 配置期把可解析配置包成 FileCollection：动作闭包只捕获该集合，不捕获 Configuration
+            // （Configuration 不可配置缓存序列化）；解析时机仍在任务执行期，判定语义不变。
+            val apiFiles = files(apiVerification)
             doLast {
-                val artifact = apiVerification.singleFile
+                val artifact = apiFiles.singleFile
                 val actual = Hashes.sha256(artifact)
                 if (actual != expectedSha256) {
                     throw GradleException(

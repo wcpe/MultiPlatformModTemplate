@@ -3,6 +3,7 @@ package buildconventions
 import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.Task
+import org.gradle.api.logging.Logger
 import org.gradle.api.tasks.TaskProvider
 import java.io.File
 
@@ -39,15 +40,22 @@ internal fun registerReleaseArtifactAggregation(project: Project, version: Strin
 
         val distRoot = project.layout.buildDirectory.dir("dist")
         outputs.dir(distRoot)
+        // 制品清单与 dist 根在配置期解析成普通值：动作只捕获这些值，不捕获 project（配置缓存要求），
+        // 校验顺序、失败文案与 [dist] 日志逐字不变。
+        val requiredArtifacts = releaseArtifacts(project, version)
+        val distDirectory = distRoot.get().asFile
 
         doLast {
-            copyReleaseArtifacts(project, version, distRoot.get().asFile)
+            copyReleaseArtifacts(requiredArtifacts, distDirectory, logger)
         }
     }
 
 /** 复制 13 个权威发布 jar；任一缺失立即失败（文案与迁移前逐字一致）。 */
-private fun copyReleaseArtifacts(project: Project, version: String, dist: File) {
-    val requiredArtifacts = releaseArtifacts(project, version)
+private fun copyReleaseArtifacts(
+    requiredArtifacts: List<ReleaseArtifact>,
+    dist: File,
+    logger: Logger,
+) {
     val missing = requiredArtifacts.filterNot { it.source.isFile }
     if (missing.isNotEmpty()) {
         throw GradleException(
@@ -65,12 +73,10 @@ private fun copyReleaseArtifacts(project: Project, version: String, dist: File) 
     requiredArtifacts.forEach { artifact ->
         val destination = File(File(dist, artifact.loader), artifact.targetName)
         artifact.source.copyTo(destination, overwrite = true)
-        project.logger.lifecycle(
-            "[dist] ${artifact.loader}/${artifact.targetName}  (${artifact.source.length()} bytes)",
-        )
+        logger.lifecycle("[dist] ${artifact.loader}/${artifact.targetName}  (${artifact.source.length()} bytes)")
     }
 
-    project.logger.lifecycle("[dist] 完成：${dist.absolutePath}")
+    logger.lifecycle("[dist] 完成：${dist.absolutePath}")
 }
 
 /**

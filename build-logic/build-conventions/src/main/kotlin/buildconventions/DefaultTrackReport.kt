@@ -55,7 +55,13 @@ fun verifyDefaultTrackReport(
     )
 }
 
-/** 元数据校验：必需项齐全、platform 标识正确、产品 jar SHA 合法、场景声明与车道清单一致。 */
+/**
+ * 元数据校验：必需项齐全、platform 标识正确、产品 jar SHA 合法、场景声明与车道清单一致。
+ *
+ * 抑制 ThrowsCount：本函数是"报告照契约逐项判定"的对照表，判定顺序与失败文案本身即契约
+ * （与 `verifyAcceptanceRoundReport` 同款处理）；拆成多个小函数会让该契约更难逐行比对。
+ */
+@Suppress("ThrowsCount")
 private fun verifyDefaultTrackMetadata(lines: List<String>, platformId: String, requiredScenarios: List<String>) {
     val metadata =
         lines.filter { it.startsWith("META ") }.associate { line ->
@@ -78,7 +84,12 @@ private fun verifyDefaultTrackMetadata(lines: List<String>, platformId: String, 
     }
 }
 
-/** 结果校验：唯一末行 RESULT PASS、场景集合与清单完全一致、逐项 PASS。 */
+/**
+ * 结果校验：唯一末行 RESULT PASS、场景集合与清单完全一致、逐项 PASS。
+ *
+ * 抑制理由同上：判定顺序与失败文案是契约，不拆函数以便与报告格式逐行对照。
+ */
+@Suppress("ThrowsCount")
 private fun verifyDefaultTrackResults(lines: List<String>, requiredScenarios: List<String>) {
     val resultLines = lines.filter { it.startsWith("RESULT ") }
     if (resultLines != listOf("RESULT PASS") || lines.last() != "RESULT PASS") {

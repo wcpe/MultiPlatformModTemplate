@@ -90,20 +90,25 @@ internal fun configureNeoForgePackagingChain(project: Project) {
  */
 internal fun registerNeoForgePackagingVerification(project: Project) {
     val productJar = project.tasks.named(NEOFORGE_REMAP_JAR_TASK, Jar::class.java)
+    val plainJar = project.tasks.named(NEOFORGE_PLAIN_JAR_TASK, Jar::class.java)
+    val shadowJar = project.tasks.named(NEOFORGE_SHADOW_JAR_TASK, Jar::class.java)
     project.tasks.register(NEOFORGE_VERIFY_PACKAGING_TASK) {
         group = "verification"
         description = "校验 NeoForge mod jar：核心 shade、snakeyaml relocate、mods.toml/services 在位、未打入 Minecraft"
         dependsOn(productJar)
+        // 输出冲突与可复现性断言所需取值在配置期取出：动作内不得再访问 project / Task（配置缓存要求），
+        // 断言取值与判定顺序、失败文案与迁移前逐字一致。
+        val plainArchive = plainJar.get().archiveFile.get().asFile
+        val shadowPreservesTimestamps = shadowJar.get().isPreserveFileTimestamps
+        val shadowReproducibleOrder = shadowJar.get().isReproducibleFileOrder
         packagingVerification(
             laneLabel = "NeoForge",
             product = productJar.flatMap { it.archiveFile },
             acceptance = null,
         ) { product, _ ->
-            val shadow = project.tasks.named(NEOFORGE_SHADOW_JAR_TASK, Jar::class.java).get()
-            val plain = project.tasks.named(NEOFORGE_PLAIN_JAR_TASK, Jar::class.java).get()
-            must(plain.archiveFile.get().asFile != product.file, "普通 jar 与最终产品 jar 输出路径冲突")
-            must(!shadow.isPreserveFileTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
-            must(shadow.isReproducibleFileOrder, "最终产品未启用可复现文件顺序")
+            must(plainArchive != product.file, "普通 jar 与最终产品 jar 输出路径冲突")
+            must(!shadowPreservesTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
+            must(shadowReproducibleOrder, "最终产品未启用可复现文件顺序")
             mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "核心类未 shade 进 mod jar")
             mustContain(
                 product,

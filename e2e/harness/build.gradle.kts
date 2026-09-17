@@ -40,22 +40,28 @@ java {
     toolchain { languageVersion = JavaLanguageVersion.of(17) }
 }
 
+// 运行期依赖（harness-core）在**配置期**解析成文件集合并包进 jar：真实 Paper 服务端不提供它，
+// 不打进来会在 onEnable 抛 NoClassDefFoundError。paper-api 是 compileOnly、不在 runtimeClasspath。
+// 用 Provider 惰性传递（而不是在内联 lambda 里读脚本作用域），否则本任务会捕获脚本对象而与
+// configuration cache 不兼容。
+val runtimeDependencyFiles = configurations.runtimeClasspath.map { files -> files.files }
+
 tasks.jar {
     archiveBaseName.set("mc-testkit-e2e-harness")
-    // 把运行期依赖（harness-core）打进插件 jar：真实 Paper 服务端不提供它，不打进来会在 onEnable
-    // 抛 NoClassDefFoundError。paper-api 是 compileOnly、不在 runtimeClasspath，故不会被打入。
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+    from(runtimeDependencyFiles.map { set -> set.map { if (it.isDirectory) it else zipTree(it) } })
 }
 
 // 质量门由 build-conventions.quality 承担（含 ktlint / checkstyle / PMD / SpotBugs 与覆盖率报告）；
 // 本模块只关掉覆盖率**底线**（供 `quality { }` 块声明，见上），不重复装配任何工具。
 
 // 桩 plugin.yml 的版本跟随工程版本（根目录 VERSION 单点来源），不再手写第二份版本号。
+// CC 约束：展开表必须声明在**任务配置块内成为局部 val**——脚本顶层 val 在嵌套 lambda 里被引用时，
+// Kotlin 生成的闭包仍会捕获整个脚本实例（script object），从而让本任务无法序列化。
 tasks.processResources {
-    filesMatching("plugin.yml") {
-        expand("version" to project.version)
-    }
+    val pluginYmlMetadata = mapOf("version" to project.version.toString())
+    inputs.properties(pluginYmlMetadata)
+    filesMatching("plugin.yml") { expand(pluginYmlMetadata) }
 }
 
 // ============================================================================

@@ -198,16 +198,20 @@ val verifyPackaging by tasks.registering {
     group = "verification"
     description = "校验 Forge mod jar：核心 shade、snakeyaml relocate、mods.toml/services 在位、SRG remap、未打入 Minecraft"
     dependsOn(tasks.named("remapJar"))
+    // 输出冲突与可复现性断言所需取值在配置期取出：动作内不得再访问 project / Task（配置缓存要求），
+    // 断言取值与判定顺序、失败文案与迁移前逐字一致。
+    val shadowJarTask = tasks.named<ShadowJar>("shadowJar").get()
+    val plainArchive = tasks.named<Jar>("jar").get().archiveFile.get().asFile
+    val shadowPreservesTimestamps = shadowJarTask.isPreserveFileTimestamps
+    val shadowReproducibleOrder = shadowJarTask.isReproducibleFileOrder
     packagingVerification(
         laneLabel = "Forge",
         product = tasks.named<RemapJarTask>("remapJar").flatMap { it.archiveFile },
         acceptance = null,
     ) { product, _ ->
-        val shadow = tasks.named<ShadowJar>("shadowJar").get()
-        val plain = tasks.named<Jar>("jar").get()
-        must(plain.archiveFile.get().asFile != product.file, "普通 jar 与最终 remapJar 输出路径冲突")
-        must(!shadow.isPreserveFileTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
-        must(shadow.isReproducibleFileOrder, "最终产品未启用可复现文件顺序")
+        must(plainArchive != product.file, "普通 jar 与最终 remapJar 输出路径冲突")
+        must(!shadowPreservesTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
+        must(shadowReproducibleOrder, "最终产品未启用可复现文件顺序")
         mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "核心类未 shade 进 mod jar")
         mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "platform-spi 未 shade 进 mod jar")
         mustContain(product, "top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class", "缺少 Forge mod 主类")

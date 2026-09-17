@@ -353,14 +353,18 @@ loom {
 
 val generatedBuildInfo = layout.buildDirectory.file("generated/sources/buildInfo/top/wcpe/mc/mpmt/platform/forge/ForgeBuildInfo.java").get().asFile
 val generateBuildInfo by tasks.registering {
-    inputs.property("version", project.version)
-    outputs.file(generatedBuildInfo)
+    // 版本与目标文件在配置期取成局部值：动作只捕获这些值，不捕获 project / 脚本对象（配置缓存要求），
+    // 生成内容与产物路径逐字不变。
+    val buildInfoVersion = project.version.toString()
+    val buildInfoFile = generatedBuildInfo
+    inputs.property("version", buildInfoVersion)
+    outputs.file(buildInfoFile)
     doLast {
-        generatedBuildInfo.parentFile.mkdirs()
-        generatedBuildInfo.writeText(
+        buildInfoFile.parentFile.mkdirs()
+        buildInfoFile.writeText(
             "package top.wcpe.mc.mpmt.platform.forge;\n\n" +
                 "public final class ForgeBuildInfo {\n" +
-                "    public static final String VERSION = \"${project.version}\";\n" +
+                "    public static final String VERSION = \"$buildInfoVersion\";\n" +
                 "    private ForgeBuildInfo() { }\n" +
                 "}\n",
             Charsets.UTF_8,
@@ -373,7 +377,9 @@ tasks.named("compileJava") { dependsOn(generateBuildInfo) }
 tasks.named<Jar>("jar") {
     // loom 约定：jar 产物改落 build/devlibs 且带 -dev 分类器；
     // build/libs 下的正式产品名（无分类器）由 remapJar 以生产命名输出（见 reobfJar 兼容层）
-    from(productBundle.elements.map { elements -> elements.map { zipTree(it.asFile) } })
+    // 解包形态与 build-conventions 的 ForgePackaging 一致：provider 内按名取配置再 zipTree，
+    // 使 from() 不捕获脚本对象（配置缓存要求）；打入内容不变。
+    from(project.provider { project.configurations.getByName("productBundle").map { project.zipTree(it) } })
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     FORGE_ARCHIVE_EXCLUDES.forEach { exclude(it) }
     exclude("top/wcpe/mc/mpmt/acceptance/**")
@@ -468,7 +474,9 @@ tasks.named("check") { dependsOn("contractTest") }
 tasks.named("build") { dependsOn("remapAcceptanceJar", "reobfJar", "reobfAcceptanceJar") }
 
 tasks.named<Delete>("clean") {
+    // 待删目录在配置期取出：动作只捕获 File，不访问 project（配置缓存要求），删除目标不变。
+    val runClientDirectory = project.file("run-client")
     doFirst {
-        delete(project.file("run-client"))
+        delete(runClientDirectory)
     }
 }

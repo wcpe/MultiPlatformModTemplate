@@ -114,12 +114,17 @@ sourceSets.named("test") {
 val verifyVersionSelection by tasks.registering {
     group = "verification"
     description = "校验本版本构建仅含固定 L4 目录（" + selectedL4Name + "）"
+    // 源树与两个 L4 名在配置期取出：动作只捕获这些值，不捕获脚本对象（配置缓存要求），判定与文案不变。
+    val javaTree = fileTree("common/src/main/java")
+    val selectedPattern = "**/version/" + selectedL4Name + "/**"
+    val unselectedPattern = "**/version/" + unselectedL4Name + "/**"
+    val selectedL4 = selectedL4Name
+    val unselectedL4 = unselectedL4Name
     doLast {
-        val javaTree = fileTree("common/src/main/java")
-        val hasSelected = javaTree.matching { include("**/version/" + selectedL4Name + "/**") }.files.isNotEmpty()
-        val hasUnselected = javaTree.matching { include("**/version/" + unselectedL4Name + "/**") }.files.isNotEmpty()
-        if (!hasSelected) throw GradleException("Fabric 版本校验失败：缺少 " + selectedL4Name)
-        if (hasUnselected) throw GradleException("Fabric 版本校验失败：混入 " + unselectedL4Name)
+        val hasSelected = javaTree.matching { include(selectedPattern) }.files.isNotEmpty()
+        val hasUnselected = javaTree.matching { include(unselectedPattern) }.files.isNotEmpty()
+        if (!hasSelected) throw GradleException("Fabric 版本校验失败：缺少 " + selectedL4)
+        if (hasUnselected) throw GradleException("Fabric 版本校验失败：混入 " + unselectedL4)
     }
 }
 
@@ -189,15 +194,20 @@ val verifyPackaging by tasks.registering {
     group = "verification"
     description = "校验 Fabric 产品 jar：core shade、snakeyaml relocate、唯一 L4、mod 元数据"
     dependsOn(tasks.named("remapJar"), verifyVersionSelection)
+    // 车道版本与选中 / 未选中 L4 名在配置期取成局部值：断言 lambda 只捕获这些值，
+    // 不捕获脚本对象（配置缓存要求）；断言内容、顺序与失败文案不变。
+    val laneMcVersion = mcVersion
+    val selectedL4 = selectedL4Name
+    val unselectedL4 = unselectedL4Name
     packagingVerification(
         laneLabel = "Fabric",
-        mcVersion = mcVersion,
+        mcVersion = laneMcVersion,
         product = tasks.named<RemapJarTask>("remapJar").flatMap { it.archiveFile },
         acceptance = null,
     ) { product, _ ->
-        val selectedPrefix = "top/wcpe/mc/mpmt/platform/fabric/version/$selectedL4Name/"
-        val unselectedPrefix = "top/wcpe/mc/mpmt/platform/fabric/version/$unselectedL4Name/"
-        must(product.file.name.contains(mcVersion), "产物名未包含 MC 版本")
+        val selectedPrefix = "top/wcpe/mc/mpmt/platform/fabric/version/$selectedL4/"
+        val unselectedPrefix = "top/wcpe/mc/mpmt/platform/fabric/version/$unselectedL4/"
+        must(product.file.name.contains(laneMcVersion), "产物名未包含 MC 版本")
         mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "core 类未 shade 进产物")
         mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "platform-spi 未 shade 进产物")
         mustContainPrefix(product, "top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/", "snakeyaml 未 relocate")
@@ -205,9 +215,9 @@ val verifyPackaging by tasks.registering {
         mustNotBundle(product, listOf("META-INF/maven/org.yaml/"), "snakeyaml Maven 元数据残留")
         mustContain(product, "fabric.mod.json", "产物缺少 fabric.mod.json")
         mustNotBundle(product, listOf("net/minecraft/"), "产物内不应直接包含 Minecraft 类")
-        mustContainPrefix(product, selectedPrefix, "缺少选中 L4：$selectedL4Name")
-        mustNotBundle(product, listOf(unselectedPrefix), "混入未选中 L4：$unselectedL4Name")
-        log("Fabric $mcVersion 打包校验通过：${product.file.name}（条目 ${product.entries.size}）")
+        mustContainPrefix(product, selectedPrefix, "缺少选中 L4：$selectedL4")
+        mustNotBundle(product, listOf(unselectedPrefix), "混入未选中 L4：$unselectedL4")
+        log("Fabric $laneMcVersion 打包校验通过：${product.file.name}（条目 ${product.entries.size}）")
     }
 }
 
