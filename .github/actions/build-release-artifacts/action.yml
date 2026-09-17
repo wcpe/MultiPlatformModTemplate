@@ -43,11 +43,12 @@ runs:
     - name: 配置 Gradle 缓存
       uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d
 
+    # 固定提交 = v0.9.3（根构建 pin 的版本）。远端 WCPE Releases 已发布同版，本地发布只作离线回退。
     - name: 检出固定 mc-testkit
       uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       with:
         repository: wcpe/mc-testkit
-        ref: b5452ab454f1e2fe52535625c284db9fb07fc312
+        ref: 4df4ccb2fce5aa75200795f21f217180aa947876
         path: .ci/mc-testkit
         persist-credentials: false
 
@@ -81,13 +82,17 @@ runs:
         cache: npm
         cache-dependency-path: e2e/bot/package-lock.json
 
+    # A 车道桩是根构建子模块（ADR-0026：无自有 wrapper / settings），故在仓库根以 JDK 25 守护构建。
     - name: 构建 E2E harness
       if: inputs.validate-template == 'true'
       shell: bash
-      working-directory: e2e/harness
       env:
-        JAVA_HOME: ${{ steps.java21.outputs.path }}
-      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain build
+        JAVA_HOME: ${{ steps.java25.outputs.path }}
+        MPMT_JAVA8_HOME: ${{ steps.java8.outputs.path }}
+        MPMT_JAVA17_HOME: ${{ steps.java17.outputs.path }}
+        MPMT_JAVA21_HOME: ${{ steps.java21.outputs.path }}
+        MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
+      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain :e2e:harness:build
 
     - name: 校验 E2E bot 模板
       if: inputs.validate-template == 'true'

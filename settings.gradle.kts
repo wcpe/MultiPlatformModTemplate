@@ -62,6 +62,10 @@ include(
 // FR-18 上手示例域（非产品玩法，不进发布产物）
 include("examples:counter")
 
+// A 车道（mc-testkit Bukkit/Folia smoke）：桩插件是根构建子模块（ADR-0026——无自有 settings / wrapper），
+// 编排扩展 mcTestkit { } 与桩同处该模块，根侧只留 runMcTestkitSmoke / runMcTestkitFoliaSmoke 入口别名。
+include(":e2e:harness")
+
 include(
     "platform:bukkit",
     "platform:bukkit:bukkit-api",

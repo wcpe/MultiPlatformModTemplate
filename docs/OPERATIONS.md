@@ -7,7 +7,7 @@
 
 ## 1. 构建
 
-> 当前上游 `mc-testkit` plugin marker 不可用时，根 `settings.gradle.kts` 会优先从本机 Maven 仓库解析 `top.wcpe.mc-testkit:0.5.1` 及其 `top.wcpe.mc` 实现模块；该回退只限这两个 group。线上仓库恢复后仍应保持本地制品与发布坐标一致。
+> A 车道 mc-testkit 插件固定 `0.9.3`，经 `pluginManagement` 的 `maven.wcpe.top`（WCPE Releases）解析；根 `settings.gradle.kts` 仍保留只覆盖 `top.wcpe.mc-testkit` / `top.wcpe.mc` 两个 group 的 mavenLocal 回退，供本机或 CI 已发布同版制品时离线使用（未发布该版本则回退到远端坐标）。
 
 ```bash
 # 根 L0–L2 + 平台 api
@@ -58,6 +58,15 @@ Forge 跨代（目录在 `platform/forge/`；全部车道为根构建子模块�
 | 1.21.1 | `platform/forge/1.21.1/` | `:platform:forge:forge-1.21.1`：同一根 Gradle 9.6.1（守护 JVM ≥25）；编译工具链 Java 21 |
 | 1.12.2 | `platform/forge/1.12.2/` | `:platform:forge:forge-1.12.2`：同一根 Gradle 9.6.1（守护 JVM ≥25）；编译工具链 Java 8（**client-only**，任务 `./gradlew :platform:forge:forge-1.12.2:prepareClientCompanionArtifacts`） |
 | 26.2 | `platform/forge/26.2/` | `:platform:forge:forge-26.2`：同一根 Gradle 9.6.1（守护 JVM 必须 ≥25），`top.wcpe.loom-no-remap` + `loom.platform=forge` 无混淆管线（ADR-0025） |
+
+### A 车道（真实 Paper / Folia smoke）
+
+桩与 `mcTestkit { }` 接线都在 `:e2e:harness`（根构建子模块，ADR-0026：无自有 wrapper / `settings.gradle.kts`），机器人在 `e2e/bot`（根 `gradle.properties` 的 `mcTestkit.botDir=e2e/bot` 已给默认值）。被测插件由接线自动取 `:platform:bukkit:1.20.1:shadowJar` 产物并注入，**不需要**手工导出 jar 路径、也不需要再传 `-PmcTestkit.botDir`：
+
+```bash
+./gradlew --no-daemon :runMcTestkitSmoke        # Paper 1.20.1 smoke
+./gradlew --no-daemon :runMcTestkitFoliaSmoke   # Folia 1.20.1 smoke（场景 smoke-folia）
+```
 
 ## 2. 平台 API 模块
 
@@ -164,7 +173,7 @@ Forge 1.12.2：**禁止** Forge 服务端 mod；真服走 CatServer HYBRID：
 
 ## 5. GitHub Actions
 
-`ci.yml` 会在 pull request、`main`/`dev` 推送和手动触发时，在 Ubuntu Hosted Runner 固定构建 `mc-testkit` `v0.5.1` 到 Maven Local；随后以 **JDK 25 守护**执行单一根构建的 `:buildAll`（Java 8 / 17 / 21 / 25 均显式安装，8/17/21 供 toolchain 解析），最后校验 E2E harness 与 bot 模板。成功的默认分支运行保存 `build/dist`，任意结果均保存测试与静态分析诊断。
+`ci.yml` 会在 pull request、`main`/`dev` 推送和手动触发时，在 Ubuntu Hosted Runner 固定构建 `mc-testkit` `v0.9.3` 到 Maven Local（远端 WCPE Releases 已发布同版，本地发布只作离线回退）；随后以 **JDK 25 守护**执行单一根构建的 `:buildAll`（Java 8 / 17 / 21 / 25 均显式安装，8/17/21 供 toolchain 解析），最后在根构建内构建 E2E harness（`:e2e:harness:build`）并校验 bot 模板。成功的默认分支运行保存 `build/dist`，任意结果均保存测试与静态分析诊断。
 
 `release.yml` 只可由维护者手动触发，并且输入必须是已经推送、与 `VERSION` 一致的 `vX.Y.Z` 附注 tag。它会冷构建 13 个产品 jar 后创建 GitHub Release；不会创建 tag、不会发布 Maven 制品。需要强制人工审批时，在仓库设置中创建 `release` Environment 并添加保护规则。
 
