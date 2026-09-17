@@ -53,3 +53,184 @@ jobs:
           path: build/dist/**
           if-no-files-found: error
           retention-days: 30
+
+# E2E 版本矩阵：用 mc-testkit（远端 Maven 的 0.9.3）逐格并行起真实服务端跑 A 车道场景。
+# 每格 = 一个 MC 版本/平台 + 该版本的产品 jar；结果文件由 e2e-report 汇总成一份报告。
+  e2e-matrix:
+    name: E2E 矩阵 · ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Paper 1.20.1
+            lane: ":platform:bukkit:1.20.1"
+            product: platform/bukkit/1.20.1
+            task: ":e2e:harness:e2eSmoke"
+          - name: Folia 1.20.1
+            lane: ":platform:bukkit:1.20.1"
+            product: platform/bukkit/1.20.1
+            task: ":e2e:harness:e2eSmokeFolia"
+          - name: Paper 1.21.1
+            lane: ":platform:bukkit:1.21.1"
+            product: platform/bukkit/1.21.1
+            task: ":e2e:harness:e2eSmoke1211"
+          - name: Paper 26.2
+            lane: ":platform:bukkit:26.2"
+            product: platform/bukkit/26.2
+            task: ":e2e:harness:e2eSmoke262"
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: 安装 Java 8（toolchain 目标）
+        id: java8
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      - name: 安装 Java 17（1.20.1 后端）
+        id: java17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: 安装 Java 21（1.21.1 后端）
+        id: java21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: 安装 Java 25（26.2 后端与根构建守护）
+        id: java25
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: 配置 Gradle 缓存
+        uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d
+
+      # 本格的产品 jar：只有它进被测插件注入；其余车道不构建（矩阵各格自足）。
+      - name: 构建本格产品 jar
+        shell: bash
+        env:
+          JAVA_HOME: ${{ steps.java25.outputs.path }}
+          MPMT_JAVA8_HOME: ${{ steps.java8.outputs.path }}
+          MPMT_JAVA17_HOME: ${{ steps.java17.outputs.path }}
+          MPMT_JAVA21_HOME: ${{ steps.java21.outputs.path }}
+          MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
+        run: |
+          ./gradlew "-Dfabric.loom.cache.dir=$GITHUB_WORKSPACE/.gradle/loom-user-cache" \
+            --no-daemon --max-workers=1 --no-watch-fs --console=plain \
+            ${{ matrix.lane }}:shadowJar
+
+      # mc-testkit 编排：起真实服务端、注入产品 jar 与桩 jar、读结果文件判 PASS/FAIL。
+      # 插件坐标直接解析远端 WCPE Releases（0.9.3 与 harness-core 0.1.1 均已发布），无需本地发布。
+      - name: 运行 mc-testkit E2E（${{ matrix.name }}）
+        shell: bash
+        env:
+          JAVA_HOME: ${{ steps.java25.outputs.path }}
+          MPMT_JAVA8_HOME: ${{ steps.java8.outputs.path }}
+          MPMT_JAVA17_HOME: ${{ steps.java17.outputs.path }}
+          MPMT_JAVA21_HOME: ${{ steps.java21.outputs.path }}
+          MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
+          MC_TESTKIT_JAVA_HOME_17: ${{ steps.java17.outputs.path }}
+          MC_TESTKIT_JAVA_HOME_21: ${{ steps.java21.outputs.path }}
+          MC_TESTKIT_JAVA_HOME_25: ${{ steps.java25.outputs.path }}
+        run: |
+          MC_VERSION=$(basename "${{ matrix.product }}")
+          JAR="${{ matrix.product }}/build/libs/mpmt-bukkit-${MC_VERSION}-$(cat VERSION).jar"
+          test -f "$JAR" || { echo "[e2e] 未找到产品 jar：$JAR"; exit 1; }
+          echo "[e2e] 被测插件：$JAR"
+          MC_TESTKIT_E2E_PLUGIN_UNDER_TEST_JAR="$PWD/$JAR" \
+            ./gradlew "-Dfabric.loom.cache.dir=$GITHUB_WORKSPACE/.gradle/loom-user-cache" \
+              --no-daemon --max-workers=1 --no-watch-fs --console=plain \
+              ${{ matrix.task }}
+
+      - name: 上传本格结果文件
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: e2e-results-${{ strategy.job-index }}-${{ matrix.name }}
+          path: e2e/harness/build/mc-testkit/results/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  # 聚合报告：把各格结果文件汇总成一张表写进 workflow summary，任一格非 PASS 即失败。
+  e2e-report:
+    name: E2E 矩阵聚合报告
+    needs: e2e-matrix
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: 下载各格结果文件
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p e2e-results
+          gh run download "${{ github.run_id }}" -p 'e2e-results-*' -D e2e-results || true
+          find e2e-results -name '*.properties' | sort || true
+
+      - name: 汇总报告
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, sys
+
+          root = pathlib.Path("e2e-results")
+          cells = {}
+          for path in sorted(root.rglob("*.properties")):
+              values = {}
+              for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                  if "=" in line:
+                      key, value = line.split("=", 1)
+                      values[key.strip()] = value.strip()
+              scenario = values.get("scenario") or path.stem
+              cells[scenario] = values
+
+          expected = {
+              "smoke": "Paper 1.20.1",
+              "smoke-folia": "Folia 1.20.1",
+              "smoke1211": "Paper 1.21.1",
+              "smoke262": "Paper 26.2",
+          }
+
+          lines = ["| 场景 | 目标 | 结果 | 服务端 | 被测插件 |", "|---|---|---|---|---|"]
+          failed = []
+          for scenario, label in expected.items():
+              values = cells.get(scenario)
+              status = (values or {}).get("status", "MISSING")
+              server = (values or {}).get("server", "-")
+              under_test = (values or {}).get("pluginUnderTest", "-")
+              lines.append(f"| {scenario} | {label} | {status} | {server} | {under_test} |")
+              if status != "PASS":
+                  failed.append(f"{scenario}={status}")
+
+          report = "\n".join(lines)
+          print(report)
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as handle:
+                  handle.write("## E2E 版本矩阵（mc-testkit）\n\n")
+                  handle.write(report + "\n")
+
+          if failed:
+              print(f"[e2e-report] 非 PASS 或缺失：{', '.join(failed)}", file=sys.stderr)
+              sys.exit(1)
+          print("[e2e-report] 全部矩阵场景 PASS")
+          PY

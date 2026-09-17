@@ -48,34 +48,55 @@ tasks.processResources {
 
 // ============================================================================
 // A 车道接线（DSL 形态见 mc-testkit docs/API.md §3.1）
-// 被测插件与桩 jar 均按**绝对路径**注入（0.9.3 取值语义：先当环境变量名查、查不到就把该值当路径），
-// 消除 `env ?: 路径` 双轨样板；生产者任务由下方 dependsOn 显式接上——框架不会替外部工程接图。
-// 拓扑与场景名是不可变契约：backend s1/folia1 + scenario smoke/smoke-folia。
+// 拓扑 = 版本矩阵：Paper 1.20.1 / 1.21.1 / 26.2 + Folia 1.20.1，四个后端各自独立场景，
+// CI 侧由 .github/workflows/ci.yml 的 e2e-matrix 逐格并行跑、再由聚合 job 收报告。
+// 被测插件 jar：CI 矩阵按格用 MC_TESTKIT_E2E_PLUGIN_UNDER_TEST_JAR 指向该版本的产品 jar；
+// 本机缺省取 :platform:bukkit:1.20.1 的 shadowJar 产物（绝对路径，避免依赖进程工作目录）。
+// 既有契约不可变：backend s1/folia1 与 scenario smoke/smoke-folia。
 // ============================================================================
+val productVersion: String = rootProject.file("VERSION").readText().trim()
+val pluginUnderTestEnv: String? = System.getenv("MC_TESTKIT_E2E_PLUGIN_UNDER_TEST_JAR")
 val pluginUnderTestJar: String =
-    rootProject.layout.projectDirectory
-        .file("platform/bukkit/1.20.1/build/libs/mpmt-bukkit-1.20.1-$version.jar")
-        .asFile.absolutePath
+    pluginUnderTestEnv
+        ?: rootProject.layout.projectDirectory
+            .file("platform/bukkit/1.20.1/build/libs/mpmt-bukkit-1.20.1-$productVersion.jar")
+            .asFile.absolutePath
 val harnessJar: String = tasks.named<Jar>("jar").get().archiveFile.get().asFile.absolutePath
 
 mcTestkit {
+    // 既有拓扑（名称不可变）
     backend("s1") {
         platform = paper
         version = "1.20.1"
         port = 25565
     }
-    // 无 bot：仅校验桩 + 被测插件就绪（smoke 桩内断言 MultiPlatformModTemplate 已启用）
-    scenario("smoke") {
-        backend = "s1"
-    }
-    // Folia 后端可选矩阵（同 smoke 场景，换平台声明）
     backend("folia1") {
         platform = folia
         version = "1.20.1"
         port = 25566
     }
+    // 版本矩阵扩展：Paper 1.21.1 与 Paper 26.2（无 bot，仅校验桩 + 被测插件就绪）
+    backend("paper1211") {
+        platform = paper
+        version = "1.21.1"
+        port = 25567
+    }
+    backend("paper262") {
+        platform = paper
+        version = "26.2"
+        port = 25568
+    }
+    scenario("smoke") {
+        backend = "s1"
+    }
     scenario("smoke-folia") {
         backend = "folia1"
+    }
+    scenario("smoke1211") {
+        backend = "paper1211"
+    }
+    scenario("smoke262") {
+        backend = "paper262"
     }
     dependencies {
         pluginUnderTest = pluginUnderTestJar
@@ -83,9 +104,12 @@ mcTestkit {
     }
 }
 
-// prepareE2e* / e2e* 都会在启动前预检并注入 jar：显式接上两个生产者
-// （被测插件取 :platform:bukkit:1.20.1 车道的 shadowJar 产物，桩取本模块 jar）。
+// prepareE2e* / e2e* 启动前会预检并注入 jar：桩（本模块 jar）恒接；
+// 被测插件默认取 :platform:bukkit:1.20.1 的 shadowJar 产物——CI 矩阵各格自行先构建对应版本产品 jar，
+// 故在外部注入生效时不再接 1.20.1 的图。
 tasks.matching { it.name.startsWith("prepareE2e") || it.name.startsWith("e2e") }.configureEach {
-    dependsOn(":platform:bukkit:1.20.1:shadowJar")
     dependsOn(tasks.jar)
+    if (pluginUnderTestEnv == null) {
+        dependsOn(":platform:bukkit:1.20.1:shadowJar")
+    }
 }

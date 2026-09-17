@@ -10,11 +10,17 @@ import java.util.stream.Collectors;
  * （三处一致），否则编排下发的 {@code MC_TESTKIT_E2E_SCENARIO} 在桩侧匹配不上。
  */
 public enum ScenarioName {
-    /** Paper 烟雾：无机器人，仅校验桩自身与被测插件已就绪即 PASS。 */
+    /** Paper 1.20.1 烟雾：无机器人，仅校验桩自身与被测插件已就绪即 PASS。 */
     SMOKE("smoke"),
 
-    /** Folia 烟雾：与 {@link #SMOKE} 同判定逻辑，后端换成 Folia（id 对齐编排场景名 {@code smoke-folia}）。 */
-    SMOKE_FOLIA("smoke-folia");
+    /** Folia 1.20.1 烟雾：与 {@link #SMOKE} 同判定逻辑，后端换成 Folia。 */
+    SMOKE_FOLIA("smoke-folia"),
+
+    /** Paper 1.21.1 烟雾：版本矩阵格（CI 并行跑，产品 jar 由该格注入）。 */
+    SMOKE_1211("smoke1211"),
+
+    /** Paper 26.2 烟雾：版本矩阵格（CI 并行跑，产品 jar 由该格注入）。 */
+    SMOKE_262("smoke262");
 
     private final String id;
 

@@ -1,5 +1,5 @@
 name: 构建全部发布车道
-description: 准备本地 mc-testkit 并在单一根构建内构建全部发布制品（ADR-0026）
+description: 在单一根构建内构建全部发布制品（ADR-0026）；mc-testkit 与 harness-core 直接解析远端 WCPE Releases
 
 inputs:
   validate-template:
@@ -42,22 +42,6 @@ runs:
 
     - name: 配置 Gradle 缓存
       uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d
-
-    # 固定提交 = v0.9.3（根构建 pin 的版本）。远端 WCPE Releases 已发布同版，本地发布只作离线回退。
-    - name: 检出固定 mc-testkit
-      uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-      with:
-        repository: wcpe/mc-testkit
-        ref: 4df4ccb2fce5aa75200795f21f217180aa947876
-        path: .ci/mc-testkit
-        persist-credentials: false
-
-    - name: 发布 mc-testkit 到 Maven Local
-      shell: bash
-      working-directory: .ci/mc-testkit
-      env:
-        JAVA_HOME: ${{ steps.java21.outputs.path }}
-      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain publishToMavenLocal
 
     # 单一根构建：全部平台车道为根子模块，一条命令构建 + 校验 + 聚合发布产物。
     # JDK 25 守护（26.2 车道配置期硬校验）；MPMT_JAVA*_HOME 供矩阵轨与跨代车道显式选 JDK。
