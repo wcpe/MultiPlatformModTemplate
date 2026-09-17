@@ -56,21 +56,33 @@ platformLane {
 }
 
 // 车道参数：loader 层接线由 build-conventions.bukkit 承担，车道只声明参数与偏离项
-val bukkit = extensions.getByType(BukkitLaneExtension::class.java)
-bukkit.mcVersion.set(minecraftVersion)
-bukkit.apiCoordinate.set(apiCoordinate)
-bukkit.targetJavaVersion.set(targetJavaVersion)
-bukkit.apiVersion.set(apiVersion)
-bukkit.foliaSupported.set(foliaMetadata)
-bukkit.productChannel.set(productChannel)
-bukkit.acceptanceChannel.set(acceptanceChannel)
-bukkit.regionSchedulerClass.set(regionSchedulerClass)
-// 本车道偏离项：无 modern 模块、无 acceptanceTest 源集、Java 8 工具链无 --release、
-// spigot-api 需排除 bungeecord-chat 并由本地补丁 jar 顶替、mpmt.test.javaVersion 用字面量 1.8
-bukkit.modernProduct.set(false)
-bukkit.releaseTargetVersion.set(false)
-bukkit.bungeeChatFallbackJar.set("platform/bukkit/third-party/bungeecord-chat-1.12-SNAPSHOT.jar")
-bukkit.testJavaVersion.set("1.8")
+val laneArgAcceptanceChannel = acceptanceChannel
+val laneArgApiCoordinate = apiCoordinate
+val laneArgApiVersion = apiVersion
+val laneArgFoliaMetadata = foliaMetadata
+val laneArgMinecraftVersion = minecraftVersion
+val laneArgProductChannel = productChannel
+val laneArgRegionSchedulerClass = regionSchedulerClass
+val laneArgTargetJavaVersion = targetJavaVersion
+bukkitLane {
+    mcVersion.set(laneArgMinecraftVersion)
+    apiCoordinate.set(laneArgApiCoordinate)
+    targetJavaVersion.set(laneArgTargetJavaVersion)
+    apiVersion.set(laneArgApiVersion)
+    foliaSupported.set(laneArgFoliaMetadata)
+    productChannel.set(laneArgProductChannel)
+    acceptanceChannel.set(laneArgAcceptanceChannel)
+    regionSchedulerClass.set(laneArgRegionSchedulerClass)
+    // 本车道偏离项：无 modern 模块、无 acceptanceTest 源集、Java 8 工具链无 --release、
+    // spigot-api 需排除 bungeecord-chat 并由本地补丁 jar 顶替、mpmt.test.javaVersion 用字面量 1.8
+    modernProduct.set(false)
+    releaseTargetVersion.set(false)
+    bungeeChatFallbackJar.set("platform/bukkit/third-party/bungeecord-chat-1.12-SNAPSHOT.jar")
+    testJavaVersion.set("1.8")
+}
+
+// 插件公开 API 需要扩展实例（块外传参用），故在此取回一次
+val bukkit = extensions.getByType(buildconventions.BukkitLaneExtension::class.java)
 
 // 冻结 API 快照（本车道为 spigot-api）：插件解析坐标与 SHA-256，并把校验挂到编译任务之前
 frozenApiSnapshot(

@@ -73,7 +73,9 @@ class RealServerGateContractTest {
         // Loom run 与报告路径由车道约定插件承担：车道只声明"run 报告跟随 -Pmpmt.acceptance.report 覆盖"，
         // 覆盖解析（-P 优先，否则 build/acceptance/server-report.txt）与 run 属性注入在插件单点实现，属性名不变。
         assertTrue(build.contains("id(\"build-conventions.fabric\")"))
-        assertTrue(build.contains("fabric.acceptanceServerUsesOverriddenReport.set(true)"))
+        // DSL 化后车道用 xxxLane { } 声明参数：断言块存在且该偏离项在块内声明（强度不变）
+        assertTrue(build.contains("fabricLane {"))
+        assertTrue(build.contains("acceptanceServerUsesOverriddenReport.set(true)"))
         assertTrue(build.contains("acceptanceReportFile(matrixId)"))
         val fabricRuns =
             readRootFile("build-logic/build-conventions/src/main/kotlin/buildconventions/FabricRuns.kt")

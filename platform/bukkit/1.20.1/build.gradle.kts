@@ -46,18 +46,29 @@ platformLane {
 }
 
 // 车道参数：loader 层接线由 build-conventions.bukkit 承担，车道只声明参数与偏离项
-val bukkit = extensions.getByType(BukkitLaneExtension::class.java)
-bukkit.mcVersion.set(minecraftVersion)
-bukkit.apiCoordinate.set(apiCoordinate)
-bukkit.targetJavaVersion.set(targetJavaVersion)
-bukkit.apiVersion.set(apiVersion)
-bukkit.foliaSupported.set(true)
-bukkit.productChannel.set(productChannel)
-bukkit.acceptanceChannel.set(acceptanceChannel)
-bukkit.regionSchedulerClass.set(regionSchedulerClass)
-// 本车道偏离项：唯一有验收默认轨契约测试源集与托管 Paper 宿主自检任务的车道
-bukkit.acceptanceTestSourceSet.set(true)
-bukkit.managedPaperHost.set(true)
+val laneArgAcceptanceChannel = acceptanceChannel
+val laneArgApiCoordinate = apiCoordinate
+val laneArgApiVersion = apiVersion
+val laneArgMinecraftVersion = minecraftVersion
+val laneArgProductChannel = productChannel
+val laneArgRegionSchedulerClass = regionSchedulerClass
+val laneArgTargetJavaVersion = targetJavaVersion
+bukkitLane {
+    mcVersion.set(laneArgMinecraftVersion)
+    apiCoordinate.set(laneArgApiCoordinate)
+    targetJavaVersion.set(laneArgTargetJavaVersion)
+    apiVersion.set(laneArgApiVersion)
+    foliaSupported.set(true)
+    productChannel.set(laneArgProductChannel)
+    acceptanceChannel.set(laneArgAcceptanceChannel)
+    regionSchedulerClass.set(laneArgRegionSchedulerClass)
+    // 本车道偏离项：唯一有验收默认轨契约测试源集与托管 Paper 宿主自检任务的车道
+    acceptanceTestSourceSet.set(true)
+    managedPaperHost.set(true)
+}
+
+// 插件公开 API 需要扩展实例（块外传参用），故在此取回一次
+val bukkit = extensions.getByType(buildconventions.BukkitLaneExtension::class.java)
 
 dependencies {
     // 车道级偏离项：验收契约测试所需的 MockBukkit（仅本车道）

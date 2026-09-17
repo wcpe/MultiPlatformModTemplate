@@ -59,13 +59,41 @@ quality {
 
 // fabric 车道参数：版本与矩阵轨 JDK 环境变量在此声明；
 // gametest 源集与依赖接线、Loom run、验收元数据注入、模拟服门禁、mod 元数据展开、单测系统属性均由插件承担。
-val fabric = extensions.getByType(FabricLaneExtension::class.java)
-fabric.mcVersion.set(mcVersion)
-fabric.targetJavaVersion.set(targetJavaVersion)
-fabric.loaderVersion.set(loaderVersion)
-fabric.fabricApiVersion.set(fabricApiVersion)
-// 矩阵轨 java 可执行文件取自本车道目标 JDK（21）
-fabric.matrixJavaHomeEnvironment.set("MPMT_JAVA21_HOME")
+val laneArgFabricApiVersion = fabricApiVersion
+val laneArgLoaderVersion = loaderVersion
+val laneArgMcVersion = mcVersion
+val laneArgTargetJavaVersion = targetJavaVersion
+// 模拟服默认轨场景清单：门禁按它逐项校验（须在 fabricLane 块之前声明）
+val simRequiredScenarios =
+    listOf(
+        "acceptance/handshake-success",
+        "acceptance/handshake-incompatible",
+        "acceptance/machine-code-session",
+        "acceptance/ban-reconnect",
+        "acceptance/unban-reconnect",
+        "acceptance/fragment-crc",
+        "acceptance/fragment-timeout-retry-resync",
+        "acceptance/session-heartbeat-rtt-timeout",
+        "acceptance/capability-eventbus",
+        "acceptance/hud-title",
+        "acceptance/hud-actionbar",
+        "acceptance/hud-toast",
+        "acceptance/hud-chat",
+        "acceptance/integrated-loopback",
+    )
+
+fabricLane {
+    mcVersion.set(laneArgMcVersion)
+    targetJavaVersion.set(laneArgTargetJavaVersion)
+    loaderVersion.set(laneArgLoaderVersion)
+    fabricApiVersion.set(laneArgFabricApiVersion)
+    // 矩阵轨 java 可执行文件取自本车道目标 JDK（21）
+    matrixJavaHomeEnvironment.set("MPMT_JAVA21_HOME")
+    simScenarios.set(simRequiredScenarios)
+}
+
+// 插件公开 API 需要扩展实例（块外传参用），故在此取回一次
+val fabric = extensions.getByType(buildconventions.FabricLaneExtension::class.java)
 
 // 专用配置：需 shade 进产物并 relocate 的内容（core + 第三方运行期依赖），不参与 Loom remap
 val shadowBundle: Configuration by configurations.creating
@@ -224,30 +252,11 @@ tasks.register("runRealServerAcceptance") {
                     layout.buildDirectory.file("acceptance/server-report-${matrixId.lowercase()}.txt").get().asFile
                 }
             } else {
-                fabric.acceptanceReport.get().asFile
+                extensions.getByType(buildconventions.FabricLaneExtension::class.java).acceptanceReport.get().asFile
             }
         // 校验实现与其余车道共用 build-conventions 的单份实现（判定顺序与失败文案逐字保留）。
         verifyDefaultTrackReport(project, report, matrixId, "fabric", realRequiredScenarios)
     }
 }
 
-val simRequiredScenarios =
-    listOf(
-        "acceptance/handshake-success",
-        "acceptance/handshake-incompatible",
-        "acceptance/machine-code-session",
-        "acceptance/ban-reconnect",
-        "acceptance/unban-reconnect",
-        "acceptance/fragment-crc",
-        "acceptance/fragment-timeout-retry-resync",
-        "acceptance/session-heartbeat-rtt-timeout",
-        "acceptance/capability-eventbus",
-        "acceptance/hud-title",
-        "acceptance/hud-actionbar",
-        "acceptance/hud-toast",
-        "acceptance/hud-chat",
-        "acceptance/integrated-loopback",
-    )
-
 // 模拟服默认轨场景清单交插件门禁（runSimNetworkAcceptance）逐项校验
-fabric.simScenarios.set(simRequiredScenarios)

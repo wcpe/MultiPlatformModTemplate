@@ -51,16 +51,28 @@ platformLane {
 }
 
 // 车道参数：loader 层接线由 build-conventions.bukkit 承担，车道只声明参数与偏离项
-val bukkit = extensions.getByType(BukkitLaneExtension::class.java)
-bukkit.mcVersion.set(minecraftVersion)
-bukkit.apiCoordinate.set(apiCoordinate)
-bukkit.targetJavaVersion.set(targetJavaVersion)
-bukkit.compilerJavaVersion.set(compilerJavaVersion)
-bukkit.apiVersion.set(apiVersion)
-bukkit.foliaSupported.set(true)
-bukkit.productChannel.set(productChannel)
-bukkit.acceptanceChannel.set(acceptanceChannel)
-bukkit.regionSchedulerClass.set(regionSchedulerClass)
+val laneArgAcceptanceChannel = acceptanceChannel
+val laneArgApiCoordinate = apiCoordinate
+val laneArgApiVersion = apiVersion
+val laneArgCompilerJavaVersion = compilerJavaVersion
+val laneArgMinecraftVersion = minecraftVersion
+val laneArgProductChannel = productChannel
+val laneArgRegionSchedulerClass = regionSchedulerClass
+val laneArgTargetJavaVersion = targetJavaVersion
+bukkitLane {
+    mcVersion.set(laneArgMinecraftVersion)
+    apiCoordinate.set(laneArgApiCoordinate)
+    targetJavaVersion.set(laneArgTargetJavaVersion)
+    compilerJavaVersion.set(laneArgCompilerJavaVersion)
+    apiVersion.set(laneArgApiVersion)
+    foliaSupported.set(true)
+    productChannel.set(laneArgProductChannel)
+    acceptanceChannel.set(laneArgAcceptanceChannel)
+    regionSchedulerClass.set(laneArgRegionSchedulerClass)
+}
+
+// 插件公开 API 需要扩展实例（块外传参用），故在此取回一次
+val bukkit = extensions.getByType(buildconventions.BukkitLaneExtension::class.java)
 
 // 验收源集由 build-conventions.bukkit 创建；本车道偏离项：显式钉住编译期 adventure / guava / gson 版本
 // （Paper 元数据亦会传递，这里避免解析漂移；均不入产物），故直接往验收源集配置上加依赖。

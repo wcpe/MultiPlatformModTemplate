@@ -84,17 +84,45 @@ quality {
 
 // fabric 车道参数：版本、产品任务与本车道接线差异在此声明；
 // gametest 源集与依赖接线、Loom run、验收元数据注入、模拟服门禁、mod 元数据展开、单测系统属性均由插件承担。
-val fabric = extensions.getByType(FabricLaneExtension::class.java)
-fabric.mcVersion.set(mcVersion)
-fabric.targetJavaVersion.set(targetJavaVersion)
-fabric.loaderVersion.set(loaderVersion)
-fabric.fabricApiVersion.set(fabricApiVersion)
-// MC 26.1+ 无混淆：产品 jar 由 shadowJar 直接产出，没有 remapJar
-fabric.productTaskName.set("shadowJar")
-// 矩阵轨 java 可执行文件取自本车道目标 JDK（25）
-fabric.matrixJavaHomeEnvironment.set("MPMT_JAVA25_HOME")
-// 单进程真服编排会用 -Pmpmt.acceptance.report 覆盖报告，run 设定的默认报告路径同步采用覆盖值
-fabric.acceptanceServerUsesOverriddenReport.set(true)
+val laneArgFabricApiVersion = fabricApiVersion
+val laneArgLoaderVersion = loaderVersion
+val laneArgMcVersion = mcVersion
+val laneArgTargetJavaVersion = targetJavaVersion
+// 模拟服默认轨场景清单：门禁按它逐项校验（须在 fabricLane 块之前声明）
+val simRequiredScenarios =
+    listOf(
+        "acceptance/handshake-success",
+        "acceptance/handshake-incompatible",
+        "acceptance/machine-code-session",
+        "acceptance/ban-reconnect",
+        "acceptance/unban-reconnect",
+        "acceptance/fragment-crc",
+        "acceptance/fragment-timeout-retry-resync",
+        "acceptance/session-heartbeat-rtt-timeout",
+        "acceptance/capability-eventbus",
+        "acceptance/hud-title",
+        "acceptance/hud-actionbar",
+        "acceptance/hud-toast",
+        "acceptance/hud-chat",
+        "acceptance/integrated-loopback",
+    )
+
+fabricLane {
+    mcVersion.set(laneArgMcVersion)
+    targetJavaVersion.set(laneArgTargetJavaVersion)
+    loaderVersion.set(laneArgLoaderVersion)
+    fabricApiVersion.set(laneArgFabricApiVersion)
+    // MC 26.1+ 无混淆：产品 jar 由 shadowJar 直接产出，没有 remapJar
+    productTaskName.set("shadowJar")
+    // 矩阵轨 java 可执行文件取自本车道目标 JDK（25）
+    matrixJavaHomeEnvironment.set("MPMT_JAVA25_HOME")
+    // 单进程真服编排会用 -Pmpmt.acceptance.report 覆盖报告，run 设定的默认报告路径同步采用覆盖值
+    acceptanceServerUsesOverriddenReport.set(true)
+    simScenarios.set(simRequiredScenarios)
+}
+
+// 插件公开 API 需要扩展实例（块外传参用），故在此取回一次
+val fabric = extensions.getByType(buildconventions.FabricLaneExtension::class.java)
 
 // 专用配置：需 shade 进产物并 relocate 的内容（core + 第三方运行期依赖）
 val shadowBundle: Configuration by configurations.creating
@@ -337,29 +365,10 @@ tasks.register("runRealServerAcceptance") {
         val haveRoundContext =
             !(project.findProperty("mpmt.acceptance.runId") as String?)?.trim().isNullOrEmpty()
         val matrixId = explicitMatrix.ifEmpty { if (haveRoundContext) "REALSERVER262" else "" }
-        val report = if (matrixId.isEmpty()) fabric.acceptanceReport.get().asFile else acceptanceReportFile(matrixId)
+        val report = if (matrixId.isEmpty()) extensions.getByType(buildconventions.FabricLaneExtension::class.java).acceptanceReport.get().asFile else acceptanceReportFile(matrixId)
         // 校验实现与其余车道共用 build-conventions 的单份实现（判定顺序与失败文案逐字保留）。
         verifyDefaultTrackReport(project, report, matrixId, "fabric", realRequiredScenarios)
     }
 }
 
-val simRequiredScenarios =
-    listOf(
-        "acceptance/handshake-success",
-        "acceptance/handshake-incompatible",
-        "acceptance/machine-code-session",
-        "acceptance/ban-reconnect",
-        "acceptance/unban-reconnect",
-        "acceptance/fragment-crc",
-        "acceptance/fragment-timeout-retry-resync",
-        "acceptance/session-heartbeat-rtt-timeout",
-        "acceptance/capability-eventbus",
-        "acceptance/hud-title",
-        "acceptance/hud-actionbar",
-        "acceptance/hud-toast",
-        "acceptance/hud-chat",
-        "acceptance/integrated-loopback",
-    )
-
 // 模拟服默认轨场景清单交插件门禁（runSimNetworkAcceptance）逐项校验
-fabric.simScenarios.set(simRequiredScenarios)
