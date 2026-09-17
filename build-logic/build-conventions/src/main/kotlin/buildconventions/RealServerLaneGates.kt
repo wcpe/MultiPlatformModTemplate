@@ -43,7 +43,8 @@ private fun registerLaneCoverageEntry(project: Project) {
                 |  CatServer（HYBRID 矩阵）    :platform:bukkit:1.12.2 + Forge 1.12 client-only 伴侣（禁止 Forge 服务端 mod）
                 |  Sponge          :platform:sponge:sponge-1.20.1
                 |入口（请用绝对路径 :task，避免匹配子工程同名任务）：
-                |  ./gradlew :runRealServerAcceptance
+                |  ./gradlew :runRealServerAcceptance          # 默认轨全服务端门（不含 26.2）
+                |  ./gradlew :runRealServerGate262              # 26.2 三车道权威门（矩阵轨 + 严格轮次校验）
                 |  ./gradlew :runRealServerAcceptanceFabric
                 |  ./gradlew :verifyVersionMatrixBuild
                 |  ./gradlew :runVersionMatrixGate
@@ -51,7 +52,7 @@ private fun registerLaneCoverageEntry(project: Project) {
                 |  ./gradlew :buildAll
                 |B 增强：
                 |  ./gradlew :platform:bukkit:1.20.1:ensurePaperRealServerHost -Pmpmt.realserver.autoHost=true
-                |A 辅车道：./gradlew :runMcTestkitSmoke -PmcTestkit.botDir=e2e/bot
+                |A 辅车道：./gradlew :runMcTestkitSmoke（被测插件自动取 bukkit 1.20.1 shadowJar；矩阵见 ci.yml）
                 |注：根构建须以 JDK 25 运行（26.2 两条车道的配置期硬校验，ADR-0026）。
                 """.trimMargin(),
             )
@@ -203,21 +204,26 @@ private fun registerSpongeLaneGate(project: Project) {
     }
 }
 
-/** 默认：全服务端 lane 串行门禁（各 lane 须已自行完成「服 + 自有 gametest 客户端」并落报告）。 */
+/**
+ * 默认：全服务端 lane 串行门禁（各 lane 须已自行完成「服 + 自有 gametest 客户端」并落报告）。
+ *
+ * 两条 26.2 车道（Bukkit 26.2 与 Fabric 26.2）**没有默认轨**：它们只有矩阵轨 REALSERVER262，
+ * 报告路径为 `server-report-realserver262.txt`，且按 `-Pmpmt.acceptance.runId` 校验本轮归属。
+ * 故本聚合门刻意**不含**它们——26.2 的权威入口是 `:runRealServerGate262`
+ * （ADR-0023：三车道 + 严格报告校验 + 本轮轮次匹配）。曾经把它们挂进来会让本门在任何时刻必红。
+ */
 private fun registerLaneAggregateGate(project: Project) {
     project.tasks.register("runRealServerAcceptance") {
         group = "verification"
         description =
-            "B 完整：全服务端 realserver 报告门禁（含 Fabric121 / NeoForge / Sponge；不含 Forge 1.21/1.12 自有 launcher）"
+            "B 完整：全服务端 realserver 报告门禁（默认轨车道；26.2 请用 :runRealServerGate262）"
         dependsOn(
             "runRealServerAcceptanceFabric",
             "runRealServerAcceptanceFabric121",
-            "runRealServerAcceptanceFabric262",
             "runRealServerAcceptanceForge",
             "runRealServerAcceptanceForge262",
             "runRealServerAcceptanceNeoForge",
             "runRealServerAcceptanceBukkit",
-            "runRealServerAcceptanceBukkit262",
             "runRealServerAcceptanceFolia",
             "runRealServerAcceptanceCatServer",
             "runRealServerAcceptanceSponge",

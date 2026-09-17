@@ -31,8 +31,9 @@ class QualityConventionPlugin : Plugin<Project> {
         quality.checkstyleToolVersion.convention("10.17.0")
         quality.pmdToolVersion.convention("7.0.0")
         quality.analysisJavaVersion.convention(DEFAULT_ANALYSIS_JAVA_VERSION)
+        quality.coverageFloor.convention(true)
         applyStyleAndBugs(project, quality)
-        applyCoverage(project)
+        applyCoverage(project, quality)
         applyKotlinToolchain(project)
         wireCompileInputs(project)
         pinAnalysisLaunchers(project, quality)
@@ -81,7 +82,7 @@ class QualityConventionPlugin : Plugin<Project> {
      * 若一并计入会稀释车道覆盖率，而它们已由各自模块的测试覆盖，故仅对平台车道排除这些共享包。
      * 注：必须作用在 class *文件树* 上——JaCoCo 自行遍历目录，只过滤目录集合无效。
      */
-    private fun applyCoverage(project: Project) {
+    private fun applyCoverage(project: Project, quality: QualityExtension) {
         project.pluginManager.apply("jacoco")
 
         val isPlatformLane = project.path.startsWith(":platform:") && project.path != ":platform"
@@ -115,7 +116,11 @@ class QualityConventionPlugin : Plugin<Project> {
             reports.xml.required.set(true)
             reports.html.required.set(true)
         }
+        // 覆盖率底线按车道开关：无业务测试的辅助模块（E2E 桩）关掉它，避免必然误杀；
+        // 报告仍产出，只是不设阈值、不入 `check`。
+        val coverageFloorEnabled = project.providers.provider { quality.coverageFloor.get() }
         project.tasks.withType(JacocoCoverageVerification::class.java).configureEach {
+            onlyIf { coverageFloorEnabled.get() }
             violationRules {
                 rule {
                     limit {
@@ -128,8 +133,10 @@ class QualityConventionPlugin : Plugin<Project> {
         project.tasks.withType(Test::class.java).configureEach {
             finalizedBy(project.tasks.matching { it.name == "jacocoTestReport" })
         }
-        project.tasks.matching { it.name == "check" }.configureEach {
-            dependsOn(project.tasks.matching { it.name == "jacocoTestCoverageVerification" })
+        project.tasks.matching { task -> task.name == "check" }.configureEach {
+            if (coverageFloorEnabled.get()) {
+                dependsOn(project.tasks.matching { task -> task.name == "jacocoTestCoverageVerification" })
+            }
         }
     }
 

@@ -19,4 +19,12 @@ abstract class QualityExtension {
 
     /** 分析任务（Checkstyle / PMD）启动 JVM 的版本（默认 17；低版本字节码车道可调到与本车道一致）。 */
     abstract val analysisJavaVersion: Property<Int>
+
+    /**
+     * 是否启用覆盖率底线（JaCoCo LINE ≥ 0.70，并入 `check`）。默认 true。
+     *
+     * 无业务测试的辅助模块（如 E2E 桩插件）关掉它：那里没有可覆盖的单测，底线必然误杀；
+     * 覆盖率报告仍照常产出，只是不再设阈值、不入 `check`。
+     */
+    abstract val coverageFloor: Property<Boolean>
 }

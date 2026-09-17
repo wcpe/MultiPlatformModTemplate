@@ -13,7 +13,7 @@ private const val BUKKIT_REAL_SERVER_EXTENSION = "mpmtRealServerAcceptance"
 /** 本平台自有验收客户端 run 任务名（各平台伴侣自行进服）。 */
 private const val BUKKIT_ACCEPTANCE_CLIENT_TASK = "runAcceptanceClient"
 
-/** 托管 Paper 宿主门户：BuildService 名与原 1.20.1 车道内联实现一致。 */
+/** 托管 Paper 宿主门户：BuildService 名前缀，实际注册名带「_<工程路径>」后缀（见 [bukkitEnsurePaperHost]）。 */
 private const val BUKKIT_PAPER_HOST_SERVICE = "mpmtPaperHostService"
 
 /** 托管 Paper 宿主自检任务名（仅声明了 `managedPaperHost` 的车道注册）。 */
@@ -72,9 +72,12 @@ internal fun registerBukkitPaperHostEnsureTask(project: Project) {
             if (!autoHost.get()) {
                 throw GradleException("请加 -P$BUKKIT_AUTO_HOST_PROPERTY=true 启用 BuildService 起宿主")
             }
+            // 宿主服务由 realserver-acceptance 插件按「mpmtPaperHostService_<工程路径>」注册（避免多车道同名冲突），
+            // 故此处按本工程路径拼出真实注册名查找；旧的裸名查找永远匹配不到（迁移前即有的缺陷）。
+            val serviceName = BUKKIT_PAPER_HOST_SERVICE + project.path.replace(':', '_')
             val registration =
-                project.gradle.sharedServices.registrations.findByName(BUKKIT_PAPER_HOST_SERVICE)
-                    ?: throw GradleException("未注册 $BUKKIT_PAPER_HOST_SERVICE")
+                project.gradle.sharedServices.registrations.findByName(serviceName)
+                    ?: throw GradleException("未注册 $serviceName（本车道未声明 managedPaperHost？）")
             registration.service.get().withGroovyBuilder { "ensureStarted"() }
             val port =
                 project.providers.gradleProperty(BUKKIT_PAPER_PORT_PROPERTY)

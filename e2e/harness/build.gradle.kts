@@ -8,14 +8,23 @@
 plugins {
     id("top.wcpe.mc-testkit")
     java
+    // 质量门：桩是 E2E 用的辅助模块（无单测、非产品代码），故只保留风格检查口径——
+    // 关掉覆盖率底线（无测试可覆盖，0.70 必然误杀）；覆盖率报告与其它工具仍按约定产出。
+    id("build-conventions.quality")
+}
+
+// 覆盖率为报告 only：本模块不设 LINE 底线（E2E 桩没有可覆盖的单测）。
+quality {
+    coverageFloor.set(false)
 }
 
 repositories {
+    // mavenCentral 放最前：质量工具链（ktlint 等）的依赖统一走它，避免被下方专用仓库的首个命中拦下。
+    mavenCentral()
     // harness-core 发布地（mc-testkit 系共享胶水构件）
     maven("https://maven.wcpe.top/repository/maven-releases/") { name = "WCPE Releases" }
     // PaperMC 官方仓库：提供 paper-api（桩编译期所需的 Bukkit/Paper API）
     maven("https://repo.papermc.io/repository/maven-public/") { name = "PaperMC" }
-    mavenCentral()
 }
 
 dependencies {
@@ -38,6 +47,9 @@ tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
 }
+
+// 质量门由 build-conventions.quality 承担（含 ktlint / checkstyle / PMD / SpotBugs 与覆盖率报告）；
+// 本模块只关掉覆盖率**底线**（供 `quality { }` 块声明，见上），不重复装配任何工具。
 
 // 桩 plugin.yml 的版本跟随工程版本（根目录 VERSION 单点来源），不再手写第二份版本号。
 tasks.processResources {
