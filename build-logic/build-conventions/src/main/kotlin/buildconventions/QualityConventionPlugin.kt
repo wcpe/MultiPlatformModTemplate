@@ -22,8 +22,7 @@ import org.gradle.testing.jacoco.tasks.JacocoReport
 /**
  * 静态分析与质量门禁（严格）——工程显式 `plugins { id("build-conventions.quality") }` 接入。
  *
- * 语义迁移自原根构建的 `subprojects {}` 块，逐项保持：
- * Checkstyle / PMD / SpotBugs(+FindSecBugs) / ktlint / detekt / kover / JaCoCo，
+ * 覆盖 Checkstyle / PMD / SpotBugs(+FindSecBugs) / ktlint / detekt / kover / JaCoCo，
  * 违规即失败（`isIgnoreFailures = false`），覆盖率下限 LINE 0.70；规则集仍在仓库根 `config/`。
  */
 class QualityConventionPlugin : Plugin<Project> {

@@ -8,7 +8,7 @@ import org.gradle.api.tasks.TaskProvider
  * 发布产物结构门与全量构建入口（注册在根工程）。
  *
  * - `verifyReleasePackaging`：五平台最终自包含发布产物结构门。全部平台车道均为根构建子模块（ADR-0026），
- *   直接依赖其任务；任务不存在即配置期失败——不再有"includeBuild 未加载 → 静默跳过"的降级路径。
+ *   直接依赖其任务；任务不存在即配置期失败。
  * - `buildFabric262`：Fabric 26.2 车道构建壳；`verifyReleasePackaging` 额外依赖它（整条 `build`，含测试），
  *   比"仅校验产物"更强，属有意加严，搬迁后保持。
  * - `buildAll`：一键全量构建 = 全部子工程 `build` + 结构门 + dist 聚合。

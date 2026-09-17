@@ -136,7 +136,7 @@ Paper 26.2 宿主 + Fabric 26.2 客户端伴侣（REALSERVER262）：
 
 P3 Paper 自动宿主只下载 `https://fill-data.papermc.io` 的冻结 build 71，缓存与新下载均核对 `paper-26.2-71.jar` 的 61,744,713 字节和 SHA-256 `36fee4f3a7020eb2e2d6f8d70d849beaf0f024d86f09302b9ccf2d96f266127e`；不跟随 `latest`。其他历史 Bukkit 自动宿主未声明冻结值时保持既有下载行为。该组合会由 Paper 车道产出当前 REALSERVER262 报告；Fabric 与 Forge 各自的服务端车道仍须另行产出相同轮次的报告，才能运行根聚合门。
 
-Forge 1.21.1 专用服（独立 launcher，车道已是根子模块，命令仍在仓库根执行）：
+Forge 1.21.1 专用服（车道已是根子模块，无车道自有 wrapper / launcher，命令仍在仓库根执行）：
 
 ```bash
 ./gradlew --no-daemon :platform:forge:forge-1.21.1:printRealServerAcceptanceRecipe

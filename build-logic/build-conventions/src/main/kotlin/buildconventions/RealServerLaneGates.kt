@@ -7,7 +7,7 @@ import org.gradle.api.Task
  * 根侧真服验收入口（Gradle only，禁止 .sh 脚本编排）。
  *
  * B 完整：全部服务端 lane；客户端 = 各 loader 自有 gametest/acceptance 伴侣进服。
- * 对齐 AllinCore：根薄包装 + includeBuild；禁止嵌套 gradlew。
+ * 对齐 AllinCore：根薄包装，门直接委托车道的根工程任务路径；禁止嵌套 gradlew。
  *
  * 各 lane 门只读平台内 `runRealServerAcceptance` 的权威报告，不重复实现判定。
  */

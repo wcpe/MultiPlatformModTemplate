@@ -53,4 +53,4 @@
 ```
 
 输出：`build/dist/{bukkit,fabric,forge,neoforge,sponge}/`。
-Forge 1.12 / 1.21 独立 launcher 产物若已构建会一并捞入，否则仅打印命令。
+Forge 1.12.2 / 1.21.1 车道的产物已构建时一并捞入，否则仅打印命令。

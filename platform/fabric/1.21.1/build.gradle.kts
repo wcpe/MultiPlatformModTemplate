@@ -70,7 +70,7 @@ fabric.matrixJavaHomeEnvironment.set("MPMT_JAVA21_HOME")
 val shadowBundle: Configuration by configurations.creating
 
 // 单版本构建内：common / server / client 分目录（服客分离、平台只胶水）；L4 已固定拷入 common。
-// Loom remap 仍在本构建根完成（多模块各挂 Loom 代价高且易冲突）。
+// Loom remap 仍由本车道工程完成（多模块各挂 Loom 代价高且易冲突）。
 sourceSets.named("main") {
     java.setSrcDirs(
         listOf(

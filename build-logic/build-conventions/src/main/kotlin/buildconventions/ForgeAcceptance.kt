@@ -123,29 +123,30 @@ internal fun registerForgeAcceptanceReportGate(project: Project, lane: ForgeLane
     }
 }
 
-/** 真服验收流程提示（独立 launcher，禁止嵌套根 gradlew）：文本与文档既有步骤一致。 */
+/** 真服验收流程提示：文本与 OPERATIONS.md 的既有步骤一致（一律在仓库根用绝对工程路径，禁止嵌套 Gradle 调用）。 */
 internal fun registerForgeAcceptanceRecipe(project: Project, lane: ForgeLaneExtension) {
     val laneLabel = lane.laneLabel.get()
+    val lanePath = project.path
     project.tasks.register("printRealServerAcceptanceRecipe") {
         group = "help"
-        description = "打印 $laneLabel 真服验收推荐步骤（独立 launcher，禁止嵌套根 gradlew）"
+        description = "打印 $laneLabel 真服验收推荐步骤（在仓库根执行，禁止嵌套 Gradle 调用）"
         doLast {
             logger.lifecycle(
                 """
                 |[$laneLabel realserver]
-                |1) 本目录构建产物：
-                |   ./gradlew --no-daemon packageArtifacts
+                |1) 构建本车道产物：
+                |   ./gradlew --no-daemon $lanePath:packageArtifacts
                 |2) 起服（二选一）：
-                |   a) dev 服：./gradlew --no-daemon runAcceptanceServer
-                |   b) 真实专用服：./gradlew --no-daemon runRealServerAcceptanceHost \
+                |   a) dev 服：./gradlew --no-daemon $lanePath:runAcceptanceServer
+                |   b) 真实专用服：./gradlew --no-daemon $lanePath:runRealServerAcceptanceHost \
                 |        -Pmpmt.acceptance.artifact.server-runtime=<forge-server.jar> \
                 |        -Pmpmt.acceptance.runId=... -Pmpmt.acceptance.matrix=... \
                 |        -Pmpmt.acceptance.startEpochMs=...
                 |3) 另开终端客户端伴侣：
-                |   ./gradlew --no-daemon runAcceptanceClient -Pmpmt.acceptance.server=127.0.0.1:<port>
+                |   ./gradlew --no-daemon $lanePath:runAcceptanceClient -Pmpmt.acceptance.server=127.0.0.1:<port>
                 |4) 报告门：
-                |   ./gradlew --no-daemon runRealServerAcceptance
-                |   # 或 ./gradlew --no-daemon verifyAcceptanceReport
+                |   ./gradlew --no-daemon $lanePath:runRealServerAcceptance
+                |   # 或 ./gradlew --no-daemon $lanePath:verifyAcceptanceReport
                 """.trimMargin().trim(),
             )
         }

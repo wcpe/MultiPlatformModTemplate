@@ -48,7 +48,7 @@ detekt {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
-    // 契约测试读取仓库外部文件（根构建 / 各车道 settings 等）而未声明为任务输入；
+    // 契约测试读取仓库外部文件（根构建 / 车道脚本 / 插件源码等）而未声明为任务输入；
     // 禁用 up-to-date 缓存，避免外部文件变更后仍命中陈旧的绿结果。
     outputs.upToDateWhen { false }
 }

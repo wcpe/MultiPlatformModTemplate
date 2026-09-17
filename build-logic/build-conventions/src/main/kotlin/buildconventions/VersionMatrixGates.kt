@@ -36,14 +36,14 @@ private fun registerMatrixAcceptanceGate(project: Project) {
 }
 
 /**
- * 版本矩阵构建（无真服）：对齐每版本独立工程路径，废除 -Pmpmt.minecraftVersion。
- * Forge 1.21.1 / 1.12.2 须用各自目录自有 launcher，本任务只打印命令不嵌套 gradlew。
+ * 版本矩阵构建（无真服）：对矩阵内车道执行打包校验（根工程任务路径），废除 -Pmpmt.minecraftVersion；
+ * 只打印后续门禁命令，不嵌套 gradlew。
  */
 private fun registerMatrixBuildGate(project: Project) {
     project.tasks.register("verifyVersionMatrixBuild") {
         group = "verification"
         description =
-            "版本矩阵构建：Bukkit 三版本 + Fabric 两版本 + Forge 1.20.1 打包校验；打印 1.21/1.12 Forge 独立 launcher 命令"
+            "版本矩阵构建：Bukkit 三版本 + Fabric 两版本 + Forge 1.20.1 打包校验；打印版本矩阵真服子门与全 lane 门命令"
         dependsOn(
             ":platform:bukkit:1.12.2:verifyPackaging",
             ":platform:bukkit:1.20.1:verifyPackaging",

@@ -56,9 +56,7 @@ internal fun gitHeadCommit(project: Project): String =
  * `source(main)` 等价 NeoGradle modSource：MOD_CLASSES 指向 main 源集输出，提供产品 main 类；验收驱动
  * acceptanceJar 放 `mods/`（自带 mods.toml，由 realserver 编排落位）。
  *
- * 已放弃的通路：core 库的 FML 模块层不向 mod 暴露（NoClassDefFoundError），曾用带 FMLModType:GAMELIBRARY
- * 的 coreLibJar 放进各 run 目录的 `mods/`，让 FML 当 game library 暴露；因 dev↔dev 全验收受 NeoGradle 同项目
- * 并发限制、交付走真服路径，该任务无调用方，已随 ADR-0027 的收敛删除（需要时按同一手法临时补回即可）。
+ * 交付走真服路径：core 库的 FML 模块层不向 dev mod 暴露（NoClassDefFoundError），dev run 不承担全验收。
  *
  * loom 类型不在插件工程编译类路径内，run 设定按对象真实方法名动态配置；调用顺序与原先车道内
  * `getByName("client") { … }` 逐项一致。

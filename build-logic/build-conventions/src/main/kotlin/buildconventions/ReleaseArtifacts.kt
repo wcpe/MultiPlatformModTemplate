@@ -12,7 +12,7 @@ private data class ReleaseArtifact(val source: File, val loader: String, val tar
 /**
  * 聚合各平台权威可发布 jar 到 `build/dist/{bukkit,fabric,forge,neoforge,sponge}/`（注册在根工程）。
  *
- * <p>不复制 acceptance / plain / dev-shadow / corelib。全部平台车道为根构建子模块（ADR-0026），
+ * <p>不复制 acceptance / plain / dev-shadow 等中间产物。全部平台车道为根构建子模块（ADR-0026），
  * 产物来源统一经 `project(...)` 的 buildDirectory 解析，并由任务依赖保证已构建；缺失即失败。
  */
 internal fun registerReleaseArtifactAggregation(project: Project, version: String): TaskProvider<Task> =

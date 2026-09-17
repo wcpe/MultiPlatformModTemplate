@@ -1,4 +1,4 @@
-// platform/bukkit 聚合壳：物理 platform/bukkit/；产物 :platform-bukkit:server-*:shadowJar
+// platform/bukkit 聚合壳：物理 platform/bukkit/；产物 :platform:bukkit:<版本>:shadowJar
 
 plugins {
     id("build-conventions.quality")

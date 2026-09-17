@@ -110,6 +110,8 @@ P2 有效矩阵**不是笛卡尔积**：
 
 ## 7. 唯一 P2 聚合入口
 
+> 本节的车道调用形式为 P2 交付时的写法；`-p <车道目录>` 与车道自有 launcher 已由 [ADR-0026](../adr/0026-single-build-subproject-unification.md) 取消（全部车道为根构建子模块，命令一律在仓库根用绝对工程路径，见 [`../OPERATIONS.md`](../OPERATIONS.md) §1）；**任务名与唯一聚合入口继续有效**。
+
 **唯一入口是 Gradle 任务**（禁止 `scripts/*.sh` / ps1 编排）：
 
 ```bash
