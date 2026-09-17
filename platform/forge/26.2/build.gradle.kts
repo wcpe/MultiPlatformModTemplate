@@ -1,11 +1,16 @@
 import buildconventions.ForgeLaneExtension
 import buildconventions.ForgeModules
+import buildconventions.awaitAcceptancePort
 import buildconventions.configureForgeModernProductJar
 import buildconventions.configureForgeReportProperties
 import buildconventions.forgeJavaLauncher
+import buildconventions.installDevAcceptanceMod
+import buildconventions.launchAcceptanceProcess
+import buildconventions.prepareAcceptanceServerProperties
 import buildconventions.registerForgeAcceptanceJar
 import buildconventions.registerForgeModernSourceSets
 import buildconventions.requiredForgeRunProperty
+import buildconventions.stopAcceptanceProcess
 import buildconventions.verifyForgeDevSecureJarOutputs
 import org.gradle.api.GradleException
 import org.gradle.api.JavaVersion
@@ -13,7 +18,6 @@ import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import java.io.File
-import java.net.Socket
 import java.util.concurrent.TimeUnit
 
 // Forge 26.2 车道（根构建子模块）：common + server + client 分目录 → mpmt-forge-26.2-<version>.jar。
@@ -230,47 +234,8 @@ val java25Launcher = forgeJavaLauncher(project, 25)
 // 读取必需运行属性、报告元数据注入与 dev SecureJar 完整性校验由 build-conventions.forge 承担
 fun requiredRunProperty(name: String): String = requiredForgeRunProperty(project, name)
 
-fun installDevAcceptanceMod(runDir: File) {
-    val modsDir = File(runDir, "mods")
-    fileTree(modsDir) {
-        include("mpmt-*.jar")
-    }.files.forEach { candidate ->
-        if (!candidate.delete()) {
-            throw GradleException("无法删除旧版 MPMT 验收 JAR：$candidate")
-        }
-    }
-    copy {
-        from(acceptanceJar.flatMap { it.archiveFile })
-        into(modsDir)
-    }
-}
-
-fun prepareAcceptanceServerProperties(runDir: File) {
-    val propertiesFile = File(runDir, "server.properties")
-    val offlineProperties = mapOf("online-mode" to "false", "enforce-secure-profile" to "false")
-    val lines: List<String> = if (propertiesFile.isFile) propertiesFile.readLines(Charsets.UTF_8) else emptyList()
-    val updatedKeys = mutableSetOf<String>()
-    val updatedLines: MutableList<String> =
-        lines
-            .map { line ->
-                val separator = line.indexOf('=')
-                val key = if (separator > 0) line.substring(0, separator) else ""
-                val offlineValue = offlineProperties[key]
-                if (offlineValue != null) {
-                    updatedKeys.add(key)
-                    "$key=$offlineValue"
-                } else {
-                    line
-                }
-            }.toMutableList()
-    offlineProperties.forEach { (key, value) ->
-        if (!updatedKeys.contains(key)) {
-            updatedLines.add("$key=$value")
-        }
-    }
-    runDir.mkdirs()
-    propertiesFile.writeText(updatedLines.joinToString(System.lineSeparator()) + System.lineSeparator(), Charsets.UTF_8)
-}
+// 进程编排的通用工具（拉起进程 / 等端口 / 停进程 / server.properties / 验收伴侣安装）集中在
+// build-conventions 的 RealServer262Orchestration.kt（本车道与 fabric 26.2 共用，见 ADR-0027）。
 
 tasks.matching { it.name == "runAcceptanceServer" }.configureEach {
     // packageArtifacts 供报告属性取 jar 路径；prepareDevModOutputs 供 MOD_CLASSES 实际加载
@@ -283,8 +248,9 @@ tasks.matching { it.name == "runAcceptanceServer" }.configureEach {
             if (realServerHostRequested) {
                 File(runDir, "eula.txt").writeText("eula=true\n", Charsets.UTF_8)
             }
-            prepareAcceptanceServerProperties(runDir)
-            installDevAcceptanceMod(runDir)
+            // Forge 车道：server.properties 可不存在（按新建处理），缺失键补齐
+            prepareAcceptanceServerProperties(runDir, requireExisting = false, fillMissingKeys = true)
+            installDevAcceptanceMod(runDir, acceptanceJar.flatMap { it.archiveFile })
             configureForgeReportProperties(project, forge, javaExec, false)
             verifyForgeDevSecureJarOutputs(project, forge)
         }
@@ -297,7 +263,7 @@ tasks.matching { it.name == "runAcceptanceClient" }.configureEach {
         val javaExec = this
         javaLauncher.set(java25Launcher)
         doFirst {
-            installDevAcceptanceMod(project.file("run-acceptance-client"))
+            installDevAcceptanceMod(project.file("run-acceptance-client"), acceptanceJar.flatMap { it.archiveFile })
             javaExec.systemProperty("mpmt.acceptance.javaExecutable", java25Launcher.get().executablePath.asFile.absolutePath)
             // 伴侣自动连服地址（含端口）；缺省与 quickPlay 一致
             javaExec.systemProperty("mpmt.acceptance.server", (project.findProperty("mpmt.acceptance.server") ?: "127.0.0.1").toString())
@@ -305,40 +271,11 @@ tasks.matching { it.name == "runAcceptanceClient" }.configureEach {
     }
 }
 
-// 进程命令行复刻 gradle JavaExec 启动（镜像 fabric launchAcceptanceProcess）：
-// jvmArguments = @argfile（classpath）+ internal vmArgs（-Dfabric.dli.* 与全部 -D 属性）；
-// 本轮系统属性去重后重注，保证编排注入值覆盖 loom 配置期默认值。
-fun launchAcceptanceProcess(task: JavaExec, logFile: File, workDir: File): Process {
-    val command: MutableList<Any?> = mutableListOf(task.javaLauncher.get().executablePath.asFile.absolutePath)
-    val systemPropertyPrefixes = task.systemProperties.keys.map { "-D$it=" }
-    // 必须用 allJvmArgs（镜像 fabric lane）：Windows 下长类路径由 Gradle 写成 argfile，
-    // 该 @argfile 只出现在 allJvmArgs 里、不在 jvmArguments 中；漏掉它会导致 java 拿不到类路径，
-    // 报 "找不到或无法加载主类 net.fabricmc.devlaunchinjector.Main"。
-    command.addAll(task.allJvmArgs.filter { arg -> arg != null && systemPropertyPrefixes.none { arg.startsWith(it) } })
-    command.addAll(task.systemProperties.map { (key, value) -> "-D$key=$value" })
-    command.addAll(listOf(task.mainClass.get()))
-    command.addAll(task.args)
-    task.argumentProviders.forEach { provider -> command.addAll(provider.asArguments()) }
-    // ProcessBuilder(List<String>) 会做一次底层 arraycopy；执行期由 argumentProviders 惰性产出的
-    // 参数可能不是 String（如 File / Path），此时抛 ArrayStoreException：
-    // "arraycopy: element type mismatch ... to java.lang.String"。
-    // 命令行元素统一按其字符串形式归一，并打印非 String 元素类型以便定位。
-    val nonStringTypes = command.filterNotNull().filter { it !is String }.map { it.javaClass.name }.distinct()
-    if (nonStringTypes.isNotEmpty()) {
-        logger.lifecycle("[realserver] ${task.name} 命令行含非 String 参数，已按字符串归一：$nonStringTypes")
-    }
-    val normalizedCommand = command.filterNotNull().map { it.toString() }
-    logger.lifecycle("[realserver] 启动 ${task.name}…")
-    logFile.parentFile.mkdirs()
-    return ProcessBuilder(normalizedCommand)
-        .directory(workDir)
-        .redirectErrorStream(true)
-        .redirectOutput(logFile)
-        .start()
-}
+// 进程命令行复刻 gradle JavaExec 启动、端口轮询、进程停止与验收伴侣安装均取自 build-conventions
+// （RealServer262Orchestration.kt，与 fabric 26.2 共用一份实现；差异以参数表达，见 ADR-0027）。
 
 /** 仅起真实 Forge 专用服（须 -Pmpmt.acceptance.artifact.server-runtime=…）；客户端请另开终端 runAcceptanceClient。 */
-/** 单 Gradle 编排：起服 → 等端口 → 起客户端伴侣 → 等同轮报告（镜像 fabric lane 的 launchAcceptanceProcess 模式）。 */
+/** 单 Gradle 编排：起服 → 等端口 → 起客户端伴侣 → 等同轮报告（与 fabric lane 共用编排实现）。 */
 tasks.register("runForgeRealServer262Acceptance") {
     group = "verification"
     description = "单 Gradle 编排 Forge 26.2 REALSERVER262 服务端与客户端验收"
@@ -357,10 +294,11 @@ tasks.register("runForgeRealServer262Acceptance") {
         // 编排模式下 run 任务的 doFirst 不会执行，这里等价执行其准备工作
         val serverTask = tasks.named<JavaExec>("runAcceptanceServer").get()
         val clientTask = tasks.named<JavaExec>("runAcceptanceClient").get()
-        installDevAcceptanceMod(file("run-acceptance-server"))
-        prepareAcceptanceServerProperties(file("run-acceptance-server"))
+        installDevAcceptanceMod(file("run-acceptance-server"), acceptanceJar.flatMap { it.archiveFile })
+        // Forge 车道：server.properties 可不存在（按新建处理），缺失键补齐
+        prepareAcceptanceServerProperties(file("run-acceptance-server"), requireExisting = false, fillMissingKeys = true)
         configureForgeReportProperties(project, forge, serverTask, false)
-        installDevAcceptanceMod(file("run-acceptance-client"))
+        installDevAcceptanceMod(file("run-acceptance-client"), acceptanceJar.flatMap { it.archiveFile })
         clientTask.systemProperty("mpmt.acceptance.javaExecutable", java25Launcher.get().executablePath.asFile.absolutePath)
         clientTask.systemProperty(
             "mpmt.acceptance.server",
@@ -375,23 +313,15 @@ tasks.register("runForgeRealServer262Acceptance") {
                 launchAcceptanceProcess(serverTask, File(logDir, "realserver262-server.log"), file(acceptanceServerRunDirectory))
             server = serverProcess
 
-            // ② 等服务端监听 25566（Java 25 冷启动窗口）
-            val portDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(300)
-            var portOpen = false
-            while (System.nanoTime() < portDeadline) {
-                if (!serverProcess.isAlive) break
-                try {
-                    Socket("127.0.0.1", 25566).close()
-                    portOpen = true
-                    break
-                } catch (_: Exception) {
-                    Thread.sleep(500)
-                }
-            }
-            if (!portOpen) {
-                val tail = serverLogFile0(logDir)
-                throw GradleException("[realserver] 服务端未监听 25566：" + System.lineSeparator() + tail)
-            }
+            // ② 等服务端监听 25566（Java 25 冷启动窗口）：forge 车道的轮询节奏与日志尾部分隔符
+            awaitAcceptancePort(
+                serverProcess,
+                File(logDir, "realserver262-server.log"),
+                25566,
+                pollIntervalMillis = 500,
+                connectTimeoutMillis = 0,
+                tailSeparator = System.lineSeparator(),
+            )
 
             // ③ 起客户端伴侣（自连 127.0.0.1:25566；GUI 窗口在用户桌面，场景全自动）
             client = launchAcceptanceProcess(clientTask, File(logDir, "realserver262-client.log"), file("run-acceptance-client"))
@@ -421,19 +351,10 @@ tasks.register("runForgeRealServer262Acceptance") {
             }
             logger.lifecycle("[realserver] Forge 26.2 REALSERVER262 报告 PASS：${report.absolutePath}")
         } finally {
-            listOf(client, server).forEach { proc ->
-                if (proc != null && proc.isAlive) {
-                    proc.destroy()
-                    if (!proc.waitFor(10, TimeUnit.SECONDS)) proc.destroyForcibly()
-                }
-            }
+            stopAcceptanceProcess(client)
+            stopAcceptanceProcess(server)
         }
     }
-}
-
-fun serverLogFile0(logDir: File): String {
-    val f = File(logDir, "realserver262-server.log")
-    return if (f.isFile) f.readLines().takeLast(30).joinToString(System.lineSeparator()) else "无服务端日志"
 }
 
 tasks.register("runRealServerAcceptanceHost") {

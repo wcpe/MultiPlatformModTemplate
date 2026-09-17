@@ -1,16 +1,18 @@
 import buildconventions.FabricLaneExtension
 import buildconventions.acceptanceReportFile
+import buildconventions.awaitAcceptancePort
 import buildconventions.injectAcceptanceClientMetadata
 import buildconventions.injectAcceptanceServerMetadata
+import buildconventions.launchAcceptanceProcess
 import buildconventions.packagingVerification
+import buildconventions.prepareAcceptanceServerProperties
 import buildconventions.requiredAcceptanceProperty
+import buildconventions.stopAcceptanceProcess
 import buildconventions.verifyAcceptanceRoundReport
 import buildconventions.verifyDefaultTrackReport
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.gradle.api.file.FileCollection
 import org.gradle.api.tasks.JavaExec
-import java.net.InetSocketAddress
-import java.net.Socket
 import java.util.concurrent.TimeUnit
 
 // Fabric 26.2 车道（根构建子模块）：common + server + client 分目录 → mpmt-fabric-26.2-<version>.jar。
@@ -258,64 +260,8 @@ val realRequiredScenarios =
         "acceptance/real-round-trip",
     )
 
-fun launchAcceptanceProcess(task: JavaExec, logFile: File, runDirectory: File): Process {
-    logFile.parentFile.mkdirs()
-    if (!runDirectory.isDirectory && !runDirectory.mkdirs()) {
-        throw GradleException("无法创建验收运行目录：${runDirectory.absolutePath}")
-    }
-    val command = mutableListOf(task.javaLauncher.get().executablePath.asFile.absolutePath)
-    // Loom 预置的参数可能与任务在矩阵轨重新注入的同名系统属性重复；以后者为准。
-    val systemPropertyPrefixes = task.systemProperties.keys.map { "-D$it=" }
-    command += task.allJvmArgs.filterNot { argument -> systemPropertyPrefixes.any(argument::startsWith) }
-    command += task.systemProperties.map { (key, value) -> "-D$key=$value" }
-    command += task.mainClass.get()
-    command += task.args
-    task.argumentProviders.forEach { command += it.asArguments().toList() }
-    return ProcessBuilder(command)
-        .directory(runDirectory)
-        .redirectErrorStream(true)
-        .redirectOutput(logFile)
-        .also { builder -> task.environment.forEach { (key, value) -> builder.environment()[key] = value.toString() } }
-        .start()
-}
-
-fun awaitAcceptancePort(server: Process, logFile: File, port: Int) {
-    // Java 25 首次加载 26.2 资源和模组时会明显慢于热启动，须留出客户端验收前的起服窗口。
-    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(300)
-    while (System.nanoTime() < deadline) {
-        try {
-            Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 500) }
-            return
-        } catch (_: Exception) {
-            if (!server.isAlive) break
-            Thread.sleep(250)
-        }
-    }
-    val tail = if (logFile.isFile) logFile.readLines().takeLast(30).joinToString("\n") else "无服务端日志"
-    throw GradleException("[realserver] 服务端未监听 $port：\n$tail")
-}
-
-fun stopAcceptanceProcess(process: Process?) {
-    if (process == null || !process.isAlive) return
-    process.destroy()
-    if (!process.waitFor(10, TimeUnit.SECONDS)) process.destroyForcibly()
-}
-
-fun prepareAcceptanceServerProperties() {
-    val propertiesFile = file("run/server.properties")
-    if (!propertiesFile.isFile) {
-        throw GradleException("未初始化 Fabric 验收服务端配置：${propertiesFile.absolutePath}")
-    }
-    val offlineProperties = mapOf("online-mode" to "false", "enforce-secure-profile" to "false")
-    val updatedLines =
-        propertiesFile.readLines().map { line ->
-            val separator = line.indexOf('=')
-            val key = if (separator > 0) line.substring(0, separator) else ""
-            offlineProperties[key]?.let { "$key=$it" } ?: line
-        }
-    propertiesFile.writeText(updatedLines.joinToString(System.lineSeparator()) + System.lineSeparator())
-}
-
+// 进程编排的通用工具（拉起进程 / 等端口 / 停进程 / server.properties / 验收伴侣安装）集中在
+// build-conventions 的 RealServer262Orchestration.kt（本车道与 forge 26.2 共用，见 ADR-0027）。
 tasks.register("runFabricRealServer262Acceptance") {
     group = "verification"
     description = "单 Gradle 编排 Fabric 26.2 REALSERVER262 服务端与客户端验收"
@@ -335,7 +281,8 @@ tasks.register("runFabricRealServer262Acceptance") {
         val clientTask = tasks.named<JavaExec>("runAcceptanceClient").get()
         serverTask.injectAcceptanceServerMetadata(fabric)
         clientTask.injectAcceptanceClientMetadata(fabric)
-        prepareAcceptanceServerProperties()
+        // Fabric 车道：server.properties 必须已初始化，且只改写已有键（不补缺失键）
+        prepareAcceptanceServerProperties(file("run"), requireExisting = true, fillMissingKeys = false)
         val logDir = layout.buildDirectory.dir("acceptance").get().asFile
         var server: Process? = null
         var client: Process? = null

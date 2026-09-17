@@ -82,9 +82,15 @@ class RealServerGateContractTest {
         assertTrue(fabricRuns.contains("acceptanceServerUsesOverriddenReport"))
         assertTrue(fabricRuns.contains("AcceptanceRound.REPORT_PROPERTY"))
         assertTrue(fabricRuns.contains("\"property\"(\"mpmt.acceptance.report\", report)"))
-        assertTrue(build.contains("val systemPropertyPrefixes = task.systemProperties.keys.map"))
-        assertTrue(build.contains("command += task.systemProperties.map"))
-        assertTrue(build.contains("TimeUnit.SECONDS.toNanos(300)"))
+        // 进程编排的通用工具已搬入插件源码（两车道共用一份实现），断言目标随之指向插件；
+        // 断言文本与强度不变。
+        val orchestration =
+            readRootFile(
+                "build-logic/build-conventions/src/main/kotlin/buildconventions/RealServer262Orchestration.kt",
+            )
+        assertTrue(orchestration.contains("val systemPropertyPrefixes = task.systemProperties.keys.map"))
+        assertTrue(orchestration.contains("command += task.systemProperties.map"))
+        assertTrue(orchestration.contains("TimeUnit.SECONDS.toNanos(300)"))
     }
 
     @Test

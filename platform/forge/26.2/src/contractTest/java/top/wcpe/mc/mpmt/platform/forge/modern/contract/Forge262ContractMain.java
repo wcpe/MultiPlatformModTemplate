@@ -32,7 +32,7 @@ public final class Forge262ContractMain {
         Path projectDir = propertyPath("mpmt.test.projectDir");
         verifyFrozenMatrix();
         verifyIndependentBuild(repositoryRoot, projectDir);
-        verifyDevRunClasspath(projectDir);
+        verifyDevRunClasspath(repositoryRoot, projectDir);
         verifyNetworkSources(projectDir);
         verifyAcceptanceSources(projectDir);
         verifyGoldenVectors(projectDir);
@@ -125,25 +125,31 @@ public final class Forge262ContractMain {
         require(channel.contains("Consumer<byte[]>"), "客户端上层必须只接收裸 byte[]");
     }
 
-    private static void verifyDevRunClasspath(Path projectDir) throws IOException {
+    private static void verifyDevRunClasspath(Path repositoryRoot, Path projectDir) throws IOException {
         String build = read(projectDir.resolve("build.gradle.kts"));
         String properties = read(projectDir.resolve("gradle.properties"));
+        // 进程编排的通用工具已搬入插件源码（fabric 26.2 与 forge 26.2 共用一份实现），
+        // 静态断言随之指向插件；断言语义与强度不变。
+        String orchestration = read(repositoryRoot.resolve(
+                "build-logic/build-conventions/src/main/kotlin/buildconventions/RealServer262Orchestration.kt"));
         int serverStart = build.indexOf("create(\"acceptanceServer\")");
         int clientStart = build.indexOf("create(\"acceptanceClient\")");
         require(serverStart >= 0 && clientStart > serverStart, "缺少 server/client 运行配置");
-        require(build.contains("fun installDevAcceptanceMod")
-                        && build.contains("from(acceptanceJar")
-                        && build.contains("into(modsDir)"),
+        require(orchestration.contains("fun installDevAcceptanceMod")
+                        && orchestration.contains("acceptanceJar: Provider<RegularFile>")
+                        && orchestration.contains("copyTo(File(modsDir, jar.name)"),
                 "必须提供将独立验收 JAR 安装到运行目录的最小适配");
-        require(build.contains("include(\"mpmt-*.jar\")") && build.contains("!candidate.delete()"),
+        require(orchestration.contains("it.name.startsWith(\"mpmt-\")") && orchestration.contains("!candidate.delete()"),
                 "验收运行目录必须清理旧版 MPMT JAR，避免重复加载");
-        require(build.contains("fun prepareAcceptanceServerProperties")
-                        && build.contains("\"online-mode\" to \"false\"")
-                        && build.contains("\"enforce-secure-profile\" to \"false\"")
-                        && build.contains("prepareAcceptanceServerProperties(runDir)"),
+        require(orchestration.contains("fun prepareAcceptanceServerProperties")
+                        && orchestration.contains("\"online-mode\" to \"false\"")
+                        && orchestration.contains("\"enforce-secure-profile\" to \"false\"")
+                        && build.contains("prepareAcceptanceServerProperties(file(\"run-acceptance-server\")"),
                 "真实服务端验收必须关闭线上认证，允许本地 Dev 客户端连接");
-        require(build.contains("installDevAcceptanceMod(runDir)")
-                        && build.contains("installDevAcceptanceMod(project.file(\"run-acceptance-client\"))"),
+        require(build.contains("installDevAcceptanceMod(runDir,")
+                        && build.contains("installDevAcceptanceMod(project.file(\"run-acceptance-client\"),")
+                        && build.contains("installDevAcceptanceMod(file(\"run-acceptance-server\"),")
+                        && build.contains("installDevAcceptanceMod(file(\"run-acceptance-client\"),"),
                 "runAcceptanceServer/runAcceptanceClient 均须安装验收伴侣 JAR");
         require(!properties.contains("net.minecraftforge.gradle.merge-source-sets"),
                 "不得重新启用已被实机证伪的 merge-source-sets 推测配置");
