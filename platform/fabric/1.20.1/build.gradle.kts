@@ -249,7 +249,7 @@ tasks.register("runRealServerAcceptance") {
     group = "verification"
     description = "严格校验 Fabric realserver acceptance v2 报告与完整默认轨 REAL_REQUIRED"
     doLast {
-        val report = extensions.getByType(buildconventions.FabricLaneExtension::class.java).acceptanceReport.get().asFile
+        val report = fabric.acceptanceReport.get().asFile
         // 校验实现与其余车道共用 build-conventions 的单份实现（判定顺序与失败文案逐字保留）。
         verifyDefaultTrackReport(project, report, "", "fabric", realRequiredScenarios)
     }

@@ -375,7 +375,7 @@ tasks.register("runRealServerAcceptance") {
         val haveRoundContext =
             !(project.findProperty("mpmt.acceptance.runId") as String?)?.trim().isNullOrEmpty()
         val matrixId = explicitMatrix.ifEmpty { if (haveRoundContext) "REALSERVER262" else "" }
-        val report = if (matrixId.isEmpty()) extensions.getByType(buildconventions.FabricLaneExtension::class.java).acceptanceReport.get().asFile else acceptanceReportFile(matrixId)
+        val report = if (matrixId.isEmpty()) fabric.acceptanceReport.get().asFile else acceptanceReportFile(matrixId)
         // 校验实现与其余车道共用 build-conventions 的单份实现（判定顺序与失败文案逐字保留）。
         verifyDefaultTrackReport(project, report, matrixId, "fabric", realRequiredScenarios)
     }

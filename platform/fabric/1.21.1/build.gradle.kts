@@ -262,7 +262,7 @@ tasks.register("runRealServerAcceptance") {
                     layout.buildDirectory.file("acceptance/server-report-${matrixId.lowercase()}.txt").get().asFile
                 }
             } else {
-                extensions.getByType(buildconventions.FabricLaneExtension::class.java).acceptanceReport.get().asFile
+                fabric.acceptanceReport.get().asFile
             }
         // 校验实现与其余车道共用 build-conventions 的单份实现（判定顺序与失败文案逐字保留）。
         verifyDefaultTrackReport(project, report, matrixId, "fabric", realRequiredScenarios)
