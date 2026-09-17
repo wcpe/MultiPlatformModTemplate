@@ -41,6 +41,7 @@ jobs:
             **/build/reports/**
             **/build/test-results/**
             **/build/acceptance/**
+            **/build/mc-testkit/results/**
             **/hs_err_pid*.log
           if-no-files-found: ignore
           retention-days: 14
@@ -182,9 +183,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p e2e-results
-          gh run download "${{ github.run_id }}" -p 'e2e-results-*' -D e2e-results || true
-          find e2e-results -name '*.properties' | sort || true
+          # 本 job 不检出仓库，故显式指定 -R；下载失败不静默（下一步会逐格报 MISSING 并失败）。
+          gh run download "${{ github.run_id }}" -R "${{ github.repository }}" \
+            -p 'e2e-results-*' -D e2e-results
+          find e2e-results -name '*.properties' | sort
 
       - name: 汇总报告
         shell: bash
