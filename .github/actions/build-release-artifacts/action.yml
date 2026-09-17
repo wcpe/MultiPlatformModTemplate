@@ -41,7 +41,7 @@ runs:
         java-version: "25"
 
     - name: 配置 Gradle 缓存
-      uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d
+      uses: gradle/actions/setup-gradle@67621b124fd2e251c5e8a0e6e3b91318f2287669
 
     # 单一根构建：全部平台车道为根子模块，一条命令构建 + 校验 + 聚合发布产物。
     # JDK 25 守护（26.2 车道配置期硬校验）；MPMT_JAVA*_HOME 供矩阵轨与跨代车道显式选 JDK。
