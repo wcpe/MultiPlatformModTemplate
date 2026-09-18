@@ -21,7 +21,7 @@ dependencies {
     // 运行时上下文对外暴露 core-domain 的 EventBusPort 等类型，故用 api 传递
     api(project(":core:domain"))
 
-    testImplementation(platform("org.junit:junit-bom:5.10.3"))
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

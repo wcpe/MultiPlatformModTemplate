@@ -20,7 +20,7 @@ dependencies {
     // 预设位置基于 L0 DataDirectoryPort 端口解析；api 暴露给调用方便于组合使用
     api(project(":core:domain"))
 
-    testImplementation(platform("org.junit:junit-bom:5.10.3"))
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

@@ -25,7 +25,7 @@ dependencies {
     api("org.yaml:snakeyaml:$snakeyamlVersion")
     api("com.google.code.gson:gson:$gsonVersion")
 
-    testImplementation(platform("org.junit:junit-bom:5.10.3"))
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
