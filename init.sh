@@ -262,6 +262,12 @@ apply_perl_batch() {
       $o =~ s/\Q$oldGroup\E/$newGroup/g;
       $o =~ s/\Q$oldPath\E/$newPath/g;
       $o =~ s/\Q$oldName\E/$newName/g;
+      # `-P<id>.` / `-D<id>.` 形式的 Gradle 属性引用：`-Pmpmt.x` 里 P 与 m 都是词字符，
+      # `-Dmpmt.x` 同理（D 与 m），后面那条 \b<id>\b 规则在这两处都不成立（无词边界），
+      # 必须先行显式处理，否则文档 / KDoc / 报错文案里的 `-Pmpmt.*` 与 `-Dmpmt.*` 会残留，
+      # 与新属性名并存。
+      $o =~ s/-P\Q$oldId\E\./-P$newId./g;
+      $o =~ s/-D\Q$oldId\E\./-D$newId./g;
       $o =~ s/\b\Q$oldId\E-/$newId-/g;
       $o =~ s/"\Q$oldId\E-/"$newId-/g;
       $o =~ s/\x27\Q$oldId\E-/\x27$newId-/g;
