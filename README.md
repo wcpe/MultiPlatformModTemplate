@@ -4,7 +4,7 @@
 
 ## 状态
 
-当前正式版 **v0.2.0**：第一期 MVP 与第二期多版本矩阵（FR-12，1.21.1 / 1.12.2）已交付。第三期（FR-16 26.2 / FR-17 模板发布 / FR-18 上手文档）仍在开发：仓库已启用为公开 GitHub Template；当前候选提交已以冻结 Paper build 71 生成 Paper、Fabric、Forge 三车道同轮 REALSERVER262 报告，并通过 `:runRealServerGate262`（`p3-r7-1787686232087`）。该严格门依 [ADR-0023](docs/adr/0023-p3-r7-automated-release-authority.md) 是 FR-16 的最终自动化验收。第四期治理需求（FR-32）正在补齐 GitHub Actions 的远端构建、手动 Release、安全与依赖维护；CI 绿灯不替代本机真服门。当前候选提交的干净克隆已复现换名和 Counter 纯 JVM 测试（使用本机预热缓存）；尚无 `v0.3.0` 或 GitHub Release。
+当前正式版 **v0.3.0**：第一期 MVP、第二期多版本矩阵（FR-12，1.21.1 / 1.12.2）与第三期（FR-16 MC 26.2 / FR-17 模板发布 / FR-18 上手指南）已交付。26.2 三车道（Paper / Fabric / Forge）以冻结 Paper build 71 通过同轮 `lc5-1789738323` 的 `:runRealServerGate262`，该严格门依 [ADR-0023](docs/adr/0023-p3-r7-automated-release-authority.md) 是 FR-16 的最终自动化验收；模板侧以"克隆 → `init.sh` 换名 → `:buildAll`"端到端复核（710 任务全绿、13 产物产出）。第四期治理需求（FR-32）已补齐 GitHub Actions 的远端构建、手动 Release、安全与依赖维护；CI 绿灯不替代本机真服门。
 
 **从模板起步**：本仓库已启用 GitHub Template；在 GitHub 选择 `Use this template` 创建新仓库后，见 [`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`](docs/HOWTO-CLONE-AND-WRITE-PLAY.md)（含 Counter 示例域）。版本节奏见 [`docs/VERSIONING.md`](docs/VERSIONING.md)。
 

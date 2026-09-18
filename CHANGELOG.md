@@ -6,6 +6,12 @@
 
 ## 未发布版本
 
+（暂无）
+
+## [0.3.0] - 2026-09-18
+
+第三期收口：MC 26.2（最新版号方案）三车道适配、脚手架模板化发布与玩法开发者上手路径。
+
 ### 新增
 - **GitHub Actions 交付治理（FR-32 / ADR-0024）**：新增固定 mc-testkit Maven Local 回退的全车道 CI、手动 GitHub Release、依赖审查、CodeQL 与 Dependabot；远端 CI 只验证可复现构建，不替代本机真服验收。
 - **26.2 三车道在制实现（FR-16）**：新增 Paper/Bukkit `platform/bukkit/26.2`、Fabric `platform/fabric/26.2`、Forge `platform/forge/26.2` 的物理车道、`v26_2` L4 适配和产品 / 验收入口；Folia、NeoForge、Sponge 不建 26.2 格。
@@ -46,9 +52,12 @@
 - **Gradle 9 全量构建**：聚合任务只依赖实际存在的 `build` 任务；旧版 Bukkit/Fabric/Sponge Shadow 更新至 8.3.11；Sponge 不再重复打入生成的插件描述符。
 - **Java 25 静态分析**：Bukkit 26.2 固定 SpotBugs 4.9.8，能够解析 Paper API 的 classfile major 69。
 - **跨版本质量门禁**：欢迎包断言按协议发送顺序读取，补齐 Bukkit 1.12 调度适配器测试并清理 Fabric GameTest 无用导入。
+- **换名漏改 `-P` / `-D` 属性引用**：`init.sh` 以 `\b<id>\b` 替换独立词，但 `-Pmpmt.x` / `-Dmpmt.x` 中 `-P`/`-D` 的字母与 id 首字母同为词字符、其间无词边界，这类 Gradle 属性引用不被替换，导致换名后同一属性出现两个名字（车道脚本与 KDoc 残留 `-Pmpmt.acceptance.*`，而契约测试断言的是新名），`:platform:forge:forge-26.2:contractTest` 必失败并连带 `:buildAll` 整条构建红；现先行显式处理这两种前缀形式。该缺陷由本轮"克隆模板并换名后跑 `:buildAll`"的端到端验证发现。
 
 ### 交付状态
-- 26.2 车道改为 Java 25 产物目标后，产物字节已变，故以本机同轮 `t25-round-1789559672`（Paper、Fabric、Forge 26.2 各一份 REALSERVER262 报告）重跑真服验收，并通过 `:runRealServerGate262`（含 `:verifyRealServerReportsStrict`），依 ADR-0023 维持 FR-16 的最终自动化验收。FR-17 尚无远端 `v0.3.0` tag / GitHub Release；三项在该发布完成前均保持开发中。
+- FR-16：26.2 三车道（Paper / Fabric / Forge）以本机同轮 `lc5-1789738323` 各写一份 REALSERVER262 报告（三份均 `RESULT PASS`，五类制品哈希与本版本 `0.3.0` 产物一致、Paper 运行时为冻结 build 71），并通过 `:runRealServerGate262`（含 `:verifyRealServerReportsStrict`）——依 ADR-0023，该严格门完成 FR-16 的最终自动化验收。v0.3.0 号变更后产物字节随之变化，故本轮为本版本产物的权威证据。
+- FR-17 / FR-18：模板交付物（`docs/VERSIONING.md`、`.github/RELEASE_TEMPLATE.md`、公开 GitHub Template、`docs/HOWTO-CLONE-AND-WRITE-PLAY.md`、`examples/counter`、`init.sh`）就绪；本轮以"克隆模板 → `init.sh` 换名为 `accelerated_torch` → `:buildAll`"做端到端复核（710 任务全绿、13 个发布产物产出），并据该验证修复了换名脚本的 `-P`/`-D` 属性引用缺陷。二者按 PRD §6 须待 `v0.3.0` 的 GitHub Release 完成才可标交付，故本次仍为开发中。
+- 本次发版仅完成本地 release 提交与附注 tag；远端推送、CI 复核与 GitHub Release 由维护者在推送后完成。
 
 ## [0.2.0] - 2026-07-26
 

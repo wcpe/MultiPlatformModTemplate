@@ -1,14 +1,14 @@
 # 功能规格：第三期 · 平台规模化与对外上手
 
-> 状态：开发中　·　关联 PRD：FR-16、FR-17、FR-18　·　基线：`v0.2.0`　·　本轮对账范围：`v0.2.0..HEAD`
+> 状态：FR-16 已交付@v0.3.0；FR-17/FR-18 待 `v0.3.0` 的 GitHub Release 完成　·　关联 PRD：FR-16、FR-17、FR-18　·　基线：`v0.2.0`　·　本轮对账范围：`v0.2.0..HEAD`
 
 ## 1. 背景与目标
 
 第三期主题是"沿平台与版本轴继续铺 + 对外可用"。当前状态：
 
 - P2（FR-12）已交付 `@v0.2.0`：1.21.1 / 1.12.2 跨版本工具链隔离、CatServer 实跑、R1–R6 合规矩阵、用户第二期实机确认通过。
-- 26.2 三车道、`v26_2`、REALSERVER262 目录与严格报告门已完成本地实现；当前候选提交已以冻结 Paper build 71 生成 Paper、Fabric、Forge 同轮 `p3-r7-1787686232087` 报告并通过根 `:runRealServerGate262`。依 ADR-0023，此证据已完成 FR-16 的最终自动化验收；FR 状态仍待随 P3 发布统一流转。
-- `docs/VERSIONING.md`、`.github/RELEASE_TEMPLATE.md`、README 的克隆入口及 Counter 上手指南 / 纯 L0 示例已进入仓库；仓库已实际启用为公开 GitHub Template。当前候选提交已在干净克隆复现换名与 Counter 纯 JVM 测试（本机预热缓存），但尚无 `v0.3.0` 或 GitHub Release。
+- 26.2 三车道、`v26_2`、REALSERVER262 目录与严格报告门已完成本地实现；本轮以冻结 Paper build 71 生成 Paper、Fabric、Forge 同轮 `lc5-1789738323` 报告并通过根 `:runRealServerGate262`。依 ADR-0023，此证据完成 FR-16 的最终自动化验收并标 `已交付@v0.3.0`；FR-17 / FR-18 按 PRD §6 须待 `v0.3.0` 的 GitHub Release 完成，仍为开发中。
+- `docs/VERSIONING.md`、`.github/RELEASE_TEMPLATE.md`、README 的克隆入口及 Counter 上手指南 / 纯 L0 示例已进入仓库；仓库已实际启用为公开 GitHub Template。本轮以"克隆模板 → `init.sh` 换名为 `accelerated_torch` → `:buildAll`"做端到端复核（710 任务全绿、13 发布产物产出），并据此修复了换名脚本的 `-P`/`-D` 属性引用缺陷。
 
 本规格冻结第三期"做什么、不做、谁先谁后、算什么齐"，**不写实现**；实现按规格走 `sdd-develop-feature` / `sdd-release-version`。
 
@@ -74,10 +74,10 @@
 - [x] T1 · 落 `docs/specs/fr-26_2-adapter.md`，冻结 26.2 工具链 / 制品 / 受控制品哈希（2026-07-26 确认 Paper/Fabric/Forge 均存在；Folia 无 26.2）
 - [x] T2 · platform-bukkit 26.2 + Fabric 26.2 + Forge 26.2 三车道工程（三车道均为根构建子模块；Folia 不建）
 - [x] T3 · `version-api` + `v26_2` 实现（Bukkit / Fabric / Forge）；运行期探测装配与当前构建 / 纯 JVM 验证已通过
-- [x] T4 · REALSERVER262 矩阵轨 + realserver v2 报告契约（公共三场景、严格当前报告校验与冻结 Paper build 71 三车道同轮 `p3-r7-1787686232087` 已通过）
+- [x] T4 · REALSERVER262 矩阵轨 + realserver v2 报告契约（公共三场景、严格当前报告校验与冻结 Paper build 71 三车道同轮 `lc5-1789738323` 已通过）
 - [x] T5 · ADR-0023 的 REALSERVER262 最终自动化验收（26.2 真实 Paper、Fabric、Forge 三车道）
-- [ ] T6 · 模板元信息与远端发布（仓库内 `docs/VERSIONING.md` + `.github/RELEASE_TEMPLATE.md` + README 入口及公开 GitHub Template 已就绪；`v0.3.0` / GitHub Release 尚未创建）
-- [x] T7 · 上手指南 `docs/HOWTO-CLONE-AND-WRITE-PLAY.md` + `examples/counter` 示例域与接入范本（以 `79bf3c9` 创建的干净克隆已通过换名 dry-run、写盘与 `:core:domain:compileJava :examples:counter:compileJava :examples:counter:test`；使用本机预热缓存）
+- [ ] T6 · 模板元信息与发布（仓库内 `docs/VERSIONING.md` + `.github/RELEASE_TEMPLATE.md` + README 入口、公开 GitHub Template 与本地 `v0.3.0` 附注 tag 已就绪；**待推送后在远端复核 CI 并创建 GitHub Release**，完成前 FR-17 不标交付）
+- [x] T7 · 上手指南 `docs/HOWTO-CLONE-AND-WRITE-PLAY.md` + `examples/counter` 示例域与接入范本（本轮以克隆模板 → `init.sh` 换名 → `:buildAll` 端到端复核，710 任务全绿、13 发布产物产出）
 - [x] T8 · 文档同步：PRD FR-16/17/18 状态、ARCHITECTURE §6 / §2.5、ADR 索引与 CHANGELOG 已对账本轮变更；不修改 API，因为没有公共契约变化
 
 ## 6. 验收标准

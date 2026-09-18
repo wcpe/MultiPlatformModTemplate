@@ -54,9 +54,9 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 | FR-13 | Folia 支持：并入 Bukkit 家族构建，经 FeatureGate 适配 RegionScheduler（验证特判机制，不拆独立构建） | P1 | 已交付@v0.1.0 |
 | FR-14 | platform-sponge（SpongeGradle）：基础网络与示例可用；车道为根构建子模块（ADR-0026） | P1 | 已交付@v0.1.0 |
 | FR-15 | platform-neoforge（Loom；**NeoForge 无 1.20.1，锚点取 1.20.2**）：基础网络与示例可用；车道为根构建子模块（ADR-0026） | P1 | 已交付@v0.1.0 |
-| FR-16 | 最新版本 26.2 适配（MC 今年最新版本号，新版号方案无 `1.` 前缀）：仅 Paper/Bukkit、Fabric、Forge 三个有效车道；`v26_2`、REALSERVER262 三公共场景和严格报告门已实现，三车道均为根构建子模块（ADR-0026）；依 [ADR-0023](adr/0023-p3-r7-automated-release-authority.md) 该严格门是最终自动化验收（须按 [specs/fr-26_2-adapter.md](specs/fr-26_2-adapter.md) 的冻结参数实跑取报告） | P3 | 开发中 |
-| FR-17 | 脚手架发布与版本化：VERSION 注入与发布说明已进入仓库，公开 GitHub Template 已启用；尚无 `v0.3.0` 或 GitHub Release | P3 | 开发中 |
-| FR-18 | 玩法开发者上手：克隆模板后如何在 L0 写玩法的文档 + Counter 示例（非产品玩法）；示例的当前实现含异步持久化、归属消息调度与离开时释放周期句柄，当前候选提交已在干净克隆复现换名与纯 JVM 测试（本机预热缓存）；目标平台装配由使用者产品域按指南完成 | P3 | 开发中 |
+| FR-16 | 最新版本 26.2 适配（MC 今年最新版本号，新版号方案无 `1.` 前缀）：仅 Paper/Bukkit、Fabric、Forge 三个有效车道；`v26_2`、REALSERVER262 三公共场景和严格报告门已实现，三车道均为根构建子模块（ADR-0026）；依 [ADR-0023](adr/0023-p3-r7-automated-release-authority.md) 该严格门是最终自动化验收（须按 [specs/fr-26_2-adapter.md](specs/fr-26_2-adapter.md) 的冻结参数实跑取报告） | P3 | 已交付@v0.3.0 |
+| FR-17 | 脚手架发布与版本化：VERSION 注入与发布说明已进入仓库，公开 GitHub Template 已启用；`v0.3.0` 的 GitHub Release 待推送后创建，在此之前不标交付 | P3 | 开发中 |
+| FR-18 | 玩法开发者上手：克隆模板后如何在 L0 写玩法的文档 + Counter 示例（非产品玩法）；示例含异步持久化、归属消息调度与离开时释放周期句柄；本轮以"克隆模板 → `init.sh` 换名 → `:buildAll`"端到端复核（710 任务全绿、13 产物产出），目标平台装配由使用者产品域按指南完成 | P3 | 开发中 |
 | FR-19 | 跨端网络收发框架：基于 protocol 的 C2S/S2C 收发管线 + 各平台经 `TransportPort` 注册通道（具体平台见 FR-20），附若干发包示例 | P1 | 已交付@v0.1.0 |
 | FR-20 | 跨平台传输：Bukkit/Folia/Sponge（插件消息）+ Fabric/Forge/NeoForge 服务端（各网络 API）+ 单人世界（集成服内存回环）均实现 `TransportPort`；上层逻辑不变 | P1 | 已交付@v0.1.0 |
 | FR-21 | 进服握手 + 客户端标识上报：握手协商后客户端上报**弱客户端标识**（默认基于可得弱硬件/系统属性 SHA-256，可伪造/可随机化，`MachineCodeProvider` 可插拔），服务端接收并回发消息 | P1 | 已交付@v0.1.0 |
@@ -105,7 +105,7 @@ Minecraft 生态长期割裂：服务端软件（Bukkit/Spigot/Paper/Folia/Spong
 
 > 第一期**实施顺序**（评审）：先 **Paper + Fabric + Forge** 跑通"一份 L0 逻辑 + 一次往返 + 握手"作骨架证明（FR-11 两证），再铺 Folia/Sponge/NeoForge 与完整可靠性 / 三组示例——"全平台跑通"是 P1 收尾目标、非 MVP 必过门。NeoForge 锚点取 1.20.2（无 1.20.1）。客户端侧**渲染必在 L3/L4、各平台各版本各写**，"写一次"主要在协议 / 状态 / 输入意图层（core-client 较薄），不夸大客户端复用。
 - **第二期**：**沿版本轴铺开**——1.21.1 / 1.12.2 验证 L4 跨版本；CatServer 实跑（需 1.12.2）。对应 FR-12；状态以 §4 为准（**已交付@v0.2.0**）。交付门（R1–R6 合规矩阵 v2 + `:runVersionMatrixGate` + 用户第二期实机确认）已齐；详见 [p2-version-matrix §11.1](specs/p2-version-matrix.md)。
-- **第三期**：**规模化与对外**——最新版本（26.2）、脚手架模板化发布、玩法开发者上手文档与示例。对应 FR-16/FR-17/FR-18；基线为 `v0.2.0`，现处开发中。严格 REALSERVER262 真服门、发布元信息、Counter 上手路径及公开 GitHub Template 已就绪；当前候选提交已以冻结 Paper build 71 通过同轮 `p3-r7-1787686232087` 的 `:runRealServerGate262`，并已在干净克隆复现换名和 Counter 纯 JVM 测试（本机预热缓存）。依 ADR-0023，同轮 REALSERVER262 严格门已完成 FR-16 最终自动化验收；之后仅待 `v0.3.0` 对外 Release。详见 [`specs/p3-platform-scaling-and-onboarding.md`](specs/p3-platform-scaling-and-onboarding.md)。
+- **第三期**：**规模化与对外**——最新版本（26.2）、脚手架模板化发布、玩法开发者上手文档与示例。对应 FR-16/FR-17/FR-18；基线为 `v0.2.0`，本版本 `v0.3.0` 号收口。严格 REALSERVER262 真服门、发布元信息、Counter 上手路径及公开 GitHub Template 已就绪；本轮以冻结 Paper build 71 通过同轮 `lc5-1789738323` 的 `:runRealServerGate262`，并完成"克隆模板 → `init.sh` 换名 → `:buildAll`"端到端复核（710 任务全绿、13 产物产出）。依 ADR-0023，同轮 REALSERVER262 严格门完成 FR-16 最终自动化验收；FR-17 / FR-18 按 §6 须待 `v0.3.0` 的 GitHub Release 完成，故本版本仍为开发中，待推送复核后随发布流转。详见 [`specs/p3-platform-scaling-and-onboarding.md`](specs/p3-platform-scaling-and-onboarding.md)。
 - **第四期（治理）**：**可复现交付**——为公开模板补齐 GitHub Actions 的构建、发布、安全与依赖维护入口。对应 FR-32；CI 绿灯是远端构建质量证据，不能替代 ADR-0014 / ADR-0023 规定的本机真服证据。详见 [`specs/github-actions-automation.md`](specs/github-actions-automation.md)。
 
 > 分期是少数粗粒度阶段，不随 FR 增长而改。某期是否完成看 §4 表里该期 FR 状态是否都 `已交付`。
