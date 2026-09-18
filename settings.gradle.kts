@@ -93,20 +93,8 @@ include(
 // `JarManifestService$Inject_ cannot be cast to JarManifestService`（jar / remapJar 均受影响）。
 // 因此车道路径末段带上加载器前缀（沿用 ADR-0026 背景记录的复合构建名），
 // 目录仍为 `platform/<loader>/<版本>`，构建产物路径与验收报告路径均不变。
-include(
-    "platform:fabric:fabric-1.20.1",
-    "platform:fabric:fabric-1.21.1",
-    "platform:fabric:fabric-26.2",
-    "platform:forge:forge-1.12.2",
-    "platform:forge:forge-1.20.1",
-    "platform:forge:forge-1.21.1",
-    "platform:forge:forge-26.2",
-    "platform:neoforge:neoforge-1.20.2",
-    "platform:sponge:sponge-1.20.1",
-)
-
-// 车道工程目录映射：工程名带加载器前缀，目录仍为 platform/<loader>/<版本>（目录即工程；车道形态见 ADR-0026）。
-mapOf(
+// 车道引入与目录映射二合一：路径字符串逐字保留（契约测试按子串断言），目录显式列表不做推导。
+listOf(
     "platform:fabric:fabric-1.20.1" to "platform/fabric/1.20.1",
     "platform:fabric:fabric-1.21.1" to "platform/fabric/1.21.1",
     "platform:fabric:fabric-26.2" to "platform/fabric/26.2",
@@ -117,5 +105,6 @@ mapOf(
     "platform:neoforge:neoforge-1.20.2" to "platform/neoforge/1.20.2",
     "platform:sponge:sponge-1.20.1" to "platform/sponge/1.20.1",
 ).forEach { (path, dir) ->
+    include(path)
     project(":$path").projectDir = file(dir)
 }
