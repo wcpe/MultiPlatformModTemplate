@@ -107,9 +107,3 @@ val verifyPackaging by tasks.registering {
         )
     }
 }
-
-tasks.named("runRealServerAcceptance") {
-    group = "verification"
-    description = "Bukkit $minecraftVersion realserver 门禁"
-    dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"), "verifyMpmtAcceptanceReport")
-}

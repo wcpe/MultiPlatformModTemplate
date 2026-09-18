@@ -185,9 +185,3 @@ mpmtRealServerAcceptance {
     acceptanceRunId.set(providers.gradleProperty("mpmt.acceptance.runId").orElse(""))
     acceptanceStartEpochMs.set(providers.gradleProperty("mpmt.acceptance.startEpochMs").orElse(""))
 }
-
-tasks.named("runRealServerAcceptance") {
-    group = "verification"
-    description = "Bukkit $minecraftVersion realserver 门禁"
-    dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"), "verifyMpmtAcceptanceReport")
-}

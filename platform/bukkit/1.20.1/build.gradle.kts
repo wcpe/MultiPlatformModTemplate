@@ -134,12 +134,3 @@ mpmtRealServerAcceptance {
         },
     )
 }
-
-tasks.named("runRealServerAcceptance") {
-    group = "verification"
-    description =
-        "Bukkit $minecraftVersion realserver 门禁" +
-        "（-Pmpmt.realserver.autoHost=true 时接线 PaperHostService；" +
-        "-Pmpmt.acceptance.matrix=SCHEDULER 时读 server-report-scheduler.txt）"
-    dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"), "verifyMpmtAcceptanceReport")
-}
