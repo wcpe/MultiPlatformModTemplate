@@ -119,7 +119,7 @@ jobs:
           java-version: "25"
 
       - name: 配置 Gradle 缓存
-        uses: gradle/actions/setup-gradle@67621b124fd2e251c5e8a0e6e3b91318f2287669
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
 
       # 本格的产品 jar：只有它进被测插件注入；其余车道不构建（矩阵各格自足）。
       - name: 构建本格产品 jar
