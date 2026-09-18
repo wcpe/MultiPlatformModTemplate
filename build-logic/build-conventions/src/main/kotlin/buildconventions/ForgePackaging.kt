@@ -2,8 +2,10 @@ package buildconventions
 
 import org.gradle.api.GradleException
 import org.gradle.api.Project
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.file.FileCollection
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
@@ -160,6 +162,54 @@ fun registerForgeAcceptanceJar(
                 "Implementation-Version" to project.version,
             ),
         )
+    }
+}
+
+/**
+ * 验收伴侣 remap 任务（`remapAcceptanceJar`，named → SRG）：1.12.2 与 1.20.1 的生产命名验收 jar。
+ *
+ * 两车道的差异只在归档名与 classpath（1.12.2 恒带版本并拼 acceptance 源集运行期，
+ * 1.20.1 用固定 `-dev-shadow` 输入产物、归档名 `mpmt-acceptance-forge`）：产物名、版本、
+ * 分类器与 CC 防捕获写法与迁移前逐项一致。
+ *
+ * loom 的 `RemapJarTask` 类型不在插件工程编译类路径内，故按 `remapJar` 任务的类
+ * （与 loom 插件同类加载器，未装饰的原始类型）注册新任务；`inputFile` / `classpath`
+ * 经 `get*` 取回属性对象后设值（Gradle 装饰对象不认 Groovy 属性名直接调用）。
+ * 注册时机要求 loom 插件已注册 `remapJar`（即车道脚本 `loom { }` 块之后调用，
+ * 故本函数只在 `afterEvaluate` 内执行）。
+ */
+internal fun registerForgeAcceptanceRemapJar(
+    project: Project,
+    lane: ForgeLaneExtension,
+) {
+    val baseName = lane.remapAcceptanceJarName.get()
+    val withVersion = lane.remapAcceptanceJarVersioned.get()
+    val remapSource = project.tasks.named("remapJar").get()
+    val remapType = remapSource.javaClass.superclass as Class<out org.gradle.api.Task>
+    val acceptanceJar = project.tasks.named(FORGE_ACCEPTANCE_JAR_TASK)
+    project.tasks.register("remapAcceptanceJar", remapType) {
+        group = "build"
+        description =
+            if (withVersion) {
+                "将验收伴侣重映射到生产命名（srg），等价原 FG reobfAcceptanceJar"
+            } else {
+                "把验收 mod jar remap 到 SRG（arch-loom 承担 FG reobf）"
+            }
+        dependsOn(acceptanceJar)
+        (groovyValue("getInputFile") as RegularFileProperty)
+            .set(acceptanceJar.flatMap { (it as AbstractArchiveTask).archiveFile })
+        if (withVersion) {
+            // 仅 1.12.2 拼 acceptance 源集运行期 classpath；1.20.1 的 shadow 链路不拼。
+            // modern 车道不走 remap 分支，无影响。
+            val sourceSets = project.extensions.getByType(SourceSetContainer::class.java)
+            (groovyValue("getClasspath") as ConfigurableFileCollection)
+                .setFrom(sourceSets.getByName("acceptance").runtimeClasspath)
+        }
+        (this as AbstractArchiveTask).archiveBaseName.set(baseName)
+        if (withVersion) {
+            (this as AbstractArchiveTask).archiveVersion.set(project.version.toString())
+        }
+        (this as AbstractArchiveTask).archiveClassifier.set("")
     }
 }
 

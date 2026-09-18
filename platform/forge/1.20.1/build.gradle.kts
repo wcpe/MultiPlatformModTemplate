@@ -31,6 +31,7 @@ forgeLane {
     laneLabel.set("Forge 1.20.1")
     reobfCopyTasks.put("reobfShadowJar", "remapJar")
     reobfCopyTasks.put("reobfAcceptanceJar", "remapAcceptanceJar")
+    remapAcceptanceJarName.set("mpmt-acceptance-forge")
 }
 
 // 插件公开 API 需要扩展实例（块外传参用），故在块后取回一次
@@ -281,16 +282,6 @@ val acceptanceJar by tasks.registering(ShadowJar::class) {
     // shadow 改配置不刷新缓存指纹，令其确定性重跑（与产品 shadowJar 一致）
     outputs.upToDateWhen { false }
     outputs.cacheIf { false }
-}
-
-// 对验收 mod jar remap（named → SRG），令其能在真实 Forge 服运行；产物 build/libs/mpmt-acceptance-forge-*.jar
-val remapAcceptanceJar by tasks.registering(RemapJarTask::class) {
-    group = "build"
-    description = "把验收 mod jar remap 到 SRG（arch-loom 承担 FG reobf）"
-    dependsOn(acceptanceJar)
-    inputFile.set(acceptanceJar.flatMap { it.archiveFile })
-    archiveBaseName.set("mpmt-acceptance-forge")
-    archiveClassifier.set("")
 }
 
 // 把验收源集纳入常规 build 的编译校验（只编译，不打包——打包由验收编排按需触发）

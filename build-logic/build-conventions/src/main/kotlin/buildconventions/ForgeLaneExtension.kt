@@ -98,4 +98,16 @@ abstract class ForgeLaneExtension {
 
     /** 契约测试的补充 `mpmt.test.*` 版本属性（仓库根、产品与验收 jar 路径由插件补齐）。 */
     abstract val contractTestProperties: MapProperty<String, String>
+
+    /**
+     * 验收伴侣 remap 任务的产物归档名（如 `mpmt-acceptance-forge`）；留空表示本车道无此任务。
+     *
+     * 1.12.2（FG 时代 `mpmt-forge-acceptance-1.12.2`，恒带版本并拼 acceptance 源集运行期 classpath）
+     * 与 1.20.1（shadow 链路 `mpmt-acceptance-forge`，不带版本不拼 classpath）
+     * 保留 remap（named → SRG）以产出生产命名验收 jar；1.21.1 / 26.2 走无 remap 链路，不设置。
+     */
+    abstract val remapAcceptanceJarName: Property<String>
+
+    /** remap 验收 jar 是否带项目版本号（仅 FG 时代的 1.12.2）。 */
+    abstract val remapAcceptanceJarVersioned: Property<Boolean>
 }

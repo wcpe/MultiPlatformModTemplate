@@ -3,7 +3,7 @@ import buildconventions.ForgeLaneExtension
 import buildconventions.ForgeModules
 import buildconventions.registerForgeAcceptanceJar
 import dev.architectury.pack200.java.Pack200Adapter
-import net.fabricmc.loom.task.RemapJarTask
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.jvm.toolchain.JavaToolchainService
 
 // Forge 1.12.2 车道（根构建子模块）：client-only，legacy 链路经 top.wcpe.loom（ADR-0025）→
@@ -69,6 +69,8 @@ forgeLane {
     )
     reobfCopyTasks.put("reobfJar", "remapJar")
     reobfCopyTasks.put("reobfAcceptanceJar", "remapAcceptanceJar")
+    remapAcceptanceJarName.set("mpmt-forge-acceptance-1.12.2")
+    remapAcceptanceJarVersioned.set(true)
     contractTestMainClass.set("top.wcpe.mc.mpmt.platform.forge.contract.Forge112ContractTest")
     contractTestDescription.set("运行 1.12.2 构建、握手、wire 与双 JAR 隔离契约测试")
     contractTestProductTask.set("remapJar")
@@ -213,19 +215,6 @@ tasks.named<Jar>("jar") {
 // 验收伴侣 dev 命名中间产物（落 devlibs），剔除清单与产物名由车道参数给出
 val acceptanceJar = registerForgeAcceptanceJar(project, forge)
 
-// 验收伴侣生产产物：named(MCP) → srg 重映射，
-// 输出保持 build/libs/mpmt-forge-acceptance-1.12.2-<version>.jar（根文档/契约既有预期）
-val remapAcceptanceJar by tasks.registering(RemapJarTask::class) {
-    group = "build"
-    description = "将验收伴侣重映射到生产命名（srg），等价原 FG reobfAcceptanceJar"
-    dependsOn(acceptanceJar)
-    inputFile.set(acceptanceJar.flatMap { it.archiveFile })
-    classpath.setFrom(sourceSets["acceptance"].runtimeClasspath)
-    archiveBaseName.set("mpmt-forge-acceptance-1.12.2")
-    archiveVersion.set(project.version.toString())
-    archiveClassifier.set("")
-}
-
 // reobf 兼容任务（reobfJar / reobfAcceptanceJar）由 build-conventions.forge 注册：
 // 根 :collectReleaseArtifacts 硬引用 platform/forge/1.12.2/build/reobfJar/output.jar，
 // 根 realserver 说明沿用 `gradlew reobfJar reobfAcceptanceJar` 命令与产物路径。
@@ -247,7 +236,13 @@ val prepareClientCompanionArtifacts by tasks.registering {
             throw GradleException("缺少 reobf 产品 jar：$product")
         }
         // 优先 reobfAcceptanceJar 兼容路径，否则 libs 中的验收 remap 产物
-        val acceptance = if (acceptanceReobf.isFile) acceptanceReobf else remapAcceptanceJar.get().archiveFile.get().asFile
+        // （remapAcceptanceJar 由 build-conventions.forge 注册，按名取归档任务，不直引 loom 类型）
+        val acceptance =
+            if (acceptanceReobf.isFile) {
+                acceptanceReobf
+            } else {
+                tasks.named("remapAcceptanceJar", AbstractArchiveTask::class.java).get().archiveFile.get().asFile
+            }
         if (!acceptance.isFile) {
             throw GradleException("缺少验收伴侣 jar：$acceptance")
         }

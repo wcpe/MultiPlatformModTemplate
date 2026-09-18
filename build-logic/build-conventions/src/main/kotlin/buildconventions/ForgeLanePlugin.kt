@@ -27,6 +27,11 @@ class ForgeLanePlugin : Plugin<Project> {
             configureForgeJavaCompilation(project)
             expandForgeModMetadata(project, lane)
             configureForgeUnitTests(project, lane)
+            // 验收伴侣 remap（1.12.2 / 1.20.1）须先于 reobf 兼容层注册：
+            // reobfCopyTasks 引用的源任务含 remapAcceptanceJar。
+            if (lane.remapAcceptanceJarName.orNull?.isNotEmpty() == true) {
+                registerForgeAcceptanceRemapJar(project, lane)
+            }
             registerForgeReobfCopyCompat(project, lane)
             if (lane.devModOutputs.get()) {
                 registerForgeDevModOutputs(project, lane)
@@ -52,6 +57,8 @@ class ForgeLanePlugin : Plugin<Project> {
         lane.acceptanceModClass.convention("")
         lane.acceptanceExcludes.convention(emptyList())
         lane.acceptanceJarVersionedDevLibs.convention(false)
+        lane.remapAcceptanceJarName.convention("")
+        lane.remapAcceptanceJarVersioned.convention(false)
         lane.devModOutputs.convention(false)
         lane.acceptanceReportGate.convention(false)
         lane.acceptanceGateClientHint.convention("runAcceptanceClient")
