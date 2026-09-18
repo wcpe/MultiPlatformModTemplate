@@ -273,9 +273,6 @@ tasks.matching { it.name == "runAcceptanceClient" }.configureEach {
 
 // 进程命令行复刻 gradle JavaExec 启动、端口轮询、进程停止与验收伴侣安装均取自 build-conventions
 // （RealServer262Orchestration.kt，与 fabric 26.2 共用一份实现；差异以参数表达，见 ADR-0027）。
-
-/** 仅起真实 Forge 专用服（须 -Pmpmt.acceptance.artifact.server-runtime=…）；客户端请另开终端 runAcceptanceClient。 */
-/** 单 Gradle 编排：起服 → 等端口 → 起客户端伴侣 → 等同轮报告（与 fabric lane 共用编排实现）。 */
 tasks.register("runForgeRealServer262Acceptance") {
     group = "verification"
     description = "单 Gradle 编排 Forge 26.2 REALSERVER262 服务端与客户端验收"
@@ -357,6 +354,7 @@ tasks.register("runForgeRealServer262Acceptance") {
     }
 }
 
+/** 仅起真实 Forge 专用服（须 -Pmpmt.acceptance.artifact.server-runtime=…）；客户端请另开终端 runAcceptanceClient。 */
 tasks.register("runRealServerAcceptanceHost") {
     group = "verification"
     description = "通过 Forge runAcceptanceServer 启动真实专用服（不含客户端伴侣；不含报告门）"
