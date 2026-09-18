@@ -35,7 +35,11 @@ class FabricLanePlugin : Plugin<Project> {
         lane.productTaskName.convention(PRODUCT_TASK_REMAP_JAR)
         lane.simulatorReport.convention(project.layout.buildDirectory.file("acceptance/sim-report.txt"))
         lane.acceptanceReport.convention(project.layout.buildDirectory.file("acceptance/server-report.txt"))
-        lane.acceptanceServerAddress.convention(DEFAULT_ACCEPTANCE_SERVER_ADDRESS)
+        lane.acceptanceServerAddress.convention(
+            project.providers
+                .gradleProperty(ACCEPTANCE_SERVER_PROPERTY)
+                .orElse(DEFAULT_ACCEPTANCE_SERVER_ADDRESS),
+        )
         lane.matrixJavaHomeEnvironment.convention("")
         lane.acceptanceServerCompilesGametest.convention(true)
         lane.acceptanceClientExposesServerProperty.convention(true)
@@ -48,5 +52,8 @@ class FabricLanePlugin : Plugin<Project> {
 
         /** 默认验收服务端地址：对齐 `run/server.properties` 的 server-port=25571。 */
         const val DEFAULT_ACCEPTANCE_SERVER_ADDRESS = "127.0.0.1:25571"
+
+        /** 验收客户端连接地址的覆盖属性（插件化前各车道直接读 `-Pmpmt.acceptance.server`）。 */
+        const val ACCEPTANCE_SERVER_PROPERTY = "mpmt.acceptance.server"
     }
 }
