@@ -29,6 +29,12 @@ private const val ACCEPTANCE_LOG_TAIL_LINES = 30
 /** 停止进程时等待其退出的窗口（秒），超时即强制结束。 */
 private const val ACCEPTANCE_STOP_WAIT_SECONDS = 10L
 
+/** 等待同轮报告的截止窗口（毫秒；驱动看门狗 600s，此处留 660s 余量）。 */
+private const val ACCEPTANCE_REPORT_TIMEOUT_MILLIS = 660_000L
+
+/** 等待同轮报告的轮询间隔（毫秒）。 */
+private const val ACCEPTANCE_REPORT_POLL_MILLIS = 500L
+
 /**
  * 按 gradle `JavaExec` 的任务配置复刻命令行并直接起进程（绕过任务图，供单 Gradle 验收编排使用）。
  *
@@ -176,4 +182,37 @@ fun installDevAcceptanceMod(runDir: File, acceptanceJar: Provider<RegularFile>) 
     modsDir.mkdirs()
     val jar = acceptanceJar.get().asFile
     jar.copyTo(File(modsDir, jar.name), overwrite = true)
+}
+
+/**
+ * 等待同轮验收报告落盘：轮询 [report] 是否包含 `RUN_ID\t[runId]`，截止 [ACCEPTANCE_REPORT_TIMEOUT_MILLIS]。
+ *
+ * 等到即返回；[serverAlive] 供调用方在服务端早退时提前结束等待（forge 车道传服务端进程存活态，
+ * fabric 车道传恒真即不早退）。超时未等到则抛调用方既有文案（由 [onTimeout] 原样抛出，两车道文案不同，
+ * 故不在此统一）。
+ */
+fun awaitAcceptanceRoundReport(report: File, runId: String, serverAlive: () -> Boolean, onTimeout: () -> Nothing) {
+    val reportLine = "RUN_ID" + "\t" + runId
+    val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(ACCEPTANCE_REPORT_TIMEOUT_MILLIS)
+    while (System.nanoTime() < deadline) {
+        if (report.isFile && report.readText(Charsets.UTF_8).contains(reportLine)) return
+        if (!serverAlive() && !(report.isFile && report.readText(Charsets.UTF_8).contains(reportLine))) break
+        Thread.sleep(ACCEPTANCE_REPORT_POLL_MILLIS)
+    }
+    if (!report.isFile || !report.readText(Charsets.UTF_8).contains(reportLine)) {
+        onTimeout()
+    }
+}
+
+/**
+ * 校验验收报告末行 `RESULT PASS`：非空报告的末行必须为 `RESULT PASS`，否则抛调用方既有文案。
+ *
+ * fabric（v2 五判据）与 1.21.1 以前报告门走各自校验器，不经此函数；仅 forge/26.2 单进程编排用。
+ */
+fun verifySimpleResultPass(report: File, onFailure: (last: String) -> Nothing) {
+    val lines = report.readText(Charsets.UTF_8).lines().map { it.trim() }.filter { it.isNotEmpty() }
+    val last = lines.last()
+    if (last != "RESULT PASS") {
+        onFailure(last)
+    }
 }

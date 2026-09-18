@@ -1,6 +1,7 @@
 import buildconventions.ForgeLaneExtension
 import buildconventions.ForgeModules
 import buildconventions.awaitAcceptancePort
+import buildconventions.awaitAcceptanceRoundReport
 import buildconventions.configureForgeModernProductJar
 import buildconventions.configureForgeReportProperties
 import buildconventions.forgeJavaLauncher
@@ -12,13 +13,13 @@ import buildconventions.registerForgeModernSourceSets
 import buildconventions.requiredForgeRunProperty
 import buildconventions.stopAcceptanceProcess
 import buildconventions.verifyForgeDevSecureJarOutputs
+import buildconventions.verifySimpleResultPass
 import org.gradle.api.GradleException
 import org.gradle.api.JavaVersion
 import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import java.io.File
-import java.util.concurrent.TimeUnit
 
 // Forge 26.2 车道（根构建子模块）：common + server + client 分目录 → mpmt-forge-26.2-<version>.jar。
 // 不可变契约：产物名与路径（无 remapJar，jar 即权威产品 jar）、mods.toml / Mixin / services 断言、
@@ -323,15 +324,8 @@ tasks.register("runForgeRealServer262Acceptance") {
             // ③ 起客户端伴侣（自连 127.0.0.1:25566；GUI 窗口在用户桌面，场景全自动）
             client = launchAcceptanceProcess(clientTask, File(logDir, "realserver262-client.log"), file("run-acceptance-client"))
 
-            // ④ 等同轮报告（驱动看门狗 600s；此处留 660s 余量）
-            val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(660_000)
-            val reportLine = "RUN_ID" + "\t" + runId
-            while (System.nanoTime() < deadline) {
-                if (report.isFile && report.readText(Charsets.UTF_8).contains(reportLine)) break
-                if (!serverProcess.isAlive && !(report.isFile && report.readText(Charsets.UTF_8).contains(reportLine))) break
-                Thread.sleep(500)
-            }
-            if (!report.isFile || !report.readText(Charsets.UTF_8).contains(reportLine)) {
+            // ④ 等同轮报告（驱动看门狗 600s；此处留 660s 余量）与末行判定由编排骨架承担
+            awaitAcceptanceRoundReport(report, runId, serverAlive = { serverProcess.isAlive }) {
                 val serverLog = File(logDir, "realserver262-server.log")
                 val tail =
                     if (serverLog.isFile) {
@@ -341,9 +335,7 @@ tasks.register("runForgeRealServer262Acceptance") {
                     }
                 throw GradleException("[realserver] REALSERVER262 未在截止前生成当前运行报告（$runId）：${report.absolutePath}" + System.lineSeparator() + tail)
             }
-            val lines = report.readText(Charsets.UTF_8).lines().map { it.trim() }.filter { it.isNotEmpty() }
-            val last = lines.last()
-            if (last != "RESULT PASS") {
+            verifySimpleResultPass(report) { last ->
                 throw GradleException("[realserver] 验收未通过（$last）：${report.absolutePath}")
             }
             logger.lifecycle("[realserver] Forge 26.2 REALSERVER262 报告 PASS：${report.absolutePath}")
