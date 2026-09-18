@@ -2,6 +2,7 @@ package buildconventions
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.tasks.SourceSetContainer
 
 /**
  * fabric 车道公共层：车道脚本 `plugins { id("build-conventions.fabric") }` 后只保留"参数与差异"。
@@ -18,6 +19,7 @@ class FabricLanePlugin : Plugin<Project> {
     override fun apply(project: Project) {
         val lane = project.extensions.create("fabricLane", FabricLaneExtension::class.java)
         applyConventions(project, lane)
+        configureSourceLayout(project)
         registerGametestSourceSet(project)
         // 车道的 `fabricLane { … }` 块晚于插件 apply，故读取配置值的接线统一在 afterEvaluate 完成。
         project.afterEvaluate {
@@ -40,10 +42,37 @@ class FabricLanePlugin : Plugin<Project> {
                 .gradleProperty(ACCEPTANCE_SERVER_PROPERTY)
                 .orElse(DEFAULT_ACCEPTANCE_SERVER_ADDRESS),
         )
+        // 三条 fabric 车道的模拟服 / 真服默认轨场景清单逐字相同（各自 14 项，仅第 14 项不同），
+        // 故收为公共约定：车道不写即用本清单，确需偏离时才覆写。
+        lane.simScenarios.convention(SIM_DEFAULT_TRACK_SCENARIOS)
+        lane.realScenarios.convention(REAL_DEFAULT_TRACK_SCENARIOS)
         lane.matrixJavaHomeEnvironment.convention("")
         lane.acceptanceServerCompilesGametest.convention(true)
         lane.acceptanceClientExposesServerProperty.convention(true)
         lane.acceptanceServerUsesOverriddenReport.convention(false)
+    }
+
+    /**
+     * 源目录布局：三条 fabric 车道一致——单版本构建内 common / server / client 分目录（服客分离、
+     * 平台只胶水），L4 已固定拷入 common。Loom remap 仍由各车道工程完成（多模块各挂 Loom 代价高且易冲突）。
+     */
+    private fun configureSourceLayout(project: Project) {
+        project.pluginManager.withPlugin("java") {
+            val sourceSets = project.extensions.getByType(SourceSetContainer::class.java)
+            sourceSets.named("main") {
+                java.setSrcDirs(
+                    listOf(
+                        "common/src/main/java",
+                        "server/src/main/java",
+                        "client/src/main/java",
+                    ),
+                )
+                resources.setSrcDirs(listOf("common/src/main/resources"))
+            }
+            sourceSets.named("test") {
+                java.setSrcDirs(listOf("common/src/test/java"))
+            }
+        }
     }
 
     private companion object {
@@ -55,5 +84,32 @@ class FabricLanePlugin : Plugin<Project> {
 
         /** 验收客户端连接地址的覆盖属性（插件化前各车道直接读 `-Pmpmt.acceptance.server`）。 */
         const val ACCEPTANCE_SERVER_PROPERTY = "mpmt.acceptance.server"
+
+        /**
+         * 模拟服默认轨场景清单（三条 fabric 车道逐字相同）。
+         *
+         * 末项 `integrated-loopback` 是模拟服特有（同进程回环）；真服轨对应位置为 `real-round-trip`。
+         */
+        val SIM_DEFAULT_TRACK_SCENARIOS =
+            listOf(
+                "acceptance/handshake-success",
+                "acceptance/handshake-incompatible",
+                "acceptance/machine-code-session",
+                "acceptance/ban-reconnect",
+                "acceptance/unban-reconnect",
+                "acceptance/fragment-crc",
+                "acceptance/fragment-timeout-retry-resync",
+                "acceptance/session-heartbeat-rtt-timeout",
+                "acceptance/capability-eventbus",
+                "acceptance/hud-title",
+                "acceptance/hud-actionbar",
+                "acceptance/hud-toast",
+                "acceptance/hud-chat",
+                "acceptance/integrated-loopback",
+            )
+
+        /** 真服默认轨场景清单（三条 fabric 车道逐字相同）；与 [SIM_DEFAULT_TRACK_SCENARIOS] 仅末项不同。 */
+        val REAL_DEFAULT_TRACK_SCENARIOS =
+            SIM_DEFAULT_TRACK_SCENARIOS.dropLast(1) + "acceptance/real-round-trip"
     }
 }

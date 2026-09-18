@@ -1,6 +1,7 @@
 import buildconventions.BukkitLaneExtension
 import buildconventions.frozenApiSnapshot
 import buildconventions.packagingVerification
+import buildconventions.verifyBukkitProducts
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 // Bukkit 1.21.1 车道（根构建子模块）：common + modern + v1_21 → mpmt-bukkit-1.21.1-<version>.jar。
@@ -91,50 +92,19 @@ val verifyPackaging by tasks.registering {
         product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
         acceptance = tasks.named<ShadowJar>("acceptanceJar").flatMap { it.archiveFile },
     ) { product, acceptance ->
-        val acceptanceFile = acceptance ?: error("缺少验收产物输入")
-        val adapterService =
-            "META-INF/services/top.wcpe.mc.mpmt.platform.bukkit.version.BukkitVersionAdapter"
-        val l4Prefix = "top/wcpe/mc/mpmt/platform/bukkit/version/v1_"
-
-        must(product.file.name.contains(laneMcVersion), "产品产物名未包含 MC 版本")
-        must(acceptanceFile.file.name.contains(laneMcVersion), "验收产物名未包含 MC 版本")
-        mustContain(product, laneAdapterClassPath, "产品缺少选中的 L4 适配器")
-        must(
-            product.entries.count { it.startsWith(l4Prefix) && it.endsWith("BukkitVersionAdapter.class") } == 1,
-            "产品包含零个或多个 L4 适配器",
+        verifyBukkitProducts(
+            product = product,
+            acceptance = acceptance,
+            mcVersion = laneMcVersion,
+            adapterClassPath = laneAdapterClassPath,
+            adapterClass = laneAdapterClass,
+            l4Prefix = "top/wcpe/mc/mpmt/platform/bukkit/version/v1_",
+            expectFoliaSchedulerClass = true,
+            rejectProductMainInAcceptance = false,
+            rejectAcceptanceInProductYml = false,
+            rejectModernYmlFields = false,
+            apiVersion = laneApiVersion,
         )
-        mustServiceEquals(product, adapterService, laneAdapterClass, "产品 adapter services 与目标不符")
-        mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "产品未 shade 核心")
-        mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "产品未 shade SPI")
-        mustContain(product, "top/wcpe/mc/mpmt/platform/bukkit/MpmtBukkitPlugin.class", "产品缺少入口")
-        mustContain(
-            product,
-            "top/wcpe/mc/mpmt/platform/bukkit/capability/FoliaSchedulerPort.class",
-            "现代产品缺少 Folia 调度类",
-        )
-        mustNotBundle(product, listOf("top/wcpe/mc/mpmt/platform/bukkit/acceptance/"), "产品混入 acceptance")
-        mustContain(
-            acceptanceFile,
-            "top/wcpe/mc/mpmt/platform/bukkit/acceptance/MpmtBukkitAcceptancePlugin.class",
-            "验收缺少入口",
-        )
-        mustNotBundle(product, listOf("org/bukkit/", "io/papermc/"), "产品误打入 Bukkit/Paper API")
-        mustContainPrefix(product, "top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/", "产品 snakeyaml 未 relocate")
-        mustMetadataContains(
-            product,
-            "plugin.yml",
-            "main: top.wcpe.mc.mpmt.platform.bukkit.MpmtBukkitPlugin",
-            "产品 metadata 入口错误",
-        )
-        mustMetadataContains(product, "plugin.yml", "folia-supported: true", "现代产品缺少 folia 字段")
-        mustMetadataContains(product, "plugin.yml", "api-version: '$laneApiVersion'", "产品 api-version 错误")
-        mustMetadataContains(acceptanceFile, "plugin.yml", "MpmtBukkitAcceptancePlugin", "验收 metadata 入口错误")
-        mustContain(
-            product,
-            "META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap",
-            "缺少 PlatformBootstrap services",
-        )
-        log("Bukkit $laneMcVersion 打包校验通过：产品=${product.file.name}，验收=${acceptanceFile.file.name}")
     }
 }
 

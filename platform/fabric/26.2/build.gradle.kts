@@ -10,6 +10,7 @@ import buildconventions.requiredAcceptanceProperty
 import buildconventions.stopAcceptanceProcess
 import buildconventions.verifyAcceptanceRoundReport
 import buildconventions.verifyDefaultTrackReport
+import buildconventions.verifyFabricProductJar
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.gradle.api.file.FileCollection
 import org.gradle.api.tasks.JavaExec
@@ -90,25 +91,6 @@ val laneArgFabricApiVersion = fabricApiVersion
 val laneArgLoaderVersion = loaderVersion
 val laneArgMcVersion = mcVersion
 val laneArgTargetJavaVersion = targetJavaVersion
-// 模拟服默认轨场景清单：门禁按它逐项校验（须在 fabricLane 块之前声明）
-val simRequiredScenarios =
-    listOf(
-        "acceptance/handshake-success",
-        "acceptance/handshake-incompatible",
-        "acceptance/machine-code-session",
-        "acceptance/ban-reconnect",
-        "acceptance/unban-reconnect",
-        "acceptance/fragment-crc",
-        "acceptance/fragment-timeout-retry-resync",
-        "acceptance/session-heartbeat-rtt-timeout",
-        "acceptance/capability-eventbus",
-        "acceptance/hud-title",
-        "acceptance/hud-actionbar",
-        "acceptance/hud-toast",
-        "acceptance/hud-chat",
-        "acceptance/integrated-loopback",
-    )
-
 fabricLane {
     mcVersion.set(laneArgMcVersion)
     targetJavaVersion.set(laneArgTargetJavaVersion)
@@ -120,7 +102,6 @@ fabricLane {
     matrixJavaHomeEnvironment.set("MPMT_JAVA25_HOME")
     // 单进程真服编排会用 -Pmpmt.acceptance.report 覆盖报告，run 设定的默认报告路径同步采用覆盖值
     acceptanceServerUsesOverriddenReport.set(true)
-    simScenarios.set(simRequiredScenarios)
 }
 
 // 插件公开 API 需要扩展实例（块外传参用），故在此取回一次
@@ -129,21 +110,6 @@ val fabric = extensions.getByType(buildconventions.FabricLaneExtension::class.ja
 // 专用配置：需 shade 进产物并 relocate 的内容（core + 第三方运行期依赖）
 val shadowBundle: Configuration by configurations.creating
 
-// 单版本构建内：common / server / client 分目录（服客分离、平台只胶水）；L4 已固定拷入 common。
-// MC 26.2 已使用无混淆原始命名，不再执行 Loom remap。
-sourceSets.named("main") {
-    java.setSrcDirs(
-        listOf(
-            "common/src/main/java",
-            "server/src/main/java",
-            "client/src/main/java",
-        ),
-    )
-    resources.setSrcDirs(listOf("common/src/main/resources"))
-}
-sourceSets.named("test") {
-    java.setSrcDirs(listOf("common/src/test/java"))
-}
 val verifyVersionSelection by tasks.registering {
     group = "verification"
     description = "校验本版本构建仅含固定 L4 目录（" + selectedL4Name + "）"
@@ -222,43 +188,13 @@ val verifyPackaging by tasks.registering {
         product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
         acceptance = null,
     ) { product, _ ->
-        val selectedPrefix = "top/wcpe/mc/mpmt/platform/fabric/version/$selectedL4/"
-        val unselectedPrefix = "top/wcpe/mc/mpmt/platform/fabric/version/$unselectedL4/"
-        must(product.file.name.contains(laneMcVersion), "产物名未包含 MC 版本")
-        mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "core 类未 shade 进产物")
-        mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "platform-spi 未 shade 进产物")
-        mustContainPrefix(product, "top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/", "snakeyaml 未 relocate")
-        mustNotBundle(product, listOf("org/yaml/snakeyaml/"), "snakeyaml 原包名残留")
-        mustNotBundle(product, listOf("META-INF/maven/org.yaml/"), "snakeyaml Maven 元数据残留")
-        mustContain(product, "fabric.mod.json", "产物缺少 fabric.mod.json")
-        mustNotBundle(product, listOf("net/minecraft/"), "产物内不应直接包含 Minecraft 类")
-        mustContainPrefix(product, selectedPrefix, "缺少选中 L4：$selectedL4")
-        mustNotBundle(product, listOf(unselectedPrefix), "混入未选中 L4：$unselectedL4")
-        log("Fabric $laneMcVersion 打包校验通过：${product.file.name}（条目 ${product.entries.size}）")
+        verifyFabricProductJar(product, laneMcVersion, selectedL4, unselectedL4)
     }
 }
 
 tasks.named("build") {
     dependsOn(verifyPackaging, verifyVersionSelection)
 }
-
-val realRequiredScenarios =
-    listOf(
-        "acceptance/handshake-success",
-        "acceptance/handshake-incompatible",
-        "acceptance/machine-code-session",
-        "acceptance/ban-reconnect",
-        "acceptance/unban-reconnect",
-        "acceptance/fragment-crc",
-        "acceptance/fragment-timeout-retry-resync",
-        "acceptance/session-heartbeat-rtt-timeout",
-        "acceptance/capability-eventbus",
-        "acceptance/hud-title",
-        "acceptance/hud-actionbar",
-        "acceptance/hud-toast",
-        "acceptance/hud-chat",
-        "acceptance/real-round-trip",
-    )
 
 // 进程编排的通用工具（拉起进程 / 等端口 / 停进程 / server.properties / 验收伴侣安装）集中在
 // build-conventions 的 RealServer262Orchestration.kt（本车道与 forge 26.2 共用，见 ADR-0027）。
@@ -324,7 +260,7 @@ tasks.register("runRealServerAcceptance") {
         val matrixId = explicitMatrix.ifEmpty { if (haveRoundContext) "REALSERVER262" else "" }
         val report = if (matrixId.isEmpty()) fabric.acceptanceReport.get().asFile else acceptanceReportFile(matrixId)
         // 校验实现与其余车道共用 build-conventions 的单份实现（判定顺序与失败文案逐字保留）。
-        verifyDefaultTrackReport(project, report, matrixId, "fabric", realRequiredScenarios)
+        verifyDefaultTrackReport(project, report, matrixId, "fabric", fabric.realScenarios.get())
     }
 }
 

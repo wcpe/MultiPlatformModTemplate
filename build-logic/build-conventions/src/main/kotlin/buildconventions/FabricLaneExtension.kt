@@ -26,8 +26,11 @@ abstract class FabricLaneExtension {
     /** 产品 jar 的生产任务名：`remapJar`；MC 26.1+ 无混淆、由 `shadowJar` 直接产出时改为它。 */
     abstract val productTaskName: Property<String>
 
-    /** 模拟服默认轨场景清单：车道各自维护，模拟服门禁按它逐项校验。 */
+    /** 模拟服默认轨场景清单：默认取三条 fabric 车道的公共约定，车道偏离时才覆写。 */
     abstract val simScenarios: ListProperty<String>
+
+    /** 真服默认轨场景清单：默认取三条 fabric 车道的公共约定，车道偏离时才覆写。 */
+    abstract val realScenarios: ListProperty<String>
 
     /** 模拟服报告文件（默认 `build/acceptance/sim-report.txt`）。 */
     abstract val simulatorReport: RegularFileProperty
