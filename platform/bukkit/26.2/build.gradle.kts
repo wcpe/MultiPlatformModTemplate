@@ -88,7 +88,7 @@ dependencies {
     compileOnly("net.kyori:adventure-text-serializer-legacy")
     compileOnly("net.kyori:adventure-text-serializer-plain")
     compileOnly("net.kyori:adventure-text-logger-slf4j")
-    compileOnly("com.google.guava:guava:33.6.0-jre")
+    compileOnly("com.google.guava:guava:33.7.1-jre")
     compileOnly("com.google.code.gson:gson:2.14.0")
     compileOnly("org.jetbrains:annotations:26.0.2")
     testImplementation(platform("net.kyori:adventure-bom:5.2.0"))
@@ -102,7 +102,7 @@ dependencies {
     add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-serializer-legacy")
     add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-serializer-plain")
     add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-logger-slf4j")
-    add(acceptance.compileOnlyConfigurationName, "com.google.guava:guava:33.6.0-jre")
+    add(acceptance.compileOnlyConfigurationName, "com.google.guava:guava:33.7.1-jre")
     add(acceptance.compileOnlyConfigurationName, "org.jetbrains:annotations:26.0.2")
 }
 
