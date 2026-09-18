@@ -9,7 +9,7 @@ plugins {
     id("com.github.spotbugs") version "6.0.26" apply false
     // Kotlin 工具链（现接、前瞻就绪；当前仅 .gradle.kts 为 Kotlin，第二期引入 Kotlin 源即生效）
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1" apply false
-    id("io.gitlab.arturbosch.detekt") version "1.23.7" apply false
+    id("io.gitlab.arturbosch.detekt") version "1.23.8" apply false
     id("org.jetbrains.kotlinx.kover") version "0.8.3" apply false
     // WCPE Loom（ADR-0025）：必须在根以 apply false 声明，让插件类路径在全构建只加载一次。
     // 若只由各车道在自己的 plugins {} 里请求，Gradle 会按子树各建一份插件类加载器，
