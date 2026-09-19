@@ -214,7 +214,12 @@ tasks.matching { it.name == "runAcceptanceClient" }.configureEach {
     if (host is JavaExec) {
         host.javaLauncher.set(java21Launcher)
         host.doFirst {
-            host.systemProperty("mpmt.acceptance.javaExecutable", java21Launcher.get().executablePath.asFile.absolutePath)
+            host.systemProperty(
+                "mpmt.acceptance.javaExecutable",
+                java21Launcher
+                    .get()
+                    .executablePath.asFile.absolutePath,
+            )
             // 伴侣自动连服地址（含端口）；缺省与 quickPlay 一致
             host.systemProperty("mpmt.acceptance.server", (project.findProperty("mpmt.acceptance.server") ?: "127.0.0.1").toString())
         }
@@ -233,8 +238,20 @@ val runRealServerAcceptanceHost =
             if (!serverRuntime.isFile()) {
                 throw GradleException("server-runtime 必须是调用方显式提供的实际文件：$serverRuntime")
             }
-            val product = tasks.named("remapJar", Jar::class.java).get().archiveFile.get().asFile
-            val acceptanceJarFile = tasks.named("acceptanceJar", Jar::class.java).get().archiveFile.get().asFile
+            val product =
+                tasks
+                    .named("remapJar", Jar::class.java)
+                    .get()
+                    .archiveFile
+                    .get()
+                    .asFile
+            val acceptanceJarFile =
+                tasks
+                    .named("acceptanceJar", Jar::class.java)
+                    .get()
+                    .archiveFile
+                    .get()
+                    .asFile
             val runDir = project.file("run-realserver")
             val modsDir = File(runDir, "mods")
             modsDir.mkdirs()

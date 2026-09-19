@@ -122,7 +122,11 @@ loom {
             // v2 元数据：commit 配置期取 git；productJar 供驱动算 SHA（remapJar 无 classifier 产物，即最终产品 jar）
             property(
                 "mpmt.acceptance.commit",
-                providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim(),
+                providers
+                    .exec { commandLine("git", "rev-parse", "HEAD") }
+                    .standardOutput.asText
+                    .get()
+                    .trim(),
             )
             property("mpmt.acceptance.version", project.version.toString())
             property("mpmt.acceptance.platform", "forge")
@@ -191,7 +195,13 @@ val verifyPackaging by tasks.registering {
     // 输出冲突与可复现性断言所需取值在配置期取出：动作内不得再访问 project / Task（配置缓存要求），
     // 断言取值与判定顺序、失败文案与迁移前逐字一致。
     val shadowJarTask = tasks.named<ShadowJar>("shadowJar").get()
-    val plainArchive = tasks.named<Jar>("jar").get().archiveFile.get().asFile
+    val plainArchive =
+        tasks
+            .named<Jar>("jar")
+            .get()
+            .archiveFile
+            .get()
+            .asFile
     val shadowPreservesTimestamps = shadowJarTask.isPreserveFileTimestamps
     val shadowReproducibleOrder = shadowJarTask.isReproducibleFileOrder
     packagingVerification(
@@ -296,7 +306,8 @@ val acceptanceContractTest by tasks.registering(Test::class) {
 
 val simAcceptanceReport = layout.buildDirectory.file("acceptance/sim-report-v2.txt")
 val realAcceptanceReport =
-    providers.gradleProperty("mpmt.acceptance.report")
+    providers
+        .gradleProperty("mpmt.acceptance.report")
         .map { file(it) }
         .orElse(provider { file("run-server/acceptance-report.txt") })
 
@@ -312,10 +323,21 @@ val runSimNetworkAcceptance by tasks.registering(JavaExec::class) {
     systemProperty("mpmt.acceptance.mcVersion", "1.20.1")
     systemProperty("mpmt.acceptance.serverVersion", forgeVersion)
     doFirst {
-        val product = tasks.named<RemapJarTask>("remapJar").get().archiveFile.get().asFile
+        val product =
+            tasks
+                .named<RemapJarTask>("remapJar")
+                .get()
+                .archiveFile
+                .get()
+                .asFile
         val digest = MessageDigest.getInstance("SHA-256").digest(product.readBytes())
         systemProperty("mpmt.acceptance.productJarSha256", digest.joinToString("") { byte -> "%02x".format(byte) })
-        val commit = providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim()
+        val commit =
+            providers
+                .exec { commandLine("git", "rev-parse", "HEAD") }
+                .standardOutput.asText
+                .get()
+                .trim()
         systemProperty("mpmt.acceptance.commit", commit)
     }
 }

@@ -2,7 +2,7 @@
 // 不可变契约：插件 id 与实现类清单、各车道可见的任务名/属性名/报告路径；插件产物须可被根构建的守护进程加载。
 plugins {
     `kotlin-dsl`
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
 }
 

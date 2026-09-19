@@ -170,7 +170,11 @@ loom {
     }
 }
 
-val generatedBuildInfo = layout.buildDirectory.file("generated/sources/buildInfo/top/wcpe/mc/mpmt/platform/forge/ForgeBuildInfo.java").get().asFile
+val generatedBuildInfo =
+    layout.buildDirectory
+        .file("generated/sources/buildInfo/top/wcpe/mc/mpmt/platform/forge/ForgeBuildInfo.java")
+        .get()
+        .asFile
 val generateBuildInfo by tasks.registering {
     // 版本与目标文件在配置期取成局部值：动作只捕获这些值，不捕获 project / 脚本对象（配置缓存要求），
     // 生成内容与产物路径逐字不变。
@@ -228,7 +232,11 @@ val prepareClientCompanionArtifacts by tasks.registering {
     description = "拷贝 Forge 1.12.2 client-only 产品/验收 jar 到 build/client-companion/（供 CatServer（HYBRID 矩阵））"
     dependsOn("reobfJar", "reobfAcceptanceJar")
     doLast {
-        val outDir = layout.buildDirectory.dir("client-companion").get().asFile
+        val outDir =
+            layout.buildDirectory
+                .dir("client-companion")
+                .get()
+                .asFile
         outDir.mkdirs()
         val product = file("${layout.buildDirectory.get().asFile}/reobfJar/output.jar")
         val acceptanceReobf = file("${layout.buildDirectory.get().asFile}/reobfAcceptanceJar/output.jar")
@@ -241,7 +249,12 @@ val prepareClientCompanionArtifacts by tasks.registering {
             if (acceptanceReobf.isFile) {
                 acceptanceReobf
             } else {
-                tasks.named("remapAcceptanceJar", AbstractArchiveTask::class.java).get().archiveFile.get().asFile
+                tasks
+                    .named("remapAcceptanceJar", AbstractArchiveTask::class.java)
+                    .get()
+                    .archiveFile
+                    .get()
+                    .asFile
             }
         if (!acceptance.isFile) {
             throw GradleException("缺少验收伴侣 jar：$acceptance")
@@ -276,7 +289,12 @@ tasks.matching { it.name == "runClient" }.configureEach {
     if (runClientTask is JavaExec) {
         runClientTask.javaLauncher.set(java8Launcher)
         runClientTask.doFirst {
-            runClientTask.systemProperty("mpmt.acceptance.javaExecutable", java8Launcher.get().executablePath.asFile.absolutePath)
+            runClientTask.systemProperty(
+                "mpmt.acceptance.javaExecutable",
+                java8Launcher
+                    .get()
+                    .executablePath.asFile.absolutePath,
+            )
         }
     }
 }
