@@ -8,6 +8,10 @@
 
 ### 修复
 - **换名漏改 `LICENSE` 与 `pack.mcmeta`**：`init.sh` 的文本候选按后缀表判定，`LICENSE` 无扩展名、`.mcmeta` 不在后缀表内，两者都被整体跳过，换名后仓库仍写着旧展示名（`LICENSE` 的权利人、Forge 1.20.1 资源包描述）。现把 `.mcmeta` 加入后缀表并把 `LICENSE` 列入特殊名单；该缺陷由穷尽审计受控文件（而非抽样 grep）发现。
+- **CodeQL 报 Exit 32「didn't build any of it」**：`build-mode: manual` 要求 `init` 与 `analyze` 之间发生真实编译（CodeQL 靠追踪 javac/kotlinc 调用提取源码），但构建缓存命中会让 `compileJava` 直接取缓存产物（日志为 `FROM-CACHE`）、不调用编译器，于是 CodeQL 提取不到任何源码并以退出码 32 失败。现为共用构建 action 增加 `disable-build-cache` 输入，CodeQL 场景用 `--no-build-cache` 覆盖 `gradle.properties` 的 `org.gradle.caching=true`，强制真实编译。A/B 实测：不带该开关为 `compileJava FROM-CACHE`，带则为真实执行。
+
+### 变更
+- **Dependabot 更新约束**：两个生态均设 `open-pull-requests-limit: 5`（首轮扫描会把全部落后依赖一次性开 PR，不限量会淹没 PR 列表、并让每个 PR 重复跑全量构建）；`gradle` 生态新增 `ignore`——`org.junit:junit-bom` 锁在 JUnit 5（`versions: [">=6.0.0"]`），因 `core-domain` 用 JDK 8 工具链编译而 JUnit 6 要求 JVM 17+，升级必然使 `:buildAll` 失败；`foojay-resolver-convention` 忽略主版本升级，待与工具链配置一并评估。
 
 ## [0.3.0] - 2026-09-18
 
