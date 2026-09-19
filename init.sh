@@ -27,9 +27,13 @@ SKIP_DIRS=(
 TEXT_SUFFIXES=(
   ".java" ".kt" ".kts" ".gradle" ".properties"
   ".yml" ".yaml" ".json" ".toml" ".md" ".xml" ".txt" ".MF" ".services"
+  ".mcmeta"
 )
+# 无扩展名或后缀不具辨识度、但确实含模板身份的文件，必须在此显式列出：
+# 后缀表按 `.xxx` 匹配，`LICENSE` 这类无后缀文件否则会被整体跳过，换名后仍写着旧展示名。
 SPECIAL_NAMES=(
   "plugin.yml" "mods.toml" "fabric.mod.json" "VERSION" "mcmod.info"
+  "LICENSE"
 )
 
 DRY_RUN="false"
