@@ -33,10 +33,14 @@ jobs:
           languages: java-kotlin
           build-mode: manual
 
+      # build-mode: manual 要求 init 与 analyze 之间发生真实编译：CodeQL 靠追踪
+      # javac/kotlinc 调用来提取源码。构建缓存命中会让 compileJava 直接取缓存产物，
+      # 提取不到任何源码并报 Exit 32，故此处禁用构建缓存。
       - name: 构建分析目标
         uses: ./.github/actions/build-release-artifacts
         with:
           validate-template: "false"
+          disable-build-cache: "true"
 
       - name: 上传 CodeQL 结果
         uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63
