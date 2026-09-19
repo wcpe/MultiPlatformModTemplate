@@ -20,7 +20,7 @@ dependencies {
     // 只依赖 L0：示例必须证明"玩法逻辑不碰任何平台 API"
     api(project(":core:domain"))
 
-    testImplementation(platform("org.junit:junit-bom:5.10.3"))
+    testImplementation(platform("org.junit:junit-bom:5.14.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
