@@ -4,7 +4,21 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # 一次最多同时开 5 个 PR：首轮扫描会把所有落后依赖一次全开，
+    # 不限量会淹没 PR 列表，也让每个 PR 的 CI 重复跑全量构建。
+    open-pull-requests-limit: 5
   - package-ecosystem: gradle
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      # core-domain 用 JDK 8 工具链编译（L0 严格 Java 8，见 ADR-0004），
+      # 而 JUnit 6 要求 JVM 17+，升级必然导致 :buildAll 失败。
+      # 待 L0 的 Java 8 契约调整前，锁在 JUnit 5。
+      - dependency-name: "org.junit:junit-bom"
+        versions: [">=6.0.0"]
+      # foojay-resolver-convention 是 Gradle toolchain 解析插件，1.0.0 为
+      # 跨主版本升级，需连同工具链配置一并评估，不适合自动跟进。
+      - dependency-name: "org.gradle.toolchains.foojay-resolver-convention"
+        update-types: ["version-update:semver-major"]
