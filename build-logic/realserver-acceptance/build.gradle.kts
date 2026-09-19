@@ -3,7 +3,7 @@
 // 真服门禁的失败文案（docs/adr/0014-realserver-acceptance-harness.md）；编排一律经 Gradle 任务图，禁 shell 入口。
 plugins {
     `kotlin-dsl`
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
     id("org.jetbrains.kotlinx.kover") version "0.9.9"
 }
