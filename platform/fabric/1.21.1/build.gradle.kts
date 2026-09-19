@@ -195,7 +195,10 @@ tasks.register("runRealServerAcceptance") {
                 if (custom.isNotEmpty()) {
                     file(custom)
                 } else {
-                    layout.buildDirectory.file("acceptance/server-report-${matrixId.lowercase()}.txt").get().asFile
+                    layout.buildDirectory
+                        .file("acceptance/server-report-${matrixId.lowercase()}.txt")
+                        .get()
+                        .asFile
                 }
             } else {
                 fabric.acceptanceReport.get().asFile

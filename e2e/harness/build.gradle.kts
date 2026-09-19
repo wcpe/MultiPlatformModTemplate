@@ -79,7 +79,13 @@ val pluginUnderTestJar: String =
         ?: rootProject.layout.projectDirectory
             .file("platform/bukkit/1.20.1/build/libs/mpmt-bukkit-1.20.1-$productVersion.jar")
             .asFile.absolutePath
-val harnessJar: String = tasks.named<Jar>("jar").get().archiveFile.get().asFile.absolutePath
+val harnessJar: String =
+    tasks
+        .named<Jar>("jar")
+        .get()
+        .archiveFile
+        .get()
+        .asFile.absolutePath
 
 mcTestkit {
     // 既有拓扑（名称不可变）

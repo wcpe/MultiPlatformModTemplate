@@ -219,7 +219,11 @@ tasks.register("runFabricRealServer262Acceptance") {
         clientTask.injectAcceptanceClientMetadata(fabric)
         // Fabric 车道：server.properties 必须已初始化，且只改写已有键（不补缺失键）
         prepareAcceptanceServerProperties(file("run"), requireExisting = true, fillMissingKeys = false)
-        val logDir = layout.buildDirectory.dir("acceptance").get().asFile
+        val logDir =
+            layout.buildDirectory
+                .dir("acceptance")
+                .get()
+                .asFile
         var server: Process? = null
         var client: Process? = null
         try {

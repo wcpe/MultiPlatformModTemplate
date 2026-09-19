@@ -23,13 +23,16 @@ sourceSets.named("test") {
 tasks.named("jar") {
     enabled = false
 }
-tasks.matching { it.name.startsWith("compile") || it.name.startsWith("process") || it.name.startsWith("classes") }
+tasks
+    .matching { it.name.startsWith("compile") || it.name.startsWith("process") || it.name.startsWith("classes") }
     .configureEach { enabled = false }
-tasks.matching {
-    it.name.startsWith("checkstyle") || it.name.startsWith("pmd") || it.name.startsWith("spotbugs") ||
-        it.name.startsWith("jacoco")
-}
-    .configureEach { enabled = false }
+tasks
+    .matching {
+        it.name.startsWith("checkstyle") ||
+            it.name.startsWith("pmd") ||
+            it.name.startsWith("spotbugs") ||
+            it.name.startsWith("jacoco")
+    }.configureEach { enabled = false }
 tasks.matching { it.name == "test" || it.name == "check" }.configureEach { enabled = false }
 
 tasks.register("verifyPackaging") {

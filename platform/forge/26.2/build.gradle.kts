@@ -265,7 +265,12 @@ tasks.matching { it.name == "runAcceptanceClient" }.configureEach {
         javaLauncher.set(java25Launcher)
         doFirst {
             installDevAcceptanceMod(project.file("run-acceptance-client"), acceptanceJar.flatMap { it.archiveFile })
-            javaExec.systemProperty("mpmt.acceptance.javaExecutable", java25Launcher.get().executablePath.asFile.absolutePath)
+            javaExec.systemProperty(
+                "mpmt.acceptance.javaExecutable",
+                java25Launcher
+                    .get()
+                    .executablePath.asFile.absolutePath,
+            )
             // 伴侣自动连服地址（含端口）；缺省与 quickPlay 一致
             javaExec.systemProperty("mpmt.acceptance.server", (project.findProperty("mpmt.acceptance.server") ?: "127.0.0.1").toString())
         }
@@ -297,7 +302,12 @@ tasks.register("runForgeRealServer262Acceptance") {
         prepareAcceptanceServerProperties(file("run-acceptance-server"), requireExisting = false, fillMissingKeys = true)
         configureForgeReportProperties(project, forge, serverTask, false)
         installDevAcceptanceMod(file("run-acceptance-client"), acceptanceJar.flatMap { it.archiveFile })
-        clientTask.systemProperty("mpmt.acceptance.javaExecutable", java25Launcher.get().executablePath.asFile.absolutePath)
+        clientTask.systemProperty(
+            "mpmt.acceptance.javaExecutable",
+            java25Launcher
+                .get()
+                .executablePath.asFile.absolutePath,
+        )
         clientTask.systemProperty(
             "mpmt.acceptance.server",
             (project.findProperty("mpmt.acceptance.server") ?: "127.0.0.1:25566").toString(),
