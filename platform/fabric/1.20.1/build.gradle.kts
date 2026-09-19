@@ -123,7 +123,7 @@ dependencies {
     "gametestImplementation"(acceptanceCoordinate)
 
     // 跨栈字节对齐 spike 的纯 JVM 测试
-    testImplementation(platform("org.junit:junit-bom:5.10.3"))
+    testImplementation(platform("org.junit:junit-bom:5.14.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.junit.jupiter:junit-jupiter-params")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

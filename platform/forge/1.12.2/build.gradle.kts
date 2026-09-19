@@ -135,7 +135,7 @@ dependencies {
 
     // 纯 JVM 单元测试：JUnit 5（BOM 统一版本，与其它车道同源）。
     // 被测类为 Java 8 字节码，测试同样以 Java 8 语法编译 / 运行（toolchain 已固定 8）。
-    add("testImplementation", platform("org.junit:junit-bom:5.10.3"))
+    add("testImplementation", platform("org.junit:junit-bom:5.14.4"))
     add("testImplementation", "org.junit.jupiter:junit-jupiter")
     add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
 
