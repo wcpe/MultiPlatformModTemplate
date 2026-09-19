@@ -72,8 +72,23 @@ bukkitLane {
 val bukkit = extensions.getByType(buildconventions.BukkitLaneExtension::class.java)
 
 dependencies {
-    // 车道级偏离项：验收契约测试所需的 MockBukkit（仅本车道）
+    // 车道级偏离项：验收契约测试所需的 MockBukkit（仅本车道）。
+    //
+    // MockBukkit 自身编译在 paper-api 1.20.4 上（其字节码引用 org.bukkit.damage.DamageSource，
+    // 该包自 1.20.2 才引入），故测试类路径必须显式声明同一版本，否则 MockBukkit 会抛
+    // NoClassDefFoundError——**不能**靠 exclude 掉它的传递 paper-api 来"净化"（已实测失败）。
+    // 因此本车道的测试基线是 1.20.4、产品基线是 1.20.1（见 apiCoordinate），二者不同是刻意的：
+    // 测试只引用 org.bukkit.command / plugin / plugin.messaging 这些两版一致的基础包。
     testImplementation("com.github.seeseemelk:MockBukkit-v1.20:3.88.1")
+    testImplementation("io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT")
+}
+
+// 把测试基线的 paper-api 显式锁到 1.20.4：MockBukkit 与其传递依赖都请求该版本，
+// 而本车道 apiCoordinate（1.20.1）也在同一配置上——冲突解析会选最高版（=1.20.4），
+// 结果虽与预期一致，但依赖"选最高"的隐式规则。这里 force 成同一版本，
+// 让"声明的版本"就是"实际解析的版本"，避免日后依赖变动时静默改变测试基线。
+configurations.matching { it.name.startsWith("test") || it.name.startsWith("acceptanceTest") }.configureEach {
+    resolutionStrategy.force("io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT")
 }
 
 // 冻结 API 快照（本车道为 paper-api）：插件解析坐标与 SHA-256，并把校验挂到编译任务之前

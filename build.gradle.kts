@@ -1,3 +1,5 @@
+import java.util.concurrent.TimeUnit
+
 // 根构建脚本：只做配置——插件声明、根级坐标与版本、A 车道根侧入口别名。
 // 不可变契约：根目录 VERSION 是版本号唯一来源（testing-and-quality §3）、根侧入口任务名
 // （runMcTestkitSmoke / runMcTestkitFoliaSmoke）、发布聚合与真服/版本矩阵门禁的编排入口。
@@ -32,6 +34,19 @@ val mpmtVersion: String = rootProject.file("VERSION").readText().trim()
 allprojects {
     group = "top.wcpe.mc.mpmt"
     version = mpmtVersion
+}
+
+// SNAPSHOT（changing module）默认仅缓存 24 小时，每次 CI 都要回源校验 metadata；
+// 上游（如 repo.papermc.io）抖动即让构建失败（实测见过 502 Bad Gateway）。
+// 本仓库依赖的旧版本线 SNAPSHOT 事实上已冻结——paper-api 1.20.1 停在 build 178（2023-09）、
+// 1.20.4 停在 build 176（2024-10），不再重发——故把 TTL 放宽，避免无谓回源。
+// 需要主动取上游新快照时，用 --refresh-dependencies 显式刷新即可。
+subprojects {
+    configurations.all {
+        resolutionStrategy {
+            cacheChangingModulesFor(365, TimeUnit.DAYS)
+        }
+    }
 }
 
 // ============================================================================
