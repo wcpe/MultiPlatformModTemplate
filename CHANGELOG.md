@@ -13,6 +13,7 @@
 - **paper-api SNAPSHOT 回源抖动中断构建**：Bukkit 1.20.1 车道的测试类路径经 MockBukkit 3.88.1 传递引入 paper-api 1.20.4，与车道产品基线 1.20.1 在同一配置上冲突，解析按「选最高」落到 1.20.4——而 SNAPSHOT 默认仅缓存 24 小时，每次回源（`repo.papermc.io`）都可能因上游 5xx 失败（实测 502 Bad Gateway，`paper-api-1.20.4-R0.1-20241030.192207-176.module`）。现按「显式声明 + 放宽 TTL」处理：该车道显式声明并 `force` 锁定测试基线为 1.20.4（MockBukkit 字节码引用 1.20.2+ 才有的 `org.bukkit.damage.DamageSource$Builder`，排除其传递依赖会直接 `NoClassDefFoundError`，已实测），根构建把 SNAPSHOT 缓存 TTL 放宽到 365 天（本仓库依赖的旧版本线快照事实上已冻结：1.20.1 停在 build 178、1.20.4 停在 build 176）。产品基线不受影响，仍为 1.20.1；需要主动取上游新快照时用 `--refresh-dependencies`。
 
 ### 变更
+- **ktlint 插件升级到 14.2.0 并按新规则集格式化**：新版 `chain-method-continuation` 等规则收紧，全仓暴露出 64 处换行违规（8 个 `.gradle.kts`，集中在 `tasks` 链式调用的点号前置）。现升级版本并按新规则执行 `ktlintFormat` 自动格式化，改动均为纯换行调整、语义不变；`.editorconfig` 中既有的规则裁剪（行长、参数换行等）未变，`.claude/rules/static-analysis.md` 记录的版本号同步更新。
 - **Dependabot 更新约束**：两个生态均设 `open-pull-requests-limit: 5`（首轮扫描会把全部落后依赖一次性开 PR，不限量会淹没 PR 列表、并让每个 PR 重复跑全量构建）；`gradle` 生态新增 `ignore`——`org.junit:junit-bom` 锁在 JUnit 5（`versions: [">=6.0.0"]`），因 `core-domain` 用 JDK 8 工具链编译而 JUnit 6 要求 JVM 17+，升级必然使 `:buildAll` 失败；`foojay-resolver-convention` 忽略主版本升级，待与工具链配置一并评估。
 
 ## [0.3.0] - 2026-09-18
