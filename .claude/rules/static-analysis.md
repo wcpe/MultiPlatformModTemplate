@@ -13,7 +13,7 @@
 - **分离度 / 分层回归断言**：`ArchUnit` 1.3.0（core-domain 测试）——校验 L0 零平台依赖、功能域互不依赖且无环（ADR-0001/0011）。
 - **Lombok**：仓库根 `lombok.config`（`addLombokGeneratedAnnotation`）使生成代码带 `@lombok.Generated`、避免静态分析误报；并登记为 `JavaCompile` 输入。
 - **L0–L2 Java 8 API 强制**：用 **JDK 8 工具链**编译（API 面即 JDK 8，强于 `--release 8`）——见 ADR-0004。
-- **Kotlin / Gradle Kotlin DSL**：`ktlint` 12.1.1（检 `*.gradle.kts`，规则经 `.editorconfig` 裁剪）；`detekt` 1.23.7 + `kover` 0.8.3——业务模块无 Kotlin 源（仅近空扫），Kotlin 源只存在于两个插件工程，其 `ktlintCheck` / `detekt` 门禁实际生效。注：detekt 1.23 的内嵌 Kotlin 编译器无法在 JDK 25 上运行，故插件工程独立调用时守护 JVM 固定 JDK 21（`gradle/gradle-daemon-jvm.properties`）+ 工具链 21（ADR-0027）。
+- **Kotlin / Gradle Kotlin DSL**：`ktlint` 14.2.0（检 `*.gradle.kts`，规则经 `.editorconfig` 裁剪）；`detekt` 1.23.7 + `kover` 0.8.3——业务模块无 Kotlin 源（仅近空扫），Kotlin 源只存在于两个插件工程，其 `ktlintCheck` / `detekt` 门禁实际生效。注：detekt 1.23 的内嵌 Kotlin 编译器无法在 JDK 25 上运行，故插件工程独立调用时守护 JVM 固定 JDK 21（`gradle/gradle-daemon-jvm.properties`）+ 工具链 21（ADR-0027）。
 
 **暂不接入（带原因，需要时再加）**：
 - **Error Prone**：其编译器插件需 JDK 11+ javac，与 L0–L2 刻意的 **JDK 8 工具链**（ADR-0004）直接冲突；编译期缺陷检测由 SpotBugs（字节码）+ PMD（源码）覆盖。

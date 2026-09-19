@@ -12,6 +12,7 @@
 - **能力示例测试的 MockBukkit 异步竞态**：`BukkitCapabilityBootstrapTest` 的「同一玩家再次进服」在 CI 上偶发 `NoSuchFileException`——L0 持久化在 `runAsync` 里、末尾还经 `runForEntity` 排一个主线程任务，而 MockBukkit 的 `waitAsyncTasksFinished()` 以 `getActiveCount()`（近似值）判断异步是否结束，存在提交窗口且等待期间不再推进 tick（issue #1610）。现改为有界轮询「推进 tick + 等异步」，以可观测条件（落盘键就位 / 异步链末尾消息入队）为完成信号。该缺陷此前被构建缓存掩盖（CI 的该测试任务命中 `FROM-CACHE` 未真实执行）。
 
 ### 变更
+- **ktlint 插件升级到 14.2.0 并按新规则集格式化**：新版 `chain-method-continuation` 等规则收紧，全仓暴露出 64 处换行违规（8 个 `.gradle.kts`，集中在 `tasks` 链式调用的点号前置）。现升级版本并按新规则执行 `ktlintFormat` 自动格式化，改动均为纯换行调整、语义不变；`.editorconfig` 中既有的规则裁剪（行长、参数换行等）未变，`.claude/rules/static-analysis.md` 记录的版本号同步更新。
 - **Dependabot 更新约束**：两个生态均设 `open-pull-requests-limit: 5`（首轮扫描会把全部落后依赖一次性开 PR，不限量会淹没 PR 列表、并让每个 PR 重复跑全量构建）；`gradle` 生态新增 `ignore`——`org.junit:junit-bom` 锁在 JUnit 5（`versions: [">=6.0.0"]`），因 `core-domain` 用 JDK 8 工具链编译而 JUnit 6 要求 JVM 17+，升级必然使 `:buildAll` 失败；`foojay-resolver-convention` 忽略主版本升级，待与工具链配置一并评估。
 
 ## [0.3.0] - 2026-09-18
