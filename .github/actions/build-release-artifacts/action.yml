@@ -6,6 +6,10 @@ inputs:
     description: 是否校验 E2E 模板
     required: false
     default: "true"
+  disable-build-cache:
+    description: 是否禁用 Gradle 构建缓存（CodeQL 需要真实编译才能提取源码）
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -41,10 +45,15 @@ runs:
         java-version: "25"
 
     - name: 配置 Gradle 缓存
-      uses: gradle/actions/setup-gradle@67621b124fd2e251c5e8a0e6e3b91318f2287669
+      uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
 
     # 单一根构建：全部平台车道为根子模块，一条命令构建 + 校验 + 聚合发布产物。
     # JDK 25 守护（26.2 车道配置期硬校验）；MPMT_JAVA*_HOME 供矩阵轨与跨代车道显式选 JDK。
+    #
+    # disable-build-cache：CodeQL 靠追踪编译器调用提取源码，构建缓存命中会让
+    # compileJava 直接取缓存产物（日志里的 FROM-CACHE）而不调用 javac，于是 CodeQL
+    # 报 "this run didn't build any of it"（Exit 32）。故该场景下用 --no-build-cache
+    # 覆盖 gradle.properties 的 org.gradle.caching=true，强制真实编译。
     - name: 根全量构建（全车道制品 + 发布产物结构门 + dist 聚合）
       shell: bash
       env:
@@ -53,9 +62,11 @@ runs:
         MPMT_JAVA17_HOME: ${{ steps.java17.outputs.path }}
         MPMT_JAVA21_HOME: ${{ steps.java21.outputs.path }}
         MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
+        EXTRA_GRADLE_ARGS: ${{ inputs.disable-build-cache == 'true' && '--no-build-cache' || '' }}
       run: |
         ./gradlew "-Dfabric.loom.cache.dir=$GITHUB_WORKSPACE/.gradle/loom-user-cache" \
           --no-daemon --max-workers=1 --no-watch-fs --console=plain --stacktrace \
+          $EXTRA_GRADLE_ARGS \
           :buildAll
 
     - name: 安装 Node 22
