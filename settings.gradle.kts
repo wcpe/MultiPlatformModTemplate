@@ -13,14 +13,18 @@ pluginManagement {
         }
         // WCPE Loom（top.wcpe.loom）发布地：dev.architectury:architectury-loom
         maven("https://maven.wcpe.top/repository/maven-releases/") { name = "WCPE Releases" }
+        // 通用插件门户必须排在加载器仓库之前：ktlint / detekt / kover / shadow 等只发布在此，
+        // 加载器仓库并不持有这些坐标（实测 NeoForged 仓库对 ktlint-gradle 返回 404）。
+        // 排在后面时，一次无关仓库的 5xx 就会直接中断整个构建——CI 上曾因 maven.neoforged.net
+        // 返回 502 拉取 ktlint-gradle 而失败。
+        gradlePluginPortal()
+        mavenCentral()
         // 各加载器插件与运行期依赖仓库（根单点声明，车道脚本不再各自声明）
         maven("https://maven.fabricmc.net/") { name = "Fabric" }
         maven("https://maven.minecraftforge.net/") { name = "MinecraftForge" }
         maven("https://maven.neoforged.net/releases") { name = "NeoForged" }
         maven("https://maven.architectury.dev/") { name = "Architectury" }
         maven("https://repo.spongepowered.org/repository/maven-public/") { name = "Sponge" }
-        gradlePluginPortal()
-        mavenCentral()
     }
     // 插件版本单点 pin（ADR-0025 / ADR-0026）：车道脚本只写 id，不带版本。
     plugins {
