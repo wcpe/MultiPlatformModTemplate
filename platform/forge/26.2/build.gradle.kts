@@ -155,7 +155,7 @@ dependencies {
     add("acceptanceBundle", files(ForgeModules.moduleJar(project, ":modules:acceptance")))
 
     add("testImplementation", files(acceptanceSharedProjects.map { ForgeModules.moduleJar(project, it) }))
-    add("testImplementation", platform("org.junit:junit-bom:5.10.3"))
+    add("testImplementation", platform("org.junit:junit-bom:5.14.4"))
     add("testImplementation", "org.junit.jupiter:junit-jupiter")
     add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
 }

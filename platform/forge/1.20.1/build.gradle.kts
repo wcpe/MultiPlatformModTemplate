@@ -173,7 +173,7 @@ dependencies {
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
     // Mixin 注解处理器由 arch-loom 内建提供（loom.mixin.useLegacyMixinAp），无需再声明 processor 依赖
 
-    testImplementation(platform("org.junit:junit-bom:5.10.3"))
+    testImplementation(platform("org.junit:junit-bom:5.14.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation(project(":modules:acceptance"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
