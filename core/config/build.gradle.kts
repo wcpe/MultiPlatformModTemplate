@@ -17,7 +17,7 @@ repositories {
 }
 
 // 第三方依赖版本（snakeyaml 与各平台一致，避免分叉）
-val snakeyamlVersion = "2.2"
+val snakeyamlVersion = "2.7"
 val gsonVersion = "2.10.1"
 
 dependencies {

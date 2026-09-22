@@ -9,7 +9,7 @@ plugins {
 group = "top.wcpe.mc.mpmt"
 version = rootProject.file("VERSION").readText().trim()
 
-val snakeyamlVersion = "2.2"
+val snakeyamlVersion = "2.7"
 val spigot112Api = "org.spigotmc:spigot-api:1.12.2-R0.1-SNAPSHOT"
 
 java {
