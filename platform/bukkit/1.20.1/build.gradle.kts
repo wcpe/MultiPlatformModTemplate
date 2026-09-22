@@ -79,7 +79,7 @@ dependencies {
     // NoClassDefFoundError——**不能**靠 exclude 掉它的传递 paper-api 来"净化"（已实测失败）。
     // 因此本车道的测试基线是 1.20.4、产品基线是 1.20.1（见 apiCoordinate），二者不同是刻意的：
     // 测试只引用 org.bukkit.command / plugin / plugin.messaging 这些两版一致的基础包。
-    testImplementation("com.github.seeseemelk:MockBukkit-v1.20:3.88.1")
+    testImplementation("com.github.seeseemelk:MockBukkit-v1.20:3.93.2")
     testImplementation("io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT")
 }
 
