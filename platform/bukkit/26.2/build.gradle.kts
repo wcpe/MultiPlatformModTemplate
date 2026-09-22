@@ -90,7 +90,7 @@ dependencies {
     compileOnly("net.kyori:adventure-text-logger-slf4j")
     compileOnly("com.google.guava:guava:33.7.1-jre")
     compileOnly("com.google.code.gson:gson:2.14.0")
-    compileOnly("org.jetbrains:annotations:26.0.2")
+    compileOnly("org.jetbrains:annotations:26.1.0")
     testImplementation(platform("net.kyori:adventure-bom:5.2.0"))
     testImplementation("net.kyori:adventure-api")
 
@@ -103,7 +103,7 @@ dependencies {
     add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-serializer-plain")
     add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-logger-slf4j")
     add(acceptance.compileOnlyConfigurationName, "com.google.guava:guava:33.7.1-jre")
-    add(acceptance.compileOnlyConfigurationName, "org.jetbrains:annotations:26.0.2")
+    add(acceptance.compileOnlyConfigurationName, "org.jetbrains:annotations:26.1.0")
 }
 
 // 冻结 API 快照（本车道为 paper-api）：插件解析坐标与 SHA-256，并把校验挂到编译任务之前
