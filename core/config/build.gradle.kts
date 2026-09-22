@@ -18,7 +18,7 @@ repositories {
 
 // 第三方依赖版本（snakeyaml 与各平台一致，避免分叉）
 val snakeyamlVersion = "2.2"
-val gsonVersion = "2.10.1"
+val gsonVersion = "2.14.0"
 
 dependencies {
     // 配置加载运行期依赖：api 暴露，便于调用方按需直接使用其类型化结果
