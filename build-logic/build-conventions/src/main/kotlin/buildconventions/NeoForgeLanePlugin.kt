@@ -38,6 +38,7 @@ class NeoForgeLanePlugin : Plugin<Project> {
             val acceptance = neoforgeAcceptanceSourceSet(project)
             registerNeoForgeDependencies(project, lane, acceptance)
             configureNeoForgeRuns(project, lane)
+            registerNeoForgeDevModsStaging(project)
             expandNeoForgeModMetadata(project)
             configureNeoForgePackagingChain(project)
             registerNeoForgePackagingVerification(project)

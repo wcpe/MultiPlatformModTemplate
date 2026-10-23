@@ -7,6 +7,7 @@
 ## 未发布版本
 
 ### 修复
+- **车道脚本的 Gradle 9.6 弃用委托写法**：`by configurations.creating` / `by sourceSets.creating` / `by tasks.registering`（含带类型参数形式）在 Gradle 9.6 已弃用，每次脚本重编译都会输出成片 `w:` 告警（`w: … Use 'val task = tasks.register(name) { }' instead`）。现统一改为 `configurations.create(...)` / `sourceSets.create(...)` / `tasks.register(...)` / `tasks.register<T>(...)`，共 11 个车道脚本、25 处；配置名、任务名与类型、依赖解析结果逐项不变（已用 `:platform:forge:forge-1.20.1:dependencies --configuration acceptanceShadowBundle`、各车道 `tasks --all` 与 `ktlintCheck` 核对）。多行表达式的换行由 `ktlintFormat` 按仓库规则统一，块体仅缩进变化、内容逐字不变。
 - **换名漏改 `LICENSE` 与 `pack.mcmeta`**：`init.sh` 的文本候选按后缀表判定，`LICENSE` 无扩展名、`.mcmeta` 不在后缀表内，两者都被整体跳过，换名后仓库仍写着旧展示名（`LICENSE` 的权利人、Forge 1.20.1 资源包描述）。现把 `.mcmeta` 加入后缀表并把 `LICENSE` 列入特殊名单；该缺陷由穷尽审计受控文件（而非抽样 grep）发现。
 - **CodeQL 报 Exit 32「didn't build any of it」**：`build-mode: manual` 要求 `init` 与 `analyze` 之间发生真实编译（CodeQL 靠追踪 javac/kotlinc 调用提取源码），但构建缓存命中会让 `compileJava` 直接取缓存产物（日志为 `FROM-CACHE`）、不调用编译器，于是 CodeQL 提取不到任何源码并以退出码 32 失败。现为共用构建 action 增加 `disable-build-cache` 输入，CodeQL 场景用 `--no-build-cache` 覆盖 `gradle.properties` 的 `org.gradle.caching=true`，强制真实编译。A/B 实测：不带该开关为 `compileJava FROM-CACHE`，带则为真实执行。
 - **能力示例测试的 MockBukkit 异步竞态**：`BukkitCapabilityBootstrapTest` 的「同一玩家再次进服」在 CI 上偶发 `NoSuchFileException`——L0 持久化在 `runAsync` 里、末尾还经 `runForEntity` 排一个主线程任务，而 MockBukkit 的 `waitAsyncTasksFinished()` 以 `getActiveCount()`（近似值）判断异步是否结束，存在提交窗口且等待期间不再推进 tick（issue #1610）。现改为有界轮询「推进 tick + 等异步」，以可观测条件（落盘键就位 / 异步链末尾消息入队）为完成信号。该缺陷此前被构建缓存掩盖（CI 的该测试任务命中 `FROM-CACHE` 未真实执行）。

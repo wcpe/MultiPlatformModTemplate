@@ -1,4 +1,7 @@
 import buildconventions.FabricLaneExtension
+import buildconventions.LaneBundle
+import buildconventions.declareLaneBundles
+import buildconventions.mpmtDomains
 import buildconventions.packagingVerification
 import buildconventions.verifyDefaultTrackReport
 import buildconventions.verifyFabricProductJar
@@ -29,7 +32,7 @@ val targetJavaVersion = 17
 val selectedL4Name = "v1_20"
 val unselectedL4Name = "v1_21"
 val snakeyamlVersion = "2.2"
-// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经项目依赖消费
+// 依赖 platform-spi（经 api 传递 core-runtime + core-kernel），经项目依赖消费
 val platformApiCoordinate = project(":platform:fabric:fabric-api")
 val spiCoordinate = project(":core:spi")
 // 依赖 core-server（服务端网络装配特性 ServerNetworkFeature；经 api 传递 protocol + core-runtime）
@@ -75,24 +78,25 @@ fabricLane {
 val fabric = extensions.getByType(buildconventions.FabricLaneExtension::class.java)
 
 // 专用配置：需 shade 进产物并 relocate 的内容（core + 第三方运行期依赖），不参与 Loom remap
-val shadowBundle: Configuration by configurations.creating
+val shadowBundle: Configuration = declareLaneBundles(LaneBundle.SHADOW).getValue(LaneBundle.SHADOW)
 
-val verifyVersionSelection by tasks.registering {
-    group = "verification"
-    description = "校验本版本构建仅含固定 L4 目录（" + selectedL4Name + "）"
-    // 源树与两个 L4 名在配置期取出：动作只捕获这些值，不捕获脚本对象（配置缓存要求），判定与文案不变。
-    val javaTree = fileTree("common/src/main/java")
-    val selectedPattern = "**/version/" + selectedL4Name + "/**"
-    val unselectedPattern = "**/version/" + unselectedL4Name + "/**"
-    val selectedL4 = selectedL4Name
-    val unselectedL4 = unselectedL4Name
-    doLast {
-        val hasSelected = javaTree.matching { include(selectedPattern) }.files.isNotEmpty()
-        val hasUnselected = javaTree.matching { include(unselectedPattern) }.files.isNotEmpty()
-        if (!hasSelected) throw GradleException("Fabric 版本校验失败：缺少 " + selectedL4)
-        if (hasUnselected) throw GradleException("Fabric 版本校验失败：混入 " + unselectedL4)
+val verifyVersionSelection =
+    tasks.register("verifyVersionSelection") {
+        group = "verification"
+        description = "校验本版本构建仅含固定 L4 目录（" + selectedL4Name + "）"
+        // 源树与两个 L4 名在配置期取出：动作只捕获这些值，不捕获脚本对象（配置缓存要求），判定与文案不变。
+        val javaTree = fileTree("common/src/main/java")
+        val selectedPattern = "**/version/" + selectedL4Name + "/**"
+        val unselectedPattern = "**/version/" + unselectedL4Name + "/**"
+        val selectedL4 = selectedL4Name
+        val unselectedL4 = unselectedL4Name
+        doLast {
+            val hasSelected = javaTree.matching { include(selectedPattern) }.files.isNotEmpty()
+            val hasUnselected = javaTree.matching { include(unselectedPattern) }.files.isNotEmpty()
+            if (!hasSelected) throw GradleException("Fabric 版本校验失败：缺少 " + selectedL4)
+            if (hasUnselected) throw GradleException("Fabric 版本校验失败：混入 " + unselectedL4)
+        }
     }
-}
 
 dependencies {
     minecraft("com.mojang:minecraft:$mcVersion")
@@ -101,7 +105,7 @@ dependencies {
     // Fabric 平台 API：提供网络收发（fabric-networking-api-v1）等；编译期依赖，运行期由宿主提供
     modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
 
-    // 共享核心（platform-spi + 传递的 core-runtime/core-domain）：纯 Java、非 mod 依赖、不参与 remap
+    // 共享核心（platform-spi + 传递的 core-runtime/core-kernel）：纯 Java、非 mod 依赖、不参与 remap
     implementation(platformApiCoordinate)
     implementation(spiCoordinate)
     shadowBundle(platformApiCoordinate)
@@ -114,6 +118,14 @@ dependencies {
     // 客户端公共逻辑（core-client）：客户端网络装配 + 弱标识提供者，shade 进产物、不参与 remap
     implementation(clientCoordinate)
     shadowBundle(clientCoordinate)
+
+    // 功能域（L0 玩法逻辑）：经 mpmtDomains() 动态覆盖——新增域无需改本脚本（ADR-0028）。
+    // 域经 META-INF/services 声明 Feature，由 core-runtime 启动期自动发现。
+    // 与其它核心产物同样处理：既进 implementation 也进 shadowBundle，否则不会被打进产品 jar。
+    mpmtDomains().forEach { domain ->
+        implementation(domain)
+        shadowBundle(domain)
+    }
 
     // 第三方运行期依赖：shade 进产物并 relocate 到 top.wcpe.mc.mpmt.libs.*（ADR-0012，防类冲突的统一约定）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
@@ -149,31 +161,29 @@ tasks.named<ShadowJar>("shadowJar") {
 }
 
 // Loom 的 remapJar 改吃 shadowJar 产物，使 core / 第三方随之进入最终 remapped 产物
-tasks.named<RemapJarTask>("remapJar") {
-    dependsOn(tasks.named("shadowJar"))
-    inputFile.set(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
-    archiveClassifier.set("")
-}
+// remapJar 的输入接线（dependsOn shadowJar / inputFile / 去 classifier）已内置到
+// build-conventions（registerFabricRemapJarWiring），三条 fabric 车道共用同一份实现。
 
 // 打包校验：core shade、snakeyaml relocate、唯一 L4、fabric.mod.json
-val verifyPackaging by tasks.registering {
-    group = "verification"
-    description = "校验 Fabric 产品 jar：core shade、snakeyaml relocate、唯一 L4、mod 元数据"
-    dependsOn(tasks.named("remapJar"), verifyVersionSelection)
-    // 车道版本与选中 / 未选中 L4 名在配置期取成局部值：断言 lambda 只捕获这些值，
-    // 不捕获脚本对象（配置缓存要求）；断言内容、顺序与失败文案不变。
-    val laneMcVersion = mcVersion
-    val selectedL4 = selectedL4Name
-    val unselectedL4 = unselectedL4Name
-    packagingVerification(
-        laneLabel = "Fabric",
-        mcVersion = laneMcVersion,
-        product = tasks.named<RemapJarTask>("remapJar").flatMap { it.archiveFile },
-        acceptance = null,
-    ) { product, _ ->
-        verifyFabricProductJar(product, laneMcVersion, selectedL4, unselectedL4)
+val verifyPackaging =
+    tasks.register("verifyPackaging") {
+        group = "verification"
+        description = "校验 Fabric 产品 jar：core shade、snakeyaml relocate、唯一 L4、mod 元数据"
+        dependsOn(tasks.named("remapJar"), verifyVersionSelection)
+        // 车道版本与选中 / 未选中 L4 名在配置期取成局部值：断言 lambda 只捕获这些值，
+        // 不捕获脚本对象（配置缓存要求）；断言内容、顺序与失败文案不变。
+        val laneMcVersion = mcVersion
+        val selectedL4 = selectedL4Name
+        val unselectedL4 = unselectedL4Name
+        packagingVerification(
+            laneLabel = "Fabric",
+            mcVersion = laneMcVersion,
+            product = tasks.named<RemapJarTask>("remapJar").flatMap { it.archiveFile },
+            acceptance = null,
+        ) { product, _ ->
+            verifyFabricProductJar(product, laneMcVersion, selectedL4, unselectedL4)
+        }
     }
-}
 
 tasks.named("build") {
     dependsOn(verifyPackaging, verifyVersionSelection)

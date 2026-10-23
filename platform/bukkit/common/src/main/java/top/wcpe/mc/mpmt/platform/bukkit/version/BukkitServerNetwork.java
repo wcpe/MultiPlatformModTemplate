@@ -1,7 +1,7 @@
 package top.wcpe.mc.mpmt.platform.bukkit.version;
 
 import java.util.function.BiConsumer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 
 /** Bukkit 服务端网络版本适配接口。 */
 public interface BukkitServerNetwork {

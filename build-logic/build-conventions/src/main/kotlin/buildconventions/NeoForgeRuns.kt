@@ -4,6 +4,10 @@ import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Project
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.api.tasks.bundling.Jar
+
+/** 产品 shade 任务名（与 NeoForgePackaging 内保持一致）。 */
+private const val NEOFORGE_DEV_SHADOW_JAR_TASK: String = "shadowJar"
 
 /** loom 为 forge 系预建的 run 名（loom 已套用 `client()` / `server()` 模板，这里只做等价移植）。 */
 internal const val NEOFORGE_CLIENT_RUN_NAME: String = "client"
@@ -105,4 +109,37 @@ private fun configureServerRun(
     run.invokeGroovy("property", MPMT_ACCEPTANCE_MC_VERSION_PROPERTY, lane.mcVersion.get())
     run.invokeGroovy("property", MPMT_ACCEPTANCE_SERVER_VERSION_PROPERTY, lane.neoForgeVersion.get())
     run.invokeGroovy("property", MPMT_ACCEPTANCE_PRODUCT_JAR_PROPERTY, neoforgeProductJarFile(project).absolutePath)
+}
+
+/**
+ * dev run 前把 shade 后的 dev 产物放进 run 目录的 mods/。
+ *
+ * 仅靠 `source(main)` 注入 dev 源集不够：核心库（core:kernel 等）不在 FML 模块层里，
+ * mod 类引用这些类型时会抛 NoClassDefFoundError。改由 mods/ 以真实 jar mod 加载，
+ * 核心类随 jar 一起进模块层，与产品部署形态一致。
+ */
+internal fun registerNeoForgeDevModsStaging(project: Project) {
+    listOf(
+        "runClient" to NEOFORGE_CLIENT_RUN_DIR,
+        "runServer" to NEOFORGE_SERVER_RUN_DIR,
+    ).forEach { (taskName, runDir) ->
+        project.tasks.named(taskName).configure {
+            dependsOn(project.tasks.named(NEOFORGE_DEV_SHADOW_JAR_TASK))
+            val devJar =
+                project.tasks
+                    .named(NEOFORGE_DEV_SHADOW_JAR_TASK, Jar::class.java)
+                    .flatMap { it.archiveFile }
+            val modsDir = project.layout.projectDirectory.dir("$runDir/mods")
+            inputs.file(devJar)
+            doFirst {
+                val target = modsDir.asFile.apply { mkdirs() }
+                // 清掉旧副本，避免改名或旧版本残留被 FML 重复加载
+                target.listFiles { f -> f.name.endsWith(".jar") }?.forEach { it.delete() }
+                project.copy {
+                    from(devJar)
+                    into(target)
+                }
+            }
+        }
+    }
 }

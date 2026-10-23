@@ -6,7 +6,7 @@ import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
 import top.wcpe.mc.mpmt.acceptance.report.DefaultScenarioMatrix;
 import top.wcpe.mc.mpmt.platform.fabric.gametest.FabricServerGameTestContext;
-import top.wcpe.mc.mpmt.platform.fabric.net.FabricConnectionHandle;
+import top.wcpe.mc.mpmt.mcshared.server.net.FabricConnectionHandle;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricNetworkBindings;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricServerNetwork;
 import top.wcpe.mc.mpmt.protocol.PacketCodec;

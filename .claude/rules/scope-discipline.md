@@ -6,7 +6,7 @@
 
 目标：**证明"逻辑/胶水完全分离"成立 + 基础网络全平台可用**。仅做以下（以 PRD §4 优先级 P1 列为准，含 FR-01~FR-11、FR-13~FR-15、FR-19~FR-31）：
 
-- L0 功能域骨架：领域内核（基类型 + 平台端口接口集 Player/World/Scheduler/Message/Persistence/Transport/DataDirectory + **自有 EventBus**，接口 EventBusPort）+ 功能域（互不依赖、经 EventBus 协作，FR-31）。
+- L0 功能域骨架：`core-kernel` 领域内核（基类型 + 平台端口接口集 Player/World/Scheduler/Message/Persistence/Transport/DataDirectory + **自有 EventBus**，接口 EventBusPort）+ `core-domains-*` 功能域（互不依赖、经 EventBus 协作，FR-31）。
 - L1：core-runtime 编排（生命周期 / 特性注册 / 端口装配）、core-server / core-client 公共逻辑骨架、protocol 协议骨架 + 版本协商。
 - L2：platform-spi（SPI + PlatformProvider Holder + ServiceLoader 发现）、FeatureGate 能力探测。
 - L3：platform-bukkit（Bukkit 家族单一构建，含 Paper 与 **Folia**，Folia 经 FeatureGate 适配区域调度）、platform-sponge（SpongeGradle）、platform-fabric（`top.wcpe.loom`·双端）、platform-forge（`top.wcpe.loom`·client/server 分离代理）、platform-neoforge（`top.wcpe.loom`·1.20.2）——**全部为根构建子模块**（ADR-0026；构建插件统一 `top.wcpe.loom` 1.17.1，ADR-0025）——**核心锚点 1.20.1**，全平台跑通基础网络与示例。
@@ -32,7 +32,7 @@
 ## 3. 不为未来预留空壳
 - 不写"以后可能用"的抽象、配置项、接口、字段（例如为 Folia/Sponge 预留的空 SPI 实现、为 26.2 预留的空 `v26_2` 模块）。需要时再加。
 - 后续阶段能力到时按平台 / 版本新增模块，当前不留占位。
-- **功能域先作 `core-domain` 内的包、用到才建，不预建空域模块 / 空 api-impl 骨架**；够大 / 需复用 / 需独立演进再提升为独立 Gradle 模块（域只依赖内核 + EventBus、不依赖兄弟域，见 ADR-0015 / ADR-0011）。
+- **功能域先作 `core-kernel` 内的包、用到才建，不预建空域模块 / 空 api-impl 骨架**；够大 / 需复用 / 需独立演进再提升为独立 Gradle 模块（域只依赖内核 + EventBus、不依赖兄弟域，见 ADR-0015 / ADR-0011）。
 - 例外：端口接口与 SPI 是 L0/L2 的**本期交付物**（FR-01/FR-05），其设计天然面向多平台多版本，不算镀金——但只实现 MVP 所需的端口，不为未用能力先铺接口。
 
 ## 4. 越界先问

@@ -8,7 +8,7 @@ import net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkRegistry;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 import top.wcpe.mc.mpmt.platform.forge.net.ForgeConnectionHandle;
 import top.wcpe.mc.mpmt.platform.forge.net.ForgeRawPayloadRouter;
 import top.wcpe.mc.mpmt.platform.forge.version.ForgeServerNetwork;

@@ -4,7 +4,7 @@ import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
-import top.wcpe.mc.mpmt.core.domain.net.HandshakeStateMachine;
+import top.wcpe.mc.mpmt.kernel.net.HandshakeStateMachine;
 import top.wcpe.mc.mpmt.platform.sponge.MpmtSpongePlugin;
 
 /**

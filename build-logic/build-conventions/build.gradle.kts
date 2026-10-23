@@ -33,6 +33,10 @@ gradlePlugin {
             id = "build-conventions.platform"
             implementationClass = "buildconventions.PlatformLanePlugin"
         }
+        register("architecture") {
+            id = "build-conventions.architecture"
+            implementationClass = "buildconventions.ArchitectureGuardPlugin"
+        }
         register("fabricLane") {
             id = "build-conventions.fabric"
             implementationClass = "buildconventions.FabricLanePlugin"
@@ -64,6 +68,10 @@ dependencies {
     // 仅编译期引用 SpotBugs 类型：运行期由消费方根构建 `plugins { id("com.github.spotbugs") apply false }`
     // 提供同一份插件类路径，避免插件类加载器分裂。
     compileOnly("com.github.spotbugs.snom:spotbugs-gradle-plugin:6.0.26")
+
+    // 版本区间匹配（McSharedRanges）是新逻辑，按 ADR-0029 需要有行为断言。
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.withType<Test>().configureEach {

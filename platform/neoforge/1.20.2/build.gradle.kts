@@ -1,4 +1,6 @@
+import buildconventions.LaneBundle
 import buildconventions.NeoForgeLaneExtension
+import buildconventions.declareLaneBundles
 
 // NeoForge 1.20.2 车道（根构建子模块）：common + server + client 分目录 → mpmt-neoforge-1.20.2-<version>.jar。
 // 不可变契约：产物名与路径、打包链路（shade 共享核心 + relocate snakeyaml，ADR-0012）、remapJar 恒等重映射
@@ -43,8 +45,9 @@ repositories {
 // 质量工具链：装配由 build-conventions.quality 插件承担（本工程无偏离项）
 
 // 专用配置：需 shade 的内容（产品：core/spi + 第三方；验收：acceptance 核心），由插件按名消费
-val shadowBundle: Configuration by configurations.creating
-val acceptanceShadowBundle: Configuration by configurations.creating
+val shadowBundle: Configuration = declareLaneBundles(LaneBundle.SHADOW).getValue(LaneBundle.SHADOW)
+val acceptanceShadowBundle: Configuration =
+    declareLaneBundles(LaneBundle.ACCEPTANCE_SHADOW).getValue(LaneBundle.ACCEPTANCE_SHADOW)
 
 // neoforge 车道参数：版本、目标 JDK、验收驱动取值在此声明；其余 loader 层接线由插件承担
 val neoforgeLane = extensions.getByType(NeoForgeLaneExtension::class.java)

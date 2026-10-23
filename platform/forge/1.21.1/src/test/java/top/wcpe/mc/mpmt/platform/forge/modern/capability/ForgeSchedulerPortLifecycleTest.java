@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.server.MinecraftServer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.ref.WorldRef;
 import top.wcpe.mc.mpmt.platform.forge.modern.Forge121MinecraftTestSupport;
 
 /** Forge 1.21.1 调度端口：线程归属转发、周期任务与关闭后的资源释放。 */
@@ -28,7 +28,7 @@ class ForgeSchedulerPortLifecycleTest {
         List<String> executed = new ArrayList<>();
         ForgeSchedulerPort port = new ForgeSchedulerPort(server);
         try {
-            port.runForEntity(new top.wcpe.mc.mpmt.core.domain.ref.EntityRef(UUID.randomUUID()),
+            port.runForEntity(new top.wcpe.mc.mpmt.kernel.ref.EntityRef(UUID.randomUUID()),
                     () -> executed.add("entity"));
             port.runForLocation(new WorldRef("minecraft:overworld"), 1, 2, () -> executed.add("location"));
             port.runGlobal(() -> executed.add("global"));
@@ -92,7 +92,7 @@ class ForgeSchedulerPortLifecycleTest {
 
         assertThrows(IllegalStateException.class, () -> port.runGlobal(() -> { }));
         assertThrows(IllegalStateException.class, () -> port.runForEntity(
-                new top.wcpe.mc.mpmt.core.domain.ref.EntityRef(UUID.randomUUID()), () -> { }));
+                new top.wcpe.mc.mpmt.kernel.ref.EntityRef(UUID.randomUUID()), () -> { }));
         assertThrows(IllegalStateException.class, () -> port.runForLocation(
                 new WorldRef("minecraft:overworld"), 0, 0, () -> { }));
         assertThrows(IllegalStateException.class, () -> port.runAsync(() -> { }));

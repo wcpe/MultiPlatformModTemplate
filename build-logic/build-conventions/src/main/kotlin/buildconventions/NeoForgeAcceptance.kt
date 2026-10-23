@@ -62,8 +62,12 @@ internal fun registerNeoForgeAcceptanceSourceSets(project: Project) {
         val acceptanceTest = sourceSets.create(NEOFORGE_ACCEPTANCE_TEST_SOURCE_SET)
         acceptanceTest.compileClasspath += acceptance.output + main.output
         acceptanceTest.runtimeClasspath += acceptanceTest.output + acceptanceTest.compileClasspath
-        configurations.getByName(acceptanceTest.implementationConfigurationName)
-            .extendsFrom(configurations.getByName("testImplementation"))
+        // 契约测试要直接构造验收源集里用到的域内组件（如 PlatformCapabilityExample），
+        // 故除 testImplementation 外还须继承验收源集的实现依赖——域模块登记在那里。
+        configurations.getByName(acceptanceTest.implementationConfigurationName).apply {
+            extendsFrom(configurations.getByName("testImplementation"))
+            extendsFrom(configurations.getByName(acceptance.implementationConfigurationName))
+        }
         configurations.getByName(acceptanceTest.runtimeOnlyConfigurationName)
             .extendsFrom(configurations.getByName("testRuntimeOnly"))
     }

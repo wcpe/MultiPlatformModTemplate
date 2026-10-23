@@ -52,12 +52,27 @@ public final class ForgeAcceptanceClientCompanion {
 
     private static final AtomicBoolean CONNECT_ATTEMPTED = new AtomicBoolean(false);
 
-    private static Connection connection;
-    private static RunStepPacket active;
-    private static int ticksInStep;
+    /** 当前连接；登录事件线程写入、tick 线程读取、登出线程置空，故需 volatile。 */
+    private static volatile Connection connection;
+    /**
+     * 当前正在执行的验收步骤。
+     *
+     * <p>线程归属：主要由客户端 tick 线程读写；{@link #clear()}（登出事件线程）也会置空。
+     * 故声明为 {@code volatile}，保证登出后 tick 线程能立刻观察到 {@code null}、不再继续跑旧步骤。
+     */
+    private static volatile RunStepPacket active;
+
+    /** 当前步骤已等待的 tick 数；仅 tick 线程读写，登出时经 {@link #clear()} 归零。 */
+    private static volatile int ticksInStep;
+
     private static int ticksSinceMenu;
-    private static boolean clientReadySent;
-    private static boolean pingSent;
+
+    /** 客户端就绪包是否已发送成功；跨 tick 线程与登出线程访问。 */
+    private static volatile boolean clientReadySent;
+
+    /** ping 是否已发出；跨 tick 线程与登出线程访问。 */
+    private static volatile boolean pingSent;
+
     private static volatile boolean pongReceived;
 
     private ForgeAcceptanceClientCompanion() {

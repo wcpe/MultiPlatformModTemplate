@@ -109,7 +109,7 @@ internal fun registerNeoForgePackagingVerification(project: Project) {
             must(plainArchive != product.file, "普通 jar 与最终产品 jar 输出路径冲突")
             must(!shadowPreservesTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
             must(shadowReproducibleOrder, "最终产品未启用可复现文件顺序")
-            mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "核心类未 shade 进 mod jar")
+            mustContain(product, "top/wcpe/mc/mpmt/kernel/Mpmt.class", "核心类未 shade 进 mod jar")
             mustContain(
                 product,
                 "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class",

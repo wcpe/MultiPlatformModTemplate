@@ -8,8 +8,8 @@ import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import top.wcpe.mc.mpmt.core.domain.port.PlayerPort;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.port.PlayerPort;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
 
 /** NeoForge 玩家查询端口：把服务端在线玩家转换为平台无关引用。 */
 public final class NeoForgePlayerPort implements PlayerPort {

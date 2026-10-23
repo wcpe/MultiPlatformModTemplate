@@ -28,6 +28,7 @@ internal fun registerForgeDevModOutputs(project: Project, lane: ForgeLaneExtensi
             group = "build"
             description = "将产品共享 JAR 嵌入 main classes，供 dev SecureJar 发现 @Mod 与依赖类"
             dependsOn(project.tasks.named("classes"), project.tasks.named("processResources"))
+            dependsOn(project.configurations.named(FORGE_PRODUCT_BUNDLE))
             from(
                 project.provider {
                     project.configurations.getByName(FORGE_PRODUCT_BUNDLE).map { project.zipTree(it) }
@@ -43,6 +44,7 @@ internal fun registerForgeDevModOutputs(project: Project, lane: ForgeLaneExtensi
             group = "build"
             description = "将验收共享 JAR 嵌入 acceptance classes，供 dev SecureJar 加载验收伴侣"
             dependsOn(project.tasks.named("acceptanceClasses"), project.tasks.named("processAcceptanceResources"))
+            dependsOn(project.configurations.named(FORGE_ACCEPTANCE_BUNDLE))
             from(
                 project.provider {
                     project.configurations.getByName(FORGE_ACCEPTANCE_BUNDLE).map { project.zipTree(it) }

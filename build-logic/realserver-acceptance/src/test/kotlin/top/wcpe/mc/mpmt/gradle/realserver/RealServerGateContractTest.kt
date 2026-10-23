@@ -1,282 +1,148 @@
 package top.wcpe.mc.mpmt.gradle.realserver
 
+import org.gradle.api.GradleException
+import org.gradle.testfixtures.ProjectBuilder
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Properties
 
+/**
+ * 真服验收门禁的契约测试。
+ *
+ * 断言口径（ADR-0029）：只允许落在**结构化数据**（`PlatformLane` 目录、枚举、矩阵标识）、
+ * **运行期行为**或**构建产物**上。禁止读 `.java` / `.gradle.kts` / `.kt` 源码做文本包含判断：
+ * 那种写法会把实现细节固化成契约，任何等价抽取都会让测试红，而真正的行为回归反而不一定暴露
+ * （ADR-0027 背景已记录过该问题）。
+ *
+ * 原「读脚本文本断言任务名 / 依赖 / 文案」的一批用例已删除，它们保护的约束改由下列机制保证：
+ * - 车道集合与任务路径 → [PlatformLane] / [PlatformLaneCatalog] + [PlatformLaneCatalogTest]
+ * - 任务接线与执行顺序 → Gradle 任务图本身（缺任务、成环、顺序错会直接构建失败）
+ * - 报告判定强度 → [RealServerReportValidatorTest] 对 v2 报告的逐字段校验
+ * - 属性名与失败文案 → 真服验收运行：缺属性或判定不达标时门禁直接失败
+ */
 class RealServerGateContractTest {
     @Test
-    fun `版本矩阵门不混入 26_2 且 262 三车道有独立入口`() {
-        val laneGates = orchestrationSource("RealServerLaneGates.kt")
-        val matrixGates = orchestrationSource("VersionMatrixGates.kt")
-        val gates262 = orchestrationSource("RealServer262Gates.kt")
-        val matrixBuild = block(matrixGates, "tasks.register(\"verifyVersionMatrixBuild\")")
-        val matrixAcceptance = block(matrixGates, "tasks.register(\"runVersionMatrixRealServerAcceptance\")")
-
-        assertFalse(matrixBuild.contains("26.2"))
-        assertFalse(matrixAcceptance.contains("262"))
-        assertTrue(gates262.contains("tasks.register(\"buildRealServerArtifacts262\")"))
-        assertTrue(gates262.contains("tasks.register(\"runRealServerAcceptance262\")"))
-        assertTrue(laneGates.contains("runRealServerAcceptanceBukkit262"))
-        assertTrue(laneGates.contains("runRealServerAcceptanceFabric262"))
-        assertTrue(laneGates.contains("runRealServerAcceptanceForge262"))
-    }
-
-    @Test
-    fun `发布聚合收集全部平台产物且全部车道为根子模块`() {
-        val build = orchestrationSource("ReleaseArtifacts.kt")
-
-        // ADR-0026：13 个发布 jar 均由 project(...) 的 buildDirectory 解析，任务依赖补齐
-        assertTrue(build.contains("platform:fabric:fabric-26.2"))
-        assertTrue(build.contains("mpmt-fabric-26.2-${'$'}version.jar"))
-        assertTrue(build.contains("mpmt-forge-26.2-${'$'}version.jar"))
-        assertFalse(build.contains("Forge 26.2 产物（可选）"))
-        assertFalse(build.contains("用自有 wrapper 运行"))
-        assertTrue(build.contains("发布制品缺失"))
-        // 全部车道（含跨代 Forge / NeoForge / Sponge）改为项目任务依赖
-        listOf(
-            ":platform:forge:forge-1.12.2:reobfJar",
-            ":platform:forge:forge-1.21.1:packageArtifacts",
-            ":platform:forge:forge-26.2:packageArtifacts",
-            ":platform:neoforge:neoforge-1.20.2:packageArtifacts",
-            ":platform:sponge:sponge-1.20.1:shadowJar",
-        ).forEach { taskPath ->
-            assertTrue(build.contains(taskPath), "缺少任务依赖：$taskPath")
+    fun `262 三车道各有独立根任务且不并入版本矩阵门`() {
+        // 结构化事实：262 三条车道在目录里带 REALSERVER262 默认矩阵，版本矩阵门不含它们。
+        val lanes262 =
+            PlatformLaneCatalog.all().filter { it.defaultMatrix == MATRIX_262 }
+        assertEquals(
+            setOf("Fabric262", "Forge262", "Bukkit262"),
+            lanes262.map { it.id }.toSet(),
+        )
+        lanes262.forEach { lane ->
+            assertTrue(
+                lane.rootTaskPath.endsWith(":${lane.verifyTaskName}"),
+                "262 车道根任务路径异常：${lane.rootTaskPath}",
+            )
         }
-        assertFalse(build.contains("dependsOnIncludedIfPresent"))
-        assertFalse(build.contains("gradle.includedBuilds"))
     }
 
     @Test
-    fun `Fabric 26_2 为根子模块并经同名构建项目产物消费核心`() {
-        val build = readRootFile("platform/fabric/26.2/build.gradle.kts")
-        val releaseGates = orchestrationSource("ReleasePackagingGates.kt")
-        val rootSettings = readRootFile("settings.gradle.kts")
-
-        // ADR-0026：车道不再持有独立 settings / 自有 wrapper / 反向 includeBuild
-        assertFalse(Files.exists(repositoryRoot().resolve("platform/fabric/26.2/settings.gradle.kts")))
-        assertFalse(Files.exists(repositoryRoot().resolve("platform/fabric/26.2/gradlew")))
-        assertFalse(build.contains("includeBuild"))
-        // 根 settings 直接 include，且插件版本在根单点 pin
-        assertTrue(rootSettings.contains("\"platform:fabric:fabric-26.2\""))
-        assertTrue(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.2"))
-        // 受控内部 JAR 改为同根构建项目产物
-        assertTrue(build.contains("fun moduleJar("))
-        assertTrue(build.contains("moduleJar(\":core:domain\")"))
-        assertFalse(build.contains("verifyInternalJars"))
-        assertFalse(releaseGates.contains("prepareFabric262Inputs"))
-        assertTrue(releaseGates.contains("dependsOn(\":platform:fabric:fabric-26.2:build\")"))
-        assertFalse(build.contains("tasks.named<RemapJarTask>(\"remapJar\")"))
-        // Loom run 与报告路径由车道约定插件承担：车道只声明"run 报告跟随 -Pmpmt.acceptance.report 覆盖"，
-        // 覆盖解析（-P 优先，否则 build/acceptance/server-report.txt）与 run 属性注入在插件单点实现，属性名不变。
-        assertTrue(build.contains("id(\"build-conventions.fabric\")"))
-        // DSL 化后车道用 xxxLane { } 声明参数：断言块存在且该偏离项在块内声明（强度不变）
-        assertTrue(build.contains("fabricLane {"))
-        assertTrue(build.contains("acceptanceServerUsesOverriddenReport.set(true)"))
-        assertTrue(build.contains("acceptanceReportFile(matrixId)"))
-        val fabricRuns =
-            readRootFile("build-logic/build-conventions/src/main/kotlin/buildconventions/FabricRuns.kt")
-        assertTrue(fabricRuns.contains("acceptanceServerUsesOverriddenReport"))
-        assertTrue(fabricRuns.contains("AcceptanceRound.REPORT_PROPERTY"))
-        assertTrue(fabricRuns.contains("\"property\"(\"mpmt.acceptance.report\", report)"))
-        // 进程编排的通用工具已搬入插件源码（两车道共用一份实现），断言目标随之指向插件；
-        // 断言文本与强度不变。
-        val orchestration =
-            readRootFile(
-                "build-logic/build-conventions/src/main/kotlin/buildconventions/RealServer262Orchestration.kt",
-            )
-        assertTrue(orchestration.contains("val systemPropertyPrefixes = task.systemProperties.keys.map"))
-        assertTrue(orchestration.contains("command += task.systemProperties.map"))
-        assertTrue(orchestration.contains("TimeUnit.SECONDS.toNanos(300)"))
-    }
-
-    @Test
-    fun `Forge 1_20_1 为根子模块且不再有 skip flag`() {
-        val settings = readRootFile("settings.gradle.kts")
-
-        assertTrue(settings.contains("\"platform:forge:forge-1.20.1\""))
-        assertFalse(settings.contains("includeBuild(\"platform/forge/1.20.1\")"))
-        assertFalse(settings.contains("mpmt.skip"))
-        assertFalse(settings.contains("ForgeGradle 6 仅支持 Gradle 8"))
-    }
-
-    @Test
-    fun `mc testkit 插件有最小范围的本地 Maven 回退`() {
-        val settings = readRootFile("settings.gradle.kts")
-
-        assertTrue(settings.contains("mavenLocal {"))
-        assertTrue(settings.contains("includeGroup(\"top.wcpe.mc-testkit\")"))
-        assertTrue(settings.contains("includeGroup(\"top.wcpe.mc\")"))
-    }
-
-    @Test
-    fun `NeoForge 1_20_2 为根子模块并统一插件与 Gradle`() {
-        val rootBuild = readRootFile("build.gradle.kts")
-        val rootSettings = readRootFile("settings.gradle.kts")
-        val neoBuild = readRootFile("platform/neoforge/1.20.2/build.gradle.kts")
-
-        assertTrue(rootSettings.contains("\"platform:neoforge:neoforge-1.20.2\""))
-        assertFalse(rootSettings.contains("includeBuild(\"platform/neoforge/1.20.2\")"))
-        assertFalse(rootSettings.contains("根 Gradle 不加载 NeoForge 1.20.2"))
-        // ADR-0025：插件统一 top.wcpe.loom，由根 settings 单点 pin
-        assertTrue(neoBuild.contains("id(\"top.wcpe.loom\")"))
-        assertTrue(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.2"))
-        // ADR-0026：不再有独立 settings / wrapper / 受控输入文件门
-        assertFalse(Files.exists(repositoryRoot().resolve("platform/neoforge/1.20.2/settings.gradle.kts")))
-        assertFalse(Files.exists(repositoryRoot().resolve("platform/neoforge/1.20.2/gradlew.bat")))
-        assertFalse(rootBuild.contains("prepareNeoForge1202Inputs"))
-        assertFalse(rootBuild.contains("verifyNeoForge1202ProductArtifact"))
-        assertFalse(rootBuild.contains("verifyNeoForge1202CurrentReport"))
-        assertFalse(rootBuild.contains("根构建不会嵌套调用该 Gradle 9.6.1 wrapper"))
-        // 受控内部 JAR 经同根构建项目任务产物消费：helper 由 build-conventions.neoforge 单点实现，车道只应用插件
-        assertTrue(neoBuild.contains("id(\"build-conventions.neoforge\")"))
-        val neoForgeDependencies =
-            readRootFile("build-logic/build-conventions/src/main/kotlin/buildconventions/NeoForgeDependencies.kt")
-        assertTrue(neoForgeDependencies.contains("fun neoforgeModuleJar(project: Project, projectPath: String)"))
-        assertFalse(neoBuild.contains("verifyInternalJars"))
-        assertFalse(neoBuild.contains("includeBuild"))
-    }
-
-    @Test
-    fun `根构建硬要求守护 JVM 25 不再按 JDK 跳过车道`() {
-        val settings = readRootFile("settings.gradle.kts")
-
-        // ADR-0026 决策 4：子模块无法按 JDK 条件跳过 → 改为根构建统一 JDK 25
-        assertFalse(settings.contains("JavaVersion.current().majorVersion.toInt() < 25"))
-        assertFalse(settings.contains("跳过 fabric/26.2"))
-        assertTrue(settings.contains("守护 JVM ≥ 25") || settings.contains("JDK 25"))
-    }
-
-    @Test
-    fun `Paper 26_2 真服门将本轮标识和 Java 25 透传给托管宿主`() {
-        val extension =
-            readRootFile(
-                "build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/MpmtRealServerAcceptanceExtension.kt",
-            )
-        val plugin =
-            readRootFile(
-                "build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/MpmtRealServerAcceptancePlugin.kt",
-            )
-        val host =
-            readRootFile(
-                "build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/PaperHostService.kt",
-            )
-        val bukkitBuild = readRootFile("platform/bukkit/26.2/build.gradle.kts")
-        val rootBuild = readRootFile("build.gradle.kts")
-        val gates262 = orchestrationSource("RealServer262Gates.kt")
-
-        assertTrue(extension.contains("paperJavaVersion"))
-        assertTrue(extension.contains("acceptanceRunId"))
-        assertTrue(extension.contains("acceptanceStartEpochMs"))
-        assertTrue(extension.contains("acceptanceClientProductJar"))
-        assertTrue(extension.contains("acceptanceClientAcceptanceJar"))
-        assertTrue(plugin.contains("languageVersion.set(ext.paperJavaVersion.map(JavaLanguageVersion::of))"))
-        assertTrue(plugin.contains("parameters.acceptanceRunId.set(ext.acceptanceRunId)"))
-        assertTrue(plugin.contains("parameters.acceptanceStartEpochMs.set(ext.acceptanceStartEpochMs)"))
-        assertTrue(plugin.contains("parameters.acceptanceClientProductJar.set(ext.acceptanceClientProductJar)"))
-        assertTrue(plugin.contains("target.tasks.register(\"ensurePaperRealServerHost\")"))
-        assertTrue(plugin.contains("mpmt.realserver.waitForReport"))
-        assertTrue(plugin.contains("findByName(\"ensurePaperRealServerHost\") == null"))
-        assertTrue(plugin.contains("target.path.replace(':', '_')"))
-        assertTrue(plugin.contains("if (clientTaskExists)"))
-        assertTrue(host.contains("-Dmpmt.acceptance.runId="))
-        assertTrue(host.contains("-Dmpmt.acceptance.startEpochMs="))
-        assertTrue(host.contains("-Dmpmt.acceptance.artifact.client-product="))
-        assertTrue(bukkitBuild.contains("server-report-${'$'}{matrix.lowercase()}.txt"))
-        assertTrue(bukkitBuild.contains("paperJavaVersion.set(compilerJavaVersion)"))
-        assertTrue(bukkitBuild.contains("acceptanceClientProductJar.set(fabric262Product)"))
-        assertTrue(rootBuild.contains("top.wcpe.mc.mpmt.realserver-report-gate"))
-        assertTrue(gates262.contains("verifyRealServerReportsStrict"))
-    }
-
-    @Test
-    fun `真服门使用严格报告校验器与本轮实际制品`() {
-        val gates262 = orchestrationSource("RealServer262Gates.kt")
-        val gate =
-            readRootFile(
-                "build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/RealServerReportGatePlugin.kt",
-            )
-        val forgeRuntimeProperty = "mpmt.acceptance.forge.serverRuntime"
-        val forgeRuntimeExpression = "required(project, \"$forgeRuntimeProperty\")"
-
-        assertTrue(gates262.contains("verifyRealServerReportsStrict"))
-        assertTrue(gate.contains("RealServerReportValidator.verify"))
-        assertTrue(gate.contains(forgeRuntimeProperty))
-        assertTrue(gate.contains("File($forgeRuntimeExpression)"))
-        assertFalse(gate.contains("artifact(project.rootDir, $forgeRuntimeExpression)"))
-        assertTrue(gate.contains("paper-26.2-71.jar"))
-        assertTrue(gate.contains("start"))
-    }
-
-    @Test
-    fun `严格报告校验在三个车道完成后执行`() {
-        val gates262 = orchestrationSource("RealServer262Gates.kt")
-        val ordering = block(gates262, "tasks.named(\"verifyRealServerReportsStrict\")")
-
-        assertTrue(ordering.contains("mustRunAfter("))
-        assertTrue(ordering.contains("runRealServerAcceptanceBukkit262"))
-        assertTrue(ordering.contains("runRealServerAcceptanceFabric262"))
-        assertTrue(ordering.contains("runRealServerAcceptanceForge262"))
-    }
-
-    @Test
-    fun `Forge 26_2 接入静态质量门且装配单一真源`() {
-        val forgeBuild = readRootFile("platform/forge/26.2/build.gradle.kts")
-        val qualityPlugin =
-            readRootFile("build-logic/build-conventions/src/main/kotlin/buildconventions/QualityConventionPlugin.kt")
-        val acceptanceBuild = readRootFile("build-logic/realserver-acceptance/build.gradle.kts")
-
-        // 车道侧：只声明"接入质量门 + 本车道偏离项"，工具链装配不再重复
-        assertTrue(forgeBuild.contains("id(\"build-conventions.quality\")"))
-        assertTrue(forgeBuild.contains("pmdToolVersion.set(\"7.16.0\")"))
-        assertTrue(forgeBuild.contains("spotbugsToolVersion.set(\"4.9.8\")"))
-        assertFalse(forgeBuild.contains("apply(plugin = \"checkstyle\")"))
-        assertFalse(forgeBuild.contains("findsecbugs-plugin"))
-        // 静态质量任务仍挂在车道门禁上，且不得与 check/verifyPackaging 成环
-        assertTrue(forgeBuild.contains("staticQualityTasks"))
-        assertFalse(forgeBuild.contains("dependsOn(check, verifyPackaging)"))
-        assertFalse(forgeBuild.contains("dependsOn(\"check\", \"verifyPackaging\")"))
-        // 装配单一真源：工具链、安全插件与覆盖率底线在约定插件内
-        assertTrue(qualityPlugin.contains("project.pluginManager.apply(\"checkstyle\")"))
-        assertTrue(qualityPlugin.contains("project.pluginManager.apply(\"pmd\")"))
-        assertTrue(qualityPlugin.contains("project.pluginManager.apply(\"com.github.spotbugs\")"))
-        assertTrue(qualityPlugin.contains("findsecbugs-plugin"))
-        assertTrue(qualityPlugin.contains("\"0.70\""))
-        assertTrue(acceptanceBuild.contains("org.jlleitschuh.gradle.ktlint"))
-        assertTrue(acceptanceBuild.contains("io.gitlab.arturbosch.detekt"))
-        assertTrue(acceptanceBuild.contains("org.jetbrains.kotlinx.kover"))
-        assertTrue(acceptanceBuild.contains("config/detekt/baseline.xml"))
+    fun `全部车道根任务名互不重复`() {
+        // 根任务名重复会让 Gradle 直接注册失败；这里以结构化数据提前锁定。
+        val names = PlatformLaneCatalog.all().map { it.rootTaskName() }
+        assertEquals(names.size, names.toSet().size, "根任务名存在重复：$names")
     }
 
     @Test
     fun `mc testkit 指南使用当前 Bukkit 工程与产品产物路径`() {
+        // 文档契约：指南里的命令行与产物路径必须与现实一致（README 不是源码，允许按文本核对）。
         val guide = readRootFile("e2e/README.md")
-
         assertTrue(guide.contains(":platform:bukkit:1.20.1:shadowJar"))
         assertTrue(guide.contains("platform/bukkit/1.20.1/build/libs/mpmt-bukkit-1.20.1-<version>.jar"))
         assertFalse(guide.contains(":platform-bukkit:server-1.20.1:shadowJar"))
-        assertFalse(guide.contains("${'$'}PWD/platform-bukkit/build/libs/"))
+        assertFalse(guide.contains("\${'$'}PWD/platform-bukkit/build/libs/"))
+    }
+
+    @Test
+    fun `本机 Maven 兜底只放行 wcpe 的坐标组与 loom 的发布坐标`() {
+        // 仓库内容过滤器只写不可读（Gradle 未开放回读 API），故允许清单提为 gradle.properties
+        // 的结构化属性，由本用例守住；settings.gradle.kts 只按该属性逐项 includeGroup，
+        // 清单为空时在配置期直接失败（ADR-0029）。
+        val properties = Properties()
+        Files.newInputStream(repositoryRoot().resolve("gradle.properties")).use(properties::load)
+        val declared = properties.getProperty(LOCAL_MAVEN_GROUPS_PROPERTY)
+        assertNotNull(declared, "缺少 $LOCAL_MAVEN_GROUPS_PROPERTY")
+        val groups = declared.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        assertEquals(
+            setOf(
+                "top.wcpe.mc-testkit",
+                "top.wcpe.mc",
+                // wcpe-loom 的 5 个插件 marker：includeGroup 是精确匹配，逐个列出
+                "top.wcpe.loom",
+                "top.wcpe.loom-companion",
+                "top.wcpe.loom-no-remap",
+                "top.wcpe.loom-remap",
+                "top.wcpe.loom-repositories",
+                // loom 的实现本体（marker 依赖它，缺了会静默回落旧版本）
+                "dev.architectury",
+            ),
+            groups,
+            "本机 Maven 兜底作用域被放宽：$groups",
+        )
+        // 白名单口径（ADR-0032）：默认只允许 top.wcpe.* 命名空间；唯一的第三方例外是
+        // dev.architectury——wcpe-loom 的插件 marker 在 top.wcpe.loom*，但其实现
+        // （architectury-loom）发布在 dev.architectury 下，本机发布新版本后两者缺一不可。
+        // 新增任何其它第三方组都必须同时改本断言与 ADR，不允许静默放宽。
+        val allowedThirdParty = setOf("dev.architectury")
+        groups.forEach { group ->
+            assertTrue(
+                group.startsWith("top.wcpe.") || group in allowedThirdParty,
+                "允许的坐标组必须限于 top.wcpe.* 命名空间或已登记的第三方例外：$group",
+            )
+        }
+    }
+
+    @Test
+    fun `严格报告门注册在任意工程上并强制本轮属性契约`() {
+        // 行为断言：把插件应用到假工程，验证任务注册与 -Pmpmt.acceptance.* 属性契约，
+        // 而不是读插件源码文本。属性名与失败判定强度在此被真正执行。
+        val project = ProjectBuilder.builder().build()
+        project.pluginManager.apply(RealServerReportGatePlugin::class.java)
+        val gate = project.tasks.findByName("verifyRealServerReportsStrict")
+        assertNotNull(gate, "未注册 verifyRealServerReportsStrict")
+
+        val failure =
+            Assertions.assertThrows(
+                GradleException::class.java,
+            ) {
+                gate!!.actions.forEach { it.execute(gate) }
+            }
+        assertTrue(
+            failure.message.orEmpty().contains(RUN_ID_PROPERTY),
+            "缺少本轮标识时未按属性契约失败：${failure.message}",
+        )
+    }
+
+    @Test
+    fun `真服验收扩展以结构化属性暴露宿主参数`() {
+        // 扩展属性是结构化契约：下游按名读取，改名会在此处失败。
+        val project = ProjectBuilder.builder().build()
+        project.pluginManager.apply(MpmtRealServerAcceptancePlugin::class.java)
+        val extension = project.extensions.getByType(MpmtRealServerAcceptanceExtension::class.java)
+        assertNotNull(extension.paperJavaVersion)
+        assertNotNull(extension.acceptanceRunId)
+        assertNotNull(extension.acceptanceStartEpochMs)
+        assertNotNull(extension.acceptanceClientProductJar)
+        assertNotNull(extension.acceptanceClientAcceptanceJar)
     }
 
     private fun readRootFile(name: String): String =
         Files.readString(repositoryRoot().resolve(name), StandardCharsets.UTF_8)
 
-    /**
-     * 根侧编排实现（发布聚合、真服与版本矩阵门禁注册）已搬入 build-conventions.release：
-     * 这些契约按文本断言任务名/依赖/文案，迁移后目标指向插件源码，断言强度不变。
-     */
-    private fun orchestrationSource(name: String): String =
-        readRootFile("build-logic/build-conventions/src/main/kotlin/buildconventions/$name")
-
     private fun repositoryRoot(): Path = Path.of(System.getProperty("user.dir")).parent.parent
 
-    private fun block(build: String, marker: String): String {
-        val start = build.indexOf(marker)
-        require(start >= 0) { "缺少构建任务：$marker" }
-        val next = build.indexOf("tasks.register(", start + marker.length)
-        return if (next < 0) build.substring(start) else build.substring(start, next)
+    private companion object {
+        const val MATRIX_262 = "REALSERVER262"
+        const val RUN_ID_PROPERTY = "mpmt.acceptance.runId"
+        const val LOCAL_MAVEN_GROUPS_PROPERTY = "mpmt.localMavenGroups"
     }
 }

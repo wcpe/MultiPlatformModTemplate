@@ -15,9 +15,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.ban.BanEntry;
-import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
-import top.wcpe.mc.mpmt.core.domain.ban.MachineCode;
+import top.wcpe.mc.mpmt.kernel.ban.BanEntry;
+import top.wcpe.mc.mpmt.kernel.ban.BanRegistry;
+import top.wcpe.mc.mpmt.kernel.ban.MachineCode;
 import top.wcpe.mc.mpmt.core.server.BanService;
 import top.wcpe.mc.mpmt.core.server.SessionRegistry;
 import top.wcpe.mc.mpmt.platform.forge.ForgeMinecraftTestSupport;
@@ -105,14 +105,14 @@ class ForgeMachineCodeCommandsTest {
                 ForgePortFixtures.emptyPersistence(),
                 ForgePortFixtures.immediateScheduler(),
                 ForgePortFixtures.noopConnections(
-                        new top.wcpe.mc.mpmt.core.domain.ref.EntityRef(UUID.randomUUID())));
+                        new top.wcpe.mc.mpmt.kernel.ref.EntityRef(UUID.randomUUID())));
         failing.initialize().join();
 
         // 服务已就绪但持久化不可用：写入失败经 complete 回执到命令源
         BanService broken = new BanService(
                 new BanRegistry(),
                 new SessionRegistry(),
-                new top.wcpe.mc.mpmt.core.domain.port.PersistencePort() {
+                new top.wcpe.mc.mpmt.kernel.port.PersistencePort() {
                     @Override
                     public java.util.Optional<String> read(String namespace, String key) {
                         return java.util.Optional.empty();
@@ -125,7 +125,7 @@ class ForgeMachineCodeCommandsTest {
                 },
                 ForgePortFixtures.immediateScheduler(),
                 ForgePortFixtures.noopConnections(
-                        new top.wcpe.mc.mpmt.core.domain.ref.EntityRef(UUID.randomUUID())));
+                        new top.wcpe.mc.mpmt.kernel.ref.EntityRef(UUID.randomUUID())));
         broken.initialize().join();
         CommandDispatcher<CommandSourceStack> brokenDispatcher = registered(recorder, broken);
 
@@ -141,7 +141,7 @@ class ForgeMachineCodeCommandsTest {
                 ForgePortFixtures.emptyPersistence(),
                 ForgePortFixtures.immediateScheduler(),
                 ForgePortFixtures.noopConnections(
-                        new top.wcpe.mc.mpmt.core.domain.ref.EntityRef(UUID.randomUUID())));
+                        new top.wcpe.mc.mpmt.kernel.ref.EntityRef(UUID.randomUUID())));
         service.initialize().join();
         return service;
     }

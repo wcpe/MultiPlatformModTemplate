@@ -1,7 +1,7 @@
 package top.wcpe.mc.mpmt.platform.forge;
 
 import net.minecraft.server.MinecraftServer;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.platform.forge.capability.ForgeCapabilityBootstrap;
 import top.wcpe.mc.mpmt.platform.forge.net.ForgeServerTransport;

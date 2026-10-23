@@ -91,6 +91,15 @@ class QualityConventionPlugin : Plugin<Project> {
             // 必须在 afterEvaluate 应用：java 插件在 afterEvaluate 才填充 classDirectories，
             // 若在 configureEach 里 setFrom，会被随后的默认值覆盖掉。
             project.afterEvaluate {
+                // classDirectories 被重建成 fileTree 后，Gradle 不再知道这些目录由哪个任务产出，
+                // 任务的直接依赖会变成空集——正常路径靠 test 的传递依赖兜住，一旦 `-x test`
+                // 就暴露为 "uses this output ... without declaring a dependency"。故显式声明
+                // 产物生产者：classes / processResources，以及车道往 build/resources/main 嵌入
+                // 内容的自定义拷贝任务（如 forge 26.2 的 embedProductSharedIntoMain）。
+                val classDirProducers =
+                    tasks.matching {
+                        it.name == "classes" || it.name == "processResources" || it.name.endsWith("IntoMain")
+                    }
                 tasks.withType(JacocoReport::class.java).configureEach {
                     classDirectories.setFrom(
                         files(
@@ -99,6 +108,7 @@ class QualityConventionPlugin : Plugin<Project> {
                             },
                         ),
                     )
+                    dependsOn(classDirProducers)
                 }
                 tasks.withType(JacocoCoverageVerification::class.java).configureEach {
                     classDirectories.setFrom(
@@ -108,6 +118,7 @@ class QualityConventionPlugin : Plugin<Project> {
                             },
                         ),
                     )
+                    dependsOn(classDirProducers)
                 }
             }
         }
@@ -182,6 +193,18 @@ class QualityConventionPlugin : Plugin<Project> {
                 if (name != "spotbugsMain") {
                     ignoreFailures = true
                 }
+                // 报告必须落盘：非门禁源集（test / acceptance / gametest）不因检出而失败，
+                // 若不产出报告，检出结果在任何地方都不可见，既无法复核也无法据此判断该不该抑制。
+                // 插件 6.x 的 reports 容器默认为空，须显式创建（默认不建任何报告）。
+                reports.create("html").required.set(true)
+                // Lombok 在各模块是 compileOnly，不随编译类路径传递；但被分析类的字节码带有
+                // @lombok.Generated / @lombok.NonNull。缺这两个类会让 SpotBugs 分析不完整并
+                // 以退出码 3 结束（harness 全绿也掩盖不了"其实没分析干净"）。补进辅助类路径。
+                auxClassPaths.from(
+                    project.configurations.detachedConfiguration(
+                        project.dependencies.create("org.projectlombok:lombok:${LOMBOK_AUX_VERSION}"),
+                    ),
+                )
             }
         }
     }
@@ -189,6 +212,9 @@ class QualityConventionPlugin : Plugin<Project> {
     private companion object {
         /** 分析任务启动 JDK：Checkstyle 10.x 需 JDK 11+，独立于被测模块的编译工具链（可能是 JDK 8）。 */
         const val DEFAULT_ANALYSIS_JAVA_VERSION: Int = 17
+
+        /** SpotBugs 辅助类路径补齐用的 Lombok 版本，与各模块 compileOnly 声明保持一致。 */
+        const val LOMBOK_AUX_VERSION: String = "1.18.48"
 
         /** 平台车道嵌入的共享模块包：计入车道覆盖率会稀释口径（由各模块自身测试覆盖）。 */
         val SHARED_PACKAGES_EXCLUDED_FROM_PLATFORM_LANES =

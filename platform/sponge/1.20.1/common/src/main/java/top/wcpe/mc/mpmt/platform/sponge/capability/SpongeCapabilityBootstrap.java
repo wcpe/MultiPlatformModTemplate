@@ -7,17 +7,16 @@ import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.network.ServerSideConnectionEvent;
 import org.spongepowered.plugin.PluginContainer;
-import top.wcpe.mc.mpmt.core.domain.event.EventBusPort;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.DataDirectoryPort;
-import top.wcpe.mc.mpmt.core.domain.port.MessagePort;
-import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
-import top.wcpe.mc.mpmt.core.domain.port.PlayerPort;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.port.WorldPort;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.event.EventBusPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
+import top.wcpe.mc.mpmt.kernel.port.MessagePort;
+import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
+import top.wcpe.mc.mpmt.kernel.port.PlayerPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.WorldPort;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
-import top.wcpe.mc.mpmt.domain.capability.PlatformCapabilityExample;
 import top.wcpe.mc.mpmt.domain.capability.PlayerJoinedEvent;
 import top.wcpe.mc.mpmt.domain.capability.PlayerLeftEvent;
 import top.wcpe.mc.mpmt.platform.sponge.net.SpongeConnectionRegistry;
@@ -63,9 +62,10 @@ public final class SpongeCapabilityBootstrap {
         runtime.ports().register(SpongeConnectionRegistry.class, connectionRegistry);
 
         EventBusPort eventBus = runtime.eventBus();
-        PlatformCapabilityExample example =
-                new PlatformCapabilityExample(persistence, message, scheduler, System::currentTimeMillis);
-        example.register(eventBus);
+        // 功能域经 META-INF/services 自动发现装配（ADR-0028）：车道不认识任何具体域，
+        // 新增域不需要改这里。discover 只是登记，真正的 onEnable（取端口、订阅）发生在
+        // runtime.enable()，故此刻端口已全部注册完毕。
+        runtime.features().discover(SpongeCapabilityBootstrap.class.getClassLoader());
         Sponge.eventManager().registerListeners(plugin, new PlayerConnectionBridge(eventBus));
     }
 

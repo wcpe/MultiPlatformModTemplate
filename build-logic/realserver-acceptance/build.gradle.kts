@@ -39,6 +39,9 @@ gradlePlugin {
 
 dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    // ProjectBuilder 行为断言：把插件应用到假工程上检查任务注册与属性契约，
+    // 取代原先「读插件源码做文本包含判断」的写法（ADR-0029）。仅从本地 Gradle 分发解析，无需联网。
+    testImplementation(gradleTestKit())
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

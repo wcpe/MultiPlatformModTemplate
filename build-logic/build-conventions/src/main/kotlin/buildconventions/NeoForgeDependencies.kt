@@ -1,14 +1,13 @@
 package buildconventions
 
 import org.gradle.api.Project
-import org.gradle.api.file.FileCollection
+import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.tasks.SourceSet
-import org.gradle.jvm.tasks.Jar
 
 /** 产品 jar 需 shade 的内部产物：顺序决定 shadowBundle 的条目顺序，与原车道声明一致。 */
 private val NEOFORGE_PRODUCT_INTERNAL_PROJECTS =
     listOf(
-        ":core:domain",
+        ":core:kernel",
         ":core:runtime",
         ":core:protocol",
         ":core:spi",
@@ -32,14 +31,15 @@ private const val NEOFORGE_JUNIT_LAUNCHER: String = "org.junit.platform:junit-pl
 private const val NEOFORGE_SNAKEYAML_MODULE: String = "org.yaml:snakeyaml"
 
 /**
- * 共享模块按工程路径取 jar 任务产物（FileCollection，自带任务依赖；文件输入、不引入传递依赖）。
+ * 共享模块按工程路径取该模块产物（非传递项目依赖）。
  *
- * 用 `withType<Jar>().matching` 惰性取任务：`named("jar")` 会在本项目先于生产者配置时立即抛
- * UnknownTaskException（子模块按路径序配置，`:platform:neoforge:1.20.2` 先于 `:platform:neoforge:neoforge-api`），
- * 故不可用。
+ * 必须用项目依赖而非 `files(任务集合)`：文件集合会在消费方配置期就快照求值，
+ * 在按需配置（`--configure-on-demand`）下生产者项目尚未配置，结果为空且不报错，
+ * 整条内部类路径随之静默消失；项目依赖惰性求值，且由 Gradle 保证各 jar 任务顺序。
  */
-internal fun neoforgeModuleJar(project: Project, projectPath: String): FileCollection =
-    project.files(project.project(projectPath).tasks.withType(Jar::class.java).matching { it.name == "jar" })
+internal fun neoforgeModuleJar(project: Project, projectPath: String): ProjectDependency =
+    (project.dependencies.project(mapOf("path" to projectPath)) as ProjectDependency)
+        .apply { isTransitive = false }
 
 /**
  * 依赖接线：产品 shade 闭包、单测与验收源集依赖。
@@ -62,7 +62,14 @@ private fun registerNeoForgeProductDependencies(project: Project, lane: NeoForge
     NEOFORGE_PRODUCT_INTERNAL_PROJECTS.forEach { projectPath ->
         val moduleJar = neoforgeModuleJar(project, projectPath)
         dependencies.add("implementation", moduleJar)
-        dependencies.add(NEOFORGE_SHADOW_BUNDLE_CONFIGURATION, moduleJar)
+        dependencies.add(NEOFORGE_SHADOW_BUNDLE_CONFIGURATION, moduleJar.copy())
+    }
+    // 功能域（L0 玩法逻辑）：新增域无需改上面的固定清单——mpmtDomains() 动态覆盖（ADR-0028）。
+    // 必须与内部产物同样处理：既进 implementation，也进 shadowBundle，否则域不会被打进产品 jar。
+    project.mpmtDomains().forEach { domain ->
+        val moduleJar = neoforgeModuleJar(project, domain.path)
+        dependencies.add("implementation", moduleJar)
+        dependencies.add(NEOFORGE_SHADOW_BUNDLE_CONFIGURATION, moduleJar.copy())
     }
     val snakeyaml = "$NEOFORGE_SNAKEYAML_MODULE:${lane.snakeyamlVersion.get()}"
     dependencies.add("implementation", snakeyaml)
@@ -86,6 +93,11 @@ private fun registerNeoForgeAcceptanceDependencies(project: Project, acceptance:
     val dependencies = project.dependencies
     val acceptanceCoreJar = neoforgeModuleJar(project, NEOFORGE_ACCEPTANCE_CORE_PROJECT)
     dependencies.add(acceptance.implementationConfigurationName, acceptanceCoreJar)
-    dependencies.add(NEOFORGE_ACCEPTANCE_SHADOW_BUNDLE_CONFIGURATION, acceptanceCoreJar)
+    dependencies.add(NEOFORGE_ACCEPTANCE_SHADOW_BUNDLE_CONFIGURATION, acceptanceCoreJar.copy())
     dependencies.add(acceptance.compileOnlyConfigurationName, neoforgeModuleJar(project, NEOFORGE_PROTOCOL_PROJECT))
+    // 验收源集要直接构造域内组件（如 PlatformCapabilityExample），故须拿到全部域模块。
+    // 域模块经 ADR-0030 拆成多模块后不再由单一坐标传递，必须显式登记。
+    project.mpmtDomains().forEach { domain ->
+        dependencies.add(acceptance.implementationConfigurationName, domain)
+    }
 }

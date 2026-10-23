@@ -33,6 +33,11 @@ internal fun registerBukkitDependencies(project: Project, lane: BukkitLaneExtens
     if (lane.modernProduct.get()) {
         project.dependencies.add("implementation", project.project(BUKKIT_MODERN_PROJECT))
     }
+    // 功能域（L0 玩法逻辑）：全部域进产品依赖，新增域无需改本行——mpmtDomains() 自动覆盖（ADR-0028）。
+    // 域经 META-INF/services 声明 Feature，由 core-runtime 启动期自动发现，故车道不逐个列举具体域。
+    project.mpmtDomains().forEach { domain ->
+        project.dependencies.add("implementation", domain)
+    }
     listOf("compileOnly", "testImplementation", acceptance.compileOnlyConfigurationName)
         .forEach { configuration -> registerBukkitApiDependency(project, configuration, lane) }
     registerBukkitJunitDependencies(project)

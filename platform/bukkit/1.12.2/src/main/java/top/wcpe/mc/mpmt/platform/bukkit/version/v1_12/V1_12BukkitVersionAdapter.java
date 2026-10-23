@@ -2,7 +2,7 @@ package top.wcpe.mc.mpmt.platform.bukkit.version.v1_12;
 
 import java.util.Objects;
 import org.bukkit.plugin.Plugin;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
 import top.wcpe.mc.mpmt.platform.bukkit.capability.BukkitSchedulerPort;
 import top.wcpe.mc.mpmt.platform.bukkit.version.BukkitChannels;
 import top.wcpe.mc.mpmt.platform.bukkit.version.BukkitVersionAdapter;

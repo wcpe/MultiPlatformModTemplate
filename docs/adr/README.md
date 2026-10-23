@@ -18,7 +18,7 @@
 | [0012](0012-packaging-and-dependency-isolation.md) | 打包与依赖隔离：第三方依赖 relocate、core 进各平台产物的方式 | 已接受 |
 | [0013](0013-threading-and-scheduling.md) | 线程模型与归属调度：Folia 无主线程，SchedulerPort 按归属调度 | 已接受 |
 | [0014](0014-realserver-acceptance-harness.md) | realserver 验收：服务端驱动 / 客户端验证 / 单一权威报告（镜像 AllinCore-New ADR-0020） | 已接受 |
-| [0015](0015-domain-organization.md) | 功能域组织与拆分约定：域模板 + 注册 + 包→模块成长，不预建空壳 | 已接受 |
+| [0015](0015-domain-organization.md) | 功能域组织与拆分约定：域模板 + 注册 + 包→模块成长，不预建空壳 | 部分被 [0028](0028-mc-shared-cross-lane-source-layer.md) 取代（决策 1 / 4） |
 | [0016](0016-mappings-policy.md) | 反混淆映射策略：仅适用于 26.1 前仍以混淆制品发布的版本 | 已被 [0022](0022-unobfuscated-minecraft-naming-policy.md) 取代 |
 | [0017](0017-assembly-orchestration-in-l2.md) | 平台发现 / 装配编排归属 L2 platform-spi（细化 ADR-0002，守 L1⊄L2） | 已接受 |
 | [0018](0018-forge-mixin-raw-payload.md) | Forge 端用 Mixin 拦截裸 CustomPayload 统一裸字节收发（取代 SimpleChannel，打通 Forge 客户端↔Bukkit 服） | 已接受 |
@@ -31,6 +31,15 @@
 | [0025](0025-wcpe-loom-toolchain-unification.md) | 构建插件统一 WCPE Loom（`top.wcpe.loom` 1.17.1）并收敛 Gradle 车道至 9.6.1（部分取代 0021 的工具链隔离） | 已接受 |
 | [0026](0026-single-build-subproject-unification.md) | 平台车道统一为根构建子模块（取消加载器插件隔离，取代 0007 决策 2、0021 决策 2） | 已接受 |
 | [0027](0027-build-convention-plugins.md) | 构建约定插件分层：公共流程进插件、车道只做配置（细化 0026） | 已接受 |
+| [0028](0028-mc-shared-cross-lane-source-layer.md) | mc-shared 跨 lane MC 源码共享层 + 功能域模块化（取代 0015 决策 1 / 4） | 提议中（待审批） |
+| [0029](0029-contract-tests-assert-artifacts-not-source-text.md) | 契约测试只断言产物 / 运行期行为 / 结构化数据，禁止读源码文本（收紧 0027 背景） | 已接受 |
+| [0030](0030-domain-module-layout.md) | 功能域按 API / internal / 实现三段八模块组织，全部零 MC（细化 0028 决策 5，补充 0015 空壳口径） | 已接受 |
+| [0031](0031-mc-shared-loader-dimension.md) | 跨 lane 共享源码增加「加载器」维度，与版本区间正交（细化 0028 决策 2/3） | 已弃用（mc-shared 定义上不碰加载器，加载器差异归 platform 层） |
+
+| [0032](0032-wcpe-loom-local-publish-maven-groups.md) | 本机 Maven 兜底放开 wcpe-loom 的发布坐标组 `top.wcpe.loom` / `dev.architectury`（修订 0029 后果节的 mavenLocal 作用域） | 已接受 |
+| [0033](0033-forge-artifact-namespace-named.md) | Forge 车道 patched jar 的重映射目标统一到 named，消除与运行期制品的命名空间并存 | 已弃用（实测证伪，见文内「证伪后的修正」） |
+| [0034](0034-forge-member-supplementary-remap.md) | 按 Forge 自身两版 jar 的成员差异，对最终 jar 做补充成员名改写 | 提议中 |
+| [0035](0035-acceptance-jar-does-not-shade-product-classes.md) | 验收插件不 shade 产品侧类，改由产品插件在运行期提供（修 ClassLoader 冲突） | 已接受 |
 
 > 模板：状态 / 背景 / 决策 / 理由 / 后果 / 备选方案，见 [`_template.md`](_template.md)。
 

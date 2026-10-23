@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,19 +22,19 @@ import top.wcpe.mc.mpmt.acceptance.report.DefaultScenarioMatrix;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioResult;
 import top.wcpe.mc.mpmt.acceptance.report.ScenarioStatus;
 import top.wcpe.mc.mpmt.core.client.HandshakeClientService;
-import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
-import top.wcpe.mc.mpmt.core.domain.ban.MachineCode;
-import top.wcpe.mc.mpmt.core.domain.event.SimpleEventBus;
-import top.wcpe.mc.mpmt.core.domain.net.HandshakeStateMachine;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.MessagePort;
-import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
-import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
-import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
+import top.wcpe.mc.mpmt.kernel.ban.BanRegistry;
+import top.wcpe.mc.mpmt.kernel.ban.MachineCode;
+import top.wcpe.mc.mpmt.kernel.event.SimpleEventBus;
+import top.wcpe.mc.mpmt.kernel.net.HandshakeStateMachine;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.MessagePort;
+import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.ref.EntityRef;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.ref.WorldRef;
 import top.wcpe.mc.mpmt.core.server.HandshakeServerService;
 import top.wcpe.mc.mpmt.core.server.SessionRegistry;
 import top.wcpe.mc.mpmt.domain.capability.PlatformCapabilityExample;
@@ -60,6 +61,10 @@ import top.wcpe.mc.mpmt.protocol.reliability.Reassembler;
 public final class BukkitDefaultSimulation {
 
     private static final String SUITE = "acceptance";
+
+    /** 制品摘要不可得时使用的占位值，满足 v2 对 64 位十六进制的格式要求。 */
+    private static final String ZERO_SHA256 =
+            "0000000000000000000000000000000000000000000000000000000000000000";
 
     private BukkitDefaultSimulation() {
         // 工具类不实例化
@@ -120,6 +125,67 @@ public final class BukkitDefaultSimulation {
                 requiredProperty("mpmt.acceptance.serverVersion"),
                 productJarSha256(),
                 DefaultScenarioMatrix.requiredFor(platform));
+    }
+
+    /**
+     * 构造失败兜底用的 acceptance v2 元数据：任何必填属性缺失都退化为占位值，绝不抛异常。
+     *
+     * <p>正常路径必须走 {@link #metadata(String)}；本方法仅供驱动异常 / 绝对截止超时等兜底分支使用，
+     * 目的是让失败原因落在合规的 v2 报告里，而不是退化成严格门禁不接受的 v1 报告从而掩盖真实异常。
+     */
+    public static AcceptanceReportMetadata failureMetadata(String defaultPlatform) {
+        // platformName() 可能把空值属性原样带进来；v2 要求非空单行，故此处再兜一层
+        String platform = safeProperty("mpmt.acceptance.platform", defaultPlatform);
+        if (platform == null || platform.trim().isEmpty()) {
+            platform = "bukkit";
+        }
+        return new AcceptanceReportMetadata(
+                safeProperty("mpmt.acceptance.commit", "unknown-commit"),
+                safeProperty("mpmt.acceptance.version", "unknown-version"),
+                platform,
+                safeProperty("mpmt.acceptance.mcVersion", "unknown-mc"),
+                safeProperty("mpmt.acceptance.serverVersion", "unknown-server"),
+                safeProductJarSha256(),
+                safeScenarios(platform));
+    }
+
+    /** 取系统属性；缺失、空白或含换行时用占位值，保证兜底路径不再二次抛异常。 */
+    private static String safeProperty(String key, String fallback) {
+        String value = System.getProperty(key);
+        if (value == null || value.trim().isEmpty()) {
+            return fallback;
+        }
+        // v2 元数据要求单行；含换行会令构造器抛异常，故此处提前退化
+        if (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0) {
+            return fallback;
+        }
+        return value;
+    }
+
+    /** 制品摘要缺失或格式不合法时用全零摘要占位，满足 v2 对 64 位十六进制的格式要求。 */
+    private static String safeProductJarSha256() {
+        String resolved;
+        try {
+            resolved = productJarSha256();
+        } catch (RuntimeException e) {
+            return ZERO_SHA256;
+        }
+        // 外部传入的值未必是合法摘要；格式不符时退化，避免构造器抛异常
+        return (resolved != null && resolved.matches("[0-9a-fA-F]{64}"))
+                ? resolved
+                : ZERO_SHA256;
+    }
+
+    /** 场景清单缺失时退化为单条 framework 占位，满足 v2「场景清单不得为空」的要求。 */
+    private static List<String> safeScenarios(String platform) {
+        List<String> required;
+        try {
+            required = DefaultScenarioMatrix.requiredFor(platform);
+        } catch (RuntimeException e) {
+            // 平台未知导致清单不可得：下方按空清单处理
+            required = Collections.emptyList();
+        }
+        return required.isEmpty() ? Collections.singletonList("framework") : required;
     }
 
     private static void verify(Path report) throws IOException {

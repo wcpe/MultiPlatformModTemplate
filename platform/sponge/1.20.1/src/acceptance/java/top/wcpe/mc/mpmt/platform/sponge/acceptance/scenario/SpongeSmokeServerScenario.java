@@ -9,7 +9,7 @@ import org.spongepowered.api.network.channel.Channel;
 import org.spongepowered.api.network.channel.raw.RawDataChannel;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
-import top.wcpe.mc.mpmt.core.domain.net.HandshakeStateMachine;
+import top.wcpe.mc.mpmt.kernel.net.HandshakeStateMachine;
 import top.wcpe.mc.mpmt.platform.sponge.MpmtSpongePlugin;
 import top.wcpe.mc.mpmt.protocol.PacketCodec;
 import top.wcpe.mc.mpmt.protocol.packet.HudKind;

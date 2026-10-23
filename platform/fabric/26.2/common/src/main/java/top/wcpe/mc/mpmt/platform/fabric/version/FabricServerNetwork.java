@@ -1,7 +1,7 @@
 package top.wcpe.mc.mpmt.platform.fabric.version;
 
 import java.util.function.BiConsumer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 
 /**
  * Fabric 服务端网络绑定（L4 版本适配接口，ADR-0003）：封装<b>随 MC 版本漂移</b>的服务端通道注册与收发。

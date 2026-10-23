@@ -5,7 +5,7 @@
 
 ## 1. 分层与依赖方向（依据 ADR-0001）
 - 五层 L0→L4，**依赖只能由外层（下层）指向内层（上层）**：L0 不知道任何下层存在。
-- **L0 `core-domain` 不得 import 任何平台 / Minecraft 原生类型**（无 `org.bukkit.*` / `net.minecraft.*` / `net.fabricmc.*` / `net.minecraftforge.*` / `net.neoforged.*` / `org.spongepowered.*`）。
+- **L0（`core-kernel` / `core-domains-*`）不得 import 任何平台 / Minecraft 原生类型**（无 `org.bukkit.*` / `net.minecraft.*` / `net.fabricmc.*` / `net.minecraftforge.*` / `net.neoforged.*` / `org.spongepowered.*`）。
 - **L1（core-runtime / core-server / core-client / protocol）不得 import 平台原生类型**，只认 L0 端口与 L2 SPI。
 - 平台细节只允许出现在 **L3/L4**。玩法逻辑只写在 L0，跨平台/跨版本差异全部被 L3/L4 关在接口之后。
 - 平台对象（Bukkit `Player`、Minecraft `ServerPlayer` 等）**不得**进入 L0/L1，只能在 L3 内部包装为端口暴露的领域视图。

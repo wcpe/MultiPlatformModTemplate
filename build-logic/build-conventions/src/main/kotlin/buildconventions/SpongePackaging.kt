@@ -78,7 +78,7 @@ internal fun registerSpongePackagingVerification(project: Project) {
             must(plainArchive != product.file, "普通 jar 与最终 shadowJar 输出路径冲突")
             must(!shadowPreservesTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
             must(shadowReproducibleOrder, "最终产品未启用可复现文件顺序")
-            mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "核心类未 shade 进插件 jar")
+            mustContain(product, "top/wcpe/mc/mpmt/kernel/Mpmt.class", "核心类未 shade 进插件 jar")
             mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "platform-spi 未 shade 进插件 jar")
             mustContain(product, "top/wcpe/mc/mpmt/platform/sponge/MpmtSpongePlugin.class", "缺少插件主类")
             mustContainPrefix(

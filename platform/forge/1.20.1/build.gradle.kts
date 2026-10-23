@@ -1,5 +1,8 @@
 import buildconventions.ForgeLaneExtension
+import buildconventions.LaneBundle
 import buildconventions.configureForgeShadowProductChain
+import buildconventions.declareLaneBundles
+import buildconventions.mpmtDomains
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import net.fabricmc.loom.task.RemapJarTask
@@ -37,7 +40,7 @@ forgeLane {
 // 插件公开 API 需要扩展实例（块外传参用），故在块后取回一次
 val forge = extensions.getByType(buildconventions.ForgeLaneExtension::class.java)
 val snakeyamlVersion = "2.2"
-// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经项目依赖消费
+// 依赖 platform-spi（经 api 传递 core-runtime + core-kernel），经项目依赖消费
 val platformApiProject = project(":platform:forge:forge-api")
 val spiProject = project(":core:spi")
 // 服务端公共网络特性（经 api 传递 protocol + core-runtime），各平台注入 TransportPort 后复用同一份装配
@@ -147,12 +150,34 @@ loom {
     }
 }
 
+// 把 shade 后的 dev 产物放进 run 目录的 mods/，让 FML 当真实 jar mod 加载。
+// 本车道不声明 loom.mods dev 源（dev 源会撞 FML 不暴露 core 的 classpath 墙），故必须由这里补上；
+// 缺了它 mod 本体不会被 FML 注册，且 core:kernel 等类因不在模块层而报 NoClassDefFoundError。
+// 用 dev-shadow（Mojmap 名）而非产品 jar（已 remap 到 SRG），与上面 mixin.env.disableRefMap 配套。
+listOf("runClient" to "run-client", "runServer" to "run-server").forEach { (taskName, runDir) ->
+    tasks.named(taskName).configure {
+        dependsOn(tasks.named("shadowJar"))
+        val devJar = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile }
+        val modsDir = layout.projectDirectory.dir("$runDir/mods")
+        inputs.file(devJar)
+        doFirst {
+            val target = modsDir.asFile.apply { mkdirs() }
+            // 清掉旧副本，避免改名或旧版本残留被 FML 重复加载
+            target.listFiles { f -> f.name.endsWith(".jar") }?.forEach { it.delete() }
+            copy {
+                from(devJar)
+                into(target)
+            }
+        }
+    }
+}
+
 repositories {
     mavenCentral()
 }
 
 // 专用配置：需 shade 进产物并 relocate 的内容（core/spi + 第三方运行期依赖），不参与 remap
-val shadowBundle: Configuration by configurations.creating
+val shadowBundle: Configuration = declareLaneBundles(LaneBundle.SHADOW).getValue(LaneBundle.SHADOW)
 
 dependencies {
     // userdev 单坐标拆分（arch-loom）：原版 MC + 官方 Mojang 映射（ADR-0016）+ Forge（arch-loom 的 forge
@@ -161,7 +186,7 @@ dependencies {
     mappings(loom.officialMojangMappings())
     "forge"("net.minecraftforge:forge:$forgeVersion")
 
-    // 共享核心（platform-spi + 传递的 core-runtime/core-domain）：纯 Java、shade 进 mod jar
+    // 共享核心（platform-spi + 传递的 core-runtime/core-kernel）：纯 Java、shade 进 mod jar
     implementation(platformApiProject)
     implementation(spiProject)
     shadowBundle(platformApiProject)
@@ -172,6 +197,12 @@ dependencies {
     // 客户端公共网络特性（FR-22/FR-28）：纯 Java、shade 进同一产品 jar
     implementation(clientProject)
     shadowBundle(clientProject)
+    // 功能域（L0 玩法逻辑）：mpmtDomains() 动态覆盖——新增域无需改本脚本（ADR-0028）。
+    // 域经 META-INF/services 声明 Feature，由 core-runtime 启动期自动发现；与其它核心产物同样 shade。
+    mpmtDomains().forEach { domain ->
+        implementation(domain)
+        shadowBundle(domain)
+    }
     // 第三方运行期依赖：shade 并 relocate（ADR-0012）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
@@ -188,47 +219,48 @@ dependencies {
 configureForgeShadowProductChain(project, "shadowBundle", "mpmt.mixins.json")
 
 // 打包校验：mod jar 内核心 shade、snakeyaml relocate、mods.toml 与 services 在位、未误打入 Minecraft
-val verifyPackaging by tasks.registering {
-    group = "verification"
-    description = "校验 Forge mod jar：核心 shade、snakeyaml relocate、mods.toml/services 在位、SRG remap、未打入 Minecraft"
-    dependsOn(tasks.named("remapJar"))
-    // 输出冲突与可复现性断言所需取值在配置期取出：动作内不得再访问 project / Task（配置缓存要求），
-    // 断言取值与判定顺序、失败文案与迁移前逐字一致。
-    val shadowJarTask = tasks.named<ShadowJar>("shadowJar").get()
-    val plainArchive =
-        tasks
-            .named<Jar>("jar")
-            .get()
-            .archiveFile
-            .get()
-            .asFile
-    val shadowPreservesTimestamps = shadowJarTask.isPreserveFileTimestamps
-    val shadowReproducibleOrder = shadowJarTask.isReproducibleFileOrder
-    packagingVerification(
-        laneLabel = "Forge",
-        product = tasks.named<RemapJarTask>("remapJar").flatMap { it.archiveFile },
-        acceptance = null,
-    ) { product, _ ->
-        must(plainArchive != product.file, "普通 jar 与最终 remapJar 输出路径冲突")
-        must(!shadowPreservesTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
-        must(shadowReproducibleOrder, "最终产品未启用可复现文件顺序")
-        mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "核心类未 shade 进 mod jar")
-        mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "platform-spi 未 shade 进 mod jar")
-        mustContain(product, "top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class", "缺少 Forge mod 主类")
-        mustContainPrefix(product, "top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/", "snakeyaml 未 relocate 到 libs.*")
-        mustNotBundle(product, listOf("org/yaml/snakeyaml/"), "snakeyaml 原包名残留")
-        mustNotBundle(product, listOf("META-INF/maven/org.yaml/"), "snakeyaml Maven 元数据残留")
-        mustContain(product, "META-INF/mods.toml", "缺少 META-INF/mods.toml")
-        mustContain(product, "META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap", "缺少 SPI services 声明")
-        // Mixin（ADR-0018）：配置 + refmap 须在产物内，否则生产期 mixin apply 失败（target method not found）
-        mustContain(product, "mpmt.mixins.json", "缺少 Mixin 配置 mpmt.mixins.json")
-        mustContain(product, "mpmt.refmap.json", "缺少 Mixin refmap（AP 未生成或未打包，生产期会 apply 失败）")
-        mustNotBundle(product, listOf("net/minecraft/"), "误把 Minecraft 类打入 mod jar")
-        println("Forge 打包校验通过：")
-        println(" 产物 = ${product.file.name}（条目数 ${product.entries.size}）")
-        println(" 核心已 shade、snakeyaml 已 relocate、mods.toml/services 在位、已 remap 到 SRG、未打入 Minecraft")
+val verifyPackaging =
+    tasks.register("verifyPackaging") {
+        group = "verification"
+        description = "校验 Forge mod jar：核心 shade、snakeyaml relocate、mods.toml/services 在位、SRG remap、未打入 Minecraft"
+        dependsOn(tasks.named("remapJar"))
+        // 输出冲突与可复现性断言所需取值在配置期取出：动作内不得再访问 project / Task（配置缓存要求），
+        // 断言取值与判定顺序、失败文案与迁移前逐字一致。
+        val shadowJarTask = tasks.named<ShadowJar>("shadowJar").get()
+        val plainArchive =
+            tasks
+                .named<Jar>("jar")
+                .get()
+                .archiveFile
+                .get()
+                .asFile
+        val shadowPreservesTimestamps = shadowJarTask.isPreserveFileTimestamps
+        val shadowReproducibleOrder = shadowJarTask.isReproducibleFileOrder
+        packagingVerification(
+            laneLabel = "Forge",
+            product = tasks.named<RemapJarTask>("remapJar").flatMap { it.archiveFile },
+            acceptance = null,
+        ) { product, _ ->
+            must(plainArchive != product.file, "普通 jar 与最终 remapJar 输出路径冲突")
+            must(!shadowPreservesTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
+            must(shadowReproducibleOrder, "最终产品未启用可复现文件顺序")
+            mustContain(product, "top/wcpe/mc/mpmt/kernel/Mpmt.class", "核心类未 shade 进 mod jar")
+            mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "platform-spi 未 shade 进 mod jar")
+            mustContain(product, "top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class", "缺少 Forge mod 主类")
+            mustContainPrefix(product, "top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/", "snakeyaml 未 relocate 到 libs.*")
+            mustNotBundle(product, listOf("org/yaml/snakeyaml/"), "snakeyaml 原包名残留")
+            mustNotBundle(product, listOf("META-INF/maven/org.yaml/"), "snakeyaml Maven 元数据残留")
+            mustContain(product, "META-INF/mods.toml", "缺少 META-INF/mods.toml")
+            mustContain(product, "META-INF/services/top.wcpe.mc.mpmt.platform.spi.PlatformBootstrap", "缺少 SPI services 声明")
+            // Mixin（ADR-0018）：配置 + refmap 须在产物内，否则生产期 mixin apply 失败（target method not found）
+            mustContain(product, "mpmt.mixins.json", "缺少 Mixin 配置 mpmt.mixins.json")
+            mustContain(product, "mpmt.refmap.json", "缺少 Mixin refmap（AP 未生成或未打包，生产期会 apply 失败）")
+            mustNotBundle(product, listOf("net/minecraft/"), "误把 Minecraft 类打入 mod jar")
+            println("Forge 打包校验通过：")
+            println(" 产物 = ${product.file.name}（条目数 ${product.entries.size}）")
+            println(" 核心已 shade、snakeyaml 已 relocate、mods.toml/services 在位、已 remap 到 SRG、未打入 Minecraft")
+        }
     }
-}
 
 tasks.named("assemble") {
     dependsOn(verifyPackaging)
@@ -248,24 +280,27 @@ tasks.named("build") {
 val acceptanceProject = project(":modules:acceptance")
 val protocolProject = project(":core:protocol")
 
-val acceptance: SourceSet by sourceSets.creating {
-    compileClasspath += sourceSets["main"].compileClasspath + sourceSets["main"].output
-    runtimeClasspath += sourceSets["main"].runtimeClasspath + sourceSets["main"].output
-}
+val acceptance: SourceSet =
+    sourceSets.create("acceptance") {
+        compileClasspath += sourceSets["main"].compileClasspath + sourceSets["main"].output
+        runtimeClasspath += sourceSets["main"].runtimeClasspath + sourceSets["main"].output
+    }
 configurations["acceptanceImplementation"].extendsFrom(configurations["implementation"])
 
-val acceptanceTest: SourceSet by sourceSets.creating {
-    compileClasspath += acceptance.output + sourceSets["main"].output
-    runtimeClasspath += output + compileClasspath
-}
+val acceptanceTest: SourceSet =
+    sourceSets.create("acceptanceTest") {
+        compileClasspath += acceptance.output + sourceSets["main"].output
+        runtimeClasspath += output + compileClasspath
+    }
 configurations["acceptanceTestImplementation"].extendsFrom(configurations["testImplementation"])
 configurations["acceptanceTestRuntimeOnly"].extendsFrom(configurations["testRuntimeOnly"])
 
 // 专用配置：需 shade 进验收 mod jar 的内容——**只含 acceptance 核心**（验收 jar 独有、不在产品 jar 里）。
-// protocol/core-domain 等已在产品 mod jar 内：Forge 的 FML 模块层禁止两个 mod 导出同名包（split package，
-// 否则 ResolutionException 启动失败），故验收 jar 不能再打 protocol/core-domain；运行期由产品 mod 提供
+// protocol/core-kernel 等已在产品 mod jar 内：Forge 的 FML 模块层禁止两个 mod 导出同名包（split package，
+// 否则 ResolutionException 启动失败），故验收 jar 不能再打 protocol/core-kernel；运行期由产品 mod 提供
 // （FML mod 为自动模块，验收 mod 可读取产品 mod 的包）。protocol 仅作编译期依赖（compileOnly），不入产物。
-val acceptanceShadowBundle: Configuration by configurations.creating
+val acceptanceShadowBundle: Configuration =
+    declareLaneBundles(LaneBundle.ACCEPTANCE_SHADOW).getValue(LaneBundle.ACCEPTANCE_SHADOW)
 
 dependencies {
     // 平台无关验收核心（控制协议 / 协调 / GameTest 框架 / 报告）：验收 jar 独有，shade 进去
@@ -275,34 +310,36 @@ dependencies {
     "acceptanceCompileOnly"(protocolProject)
 }
 
-// 验收驱动 mod jar：shade acceptance/protocol/core-domain（均第一方、无第三方运行期依赖，无需 relocate），
+// 验收驱动 mod jar：shade acceptance/protocol/core-kernel（均第一方、无第三方运行期依赖，无需 relocate），
 // 产物名 -dev-shadow，作为 remapAcceptanceJar 的输入
-val acceptanceJar by tasks.registering(ShadowJar::class) {
-    group = "build"
-    description = "构建 realserver 验收驱动 mod mpmt-acceptance（仅验收运行期用，不入产品 jar）"
-    archiveBaseName.set("mpmt-acceptance-forge")
-    archiveClassifier.set("dev-shadow")
-    from(acceptance.output)
-    configurations = listOf(acceptanceShadowBundle)
-    exclude("META-INF/maven/**")
-    // MixinConfigs 清单属性指向产品 jar 内的 mpmt.mixins.json（验收 mod 与产品 mod 共用同一 Mixin 配置）
-    manifest {
-        attributes("MixinConfigs" to "mpmt.mixins.json")
+val acceptanceJar =
+    tasks.register<ShadowJar>("acceptanceJar") {
+        group = "build"
+        description = "构建 realserver 验收驱动 mod mpmt-acceptance（仅验收运行期用，不入产品 jar）"
+        archiveBaseName.set("mpmt-acceptance-forge")
+        archiveClassifier.set("dev-shadow")
+        from(acceptance.output)
+        configurations = listOf(acceptanceShadowBundle)
+        exclude("META-INF/maven/**")
+        // MixinConfigs 清单属性指向产品 jar 内的 mpmt.mixins.json（验收 mod 与产品 mod 共用同一 Mixin 配置）
+        manifest {
+            attributes("MixinConfigs" to "mpmt.mixins.json")
+        }
+        // shadow 改配置不刷新缓存指纹，令其确定性重跑（与产品 shadowJar 一致）
+        outputs.upToDateWhen { false }
+        outputs.cacheIf { false }
     }
-    // shadow 改配置不刷新缓存指纹，令其确定性重跑（与产品 shadowJar 一致）
-    outputs.upToDateWhen { false }
-    outputs.cacheIf { false }
-}
 
 // 把验收源集纳入常规 build 的编译校验（只编译，不打包——打包由验收编排按需触发）
-val acceptanceContractTest by tasks.registering(Test::class) {
-    group = "verification"
-    description = "运行 Forge acceptance v2 与完整默认轨场景契约测试"
-    testClassesDirs = acceptanceTest.output.classesDirs
-    classpath = acceptanceTest.runtimeClasspath
-    useJUnitPlatform()
-    dependsOn(tasks.named("acceptanceClasses"))
-}
+val acceptanceContractTest =
+    tasks.register<Test>("acceptanceContractTest") {
+        group = "verification"
+        description = "运行 Forge acceptance v2 与完整默认轨场景契约测试"
+        testClassesDirs = acceptanceTest.output.classesDirs
+        classpath = acceptanceTest.runtimeClasspath
+        useJUnitPlatform()
+        dependsOn(tasks.named("acceptanceClasses"))
+    }
 
 val simAcceptanceReport = layout.buildDirectory.file("acceptance/sim-report-v2.txt")
 val realAcceptanceReport =
@@ -311,51 +348,53 @@ val realAcceptanceReport =
         .map { file(it) }
         .orElse(provider { file("run-server/acceptance-report.txt") })
 
-val runSimNetworkAcceptance by tasks.registering(JavaExec::class) {
-    group = "verification"
-    description = "运行 Forge 1.20.1 完整默认轨模拟服套件并生成 acceptance v2 报告"
-    classpath = acceptance.runtimeClasspath
-    mainClass.set("top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeDefaultSimulation")
-    dependsOn("acceptanceClasses", "reobfShadowJar")
-    systemProperty("mpmt.acceptance.report", simAcceptanceReport.get().asFile.absolutePath)
-    systemProperty("mpmt.acceptance.version", project.version.toString())
-    systemProperty("mpmt.acceptance.platform", "forge")
-    systemProperty("mpmt.acceptance.mcVersion", "1.20.1")
-    systemProperty("mpmt.acceptance.serverVersion", forgeVersion)
-    doFirst {
-        val product =
-            tasks
-                .named<RemapJarTask>("remapJar")
-                .get()
-                .archiveFile
-                .get()
-                .asFile
-        val digest = MessageDigest.getInstance("SHA-256").digest(product.readBytes())
-        systemProperty("mpmt.acceptance.productJarSha256", digest.joinToString("") { byte -> "%02x".format(byte) })
-        val commit =
-            providers
-                .exec { commandLine("git", "rev-parse", "HEAD") }
-                .standardOutput.asText
-                .get()
-                .trim()
-        systemProperty("mpmt.acceptance.commit", commit)
-    }
-}
-
-val verifyAcceptanceReport by tasks.registering(JavaExec::class) {
-    group = "verification"
-    description = "严格校验 Forge acceptance v2 报告，缺元数据、场景或 PASS 均失败"
-    classpath = acceptance.runtimeClasspath
-    mainClass.set("top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeDefaultSimulation")
-    dependsOn(tasks.named("acceptanceClasses"))
-    doFirst {
-        val report = realAcceptanceReport.get()
-        if (!report.isFile) {
-            throw GradleException("未找到 Forge 验收报告：${report.absolutePath}")
+val runSimNetworkAcceptance =
+    tasks.register<JavaExec>("runSimNetworkAcceptance") {
+        group = "verification"
+        description = "运行 Forge 1.20.1 完整默认轨模拟服套件并生成 acceptance v2 报告"
+        classpath = acceptance.runtimeClasspath
+        mainClass.set("top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeDefaultSimulation")
+        dependsOn("acceptanceClasses", "reobfShadowJar")
+        systemProperty("mpmt.acceptance.report", simAcceptanceReport.get().asFile.absolutePath)
+        systemProperty("mpmt.acceptance.version", project.version.toString())
+        systemProperty("mpmt.acceptance.platform", "forge")
+        systemProperty("mpmt.acceptance.mcVersion", "1.20.1")
+        systemProperty("mpmt.acceptance.serverVersion", forgeVersion)
+        doFirst {
+            val product =
+                tasks
+                    .named<RemapJarTask>("remapJar")
+                    .get()
+                    .archiveFile
+                    .get()
+                    .asFile
+            val digest = MessageDigest.getInstance("SHA-256").digest(product.readBytes())
+            systemProperty("mpmt.acceptance.productJarSha256", digest.joinToString("") { byte -> "%02x".format(byte) })
+            val commit =
+                providers
+                    .exec { commandLine("git", "rev-parse", "HEAD") }
+                    .standardOutput.asText
+                    .get()
+                    .trim()
+            systemProperty("mpmt.acceptance.commit", commit)
         }
-        args("verify", report.absolutePath)
     }
-}
+
+val verifyAcceptanceReport =
+    tasks.register<JavaExec>("verifyAcceptanceReport") {
+        group = "verification"
+        description = "严格校验 Forge acceptance v2 报告，缺元数据、场景或 PASS 均失败"
+        classpath = acceptance.runtimeClasspath
+        mainClass.set("top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeDefaultSimulation")
+        dependsOn(tasks.named("acceptanceClasses"))
+        doFirst {
+            val report = realAcceptanceReport.get()
+            if (!report.isFile) {
+                throw GradleException("未找到 Forge 验收报告：${report.absolutePath}")
+            }
+            args("verify", report.absolutePath)
+        }
+    }
 
 // B 车道：Forge 专用服 + 自有 acceptance 客户端伴侣进服后读报告。
 tasks.register("runRealServerAcceptance") {

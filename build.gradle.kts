@@ -17,16 +17,20 @@ plugins {
     // 若只由各车道在自己的 plugins {} 里请求，Gradle 会按子树各建一份插件类加载器，
     // loom 跨工程迭代（MixinAPMappingService → GradleUtils.allLoomProjects →
     // LoomGradleExtension.get(otherProject)）就会因跨 classloader 而转换失败。
-    id("top.wcpe.loom") version "1.17.2" apply false
-    id("top.wcpe.loom-no-remap") version "1.17.2" apply false
+    // 版本由 settings.gradle.kts 的 pluginManagement.plugins 统一定义（真源：gradle.properties
+    // 的 mpmt.loomVersion）；这里只写 id，避免同一版本在两处各写一遍、升级时漏改。
+    id("top.wcpe.loom") apply false
+    id("top.wcpe.loom-no-remap") apply false
     // A 车道：mc-testkit（Bukkit/Folia smoke；与 B 真 mod 客户端分 lane）
-    // 仅经 maven.wcpe.top 解析插件坐标；禁止 sibling includeBuild 联调。
+    // 仅经 repo.wcpe.top 解析插件坐标；禁止 sibling includeBuild 联调。
     // 只应用在 :e2e:harness（拓扑 / 场景 / 依赖注入随桩同处该子模块），根侧只留入口别名任务。
-    id("top.wcpe.mc-testkit") version "0.9.3" apply false
+    id("top.wcpe.mc-testkit") version "0.16.0" apply false
     id("top.wcpe.mc.mpmt.realserver-report-gate")
     // 根侧编排（发布聚合 + 真服/版本矩阵门禁注册）。须声明在上述报告门插件之后：
     // 该插件注册 verifyRealServerReportsStrict，编排插件为它接线 mustRunAfter。
     id("build-conventions.release")
+    // 架构守卫（ADR-0028 决策 7）：三档扫描 + mc-shared 形态 + 顶层语义 + 孤儿检查。
+    id("build-conventions.architecture")
 }
 
 val mpmtVersion: String = rootProject.file("VERSION").readText().trim()
@@ -34,6 +38,19 @@ val mpmtVersion: String = rootProject.file("VERSION").readText().trim()
 allprojects {
     group = "top.wcpe.mc.mpmt"
     version = mpmtVersion
+    // 域模块的末段名是短名（client / server / core 等，ADR-0030），会与 core:client / core:server
+    // 等分层模块重名。Gradle 的项目依赖以 group:name:version 标识模块，重名即被视为同一模块
+    // 而被替换（实测 :core:server 被 :core:domains:capability:server 顶掉，运行期
+    // ClassNotFoundException: core.server.HandshakeServerService）。故域模块给独立的 group 消除歧义。
+    // 域模块不对外发布，改 group 不影响 13 个发布产物。
+    val path = project.path
+    if (path.contains(":domains:") || (path.startsWith(":examples:") && path.count { it == ':' } >= 2)) {
+        val domain = path.split(":").filter { it.isNotEmpty() }.let {
+            // core:domains:<域>:<模块> 或 examples:<域>:<模块>
+            if (it.contains("domains")) it.getOrElse(it.indexOf("domains") + 1) { "unknown" } else it.getOrElse(1) { "unknown" }
+        }
+        group = "top.wcpe.mc.mpmt.domains.$domain"
+    }
 }
 
 // SNAPSHOT（changing module）默认仅缓存 24 小时，每次 CI 都要回源校验 metadata；

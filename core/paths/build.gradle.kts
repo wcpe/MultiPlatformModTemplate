@@ -18,7 +18,7 @@ repositories {
 
 dependencies {
     // 预设位置基于 L0 DataDirectoryPort 端口解析；api 暴露给调用方便于组合使用
-    api(project(":core:domain"))
+    api(project(":core:kernel"))
 
     testImplementation(platform("org.junit:junit-bom:5.14.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")

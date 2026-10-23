@@ -94,7 +94,7 @@ private fun registerSpongeAcceptanceContractTest(
     }
 
 /**
- * 验收驱动插件 jar：shade acceptance 核心 + protocol + core-domain
+ * 验收驱动插件 jar：shade acceptance 核心 + protocol + core-kernel
  * （均第一方、无第三方运行期依赖，无需 relocate）。
  */
 private fun registerSpongeAcceptanceJar(project: Project, lane: SpongeLaneExtension, acceptance: SourceSet) {

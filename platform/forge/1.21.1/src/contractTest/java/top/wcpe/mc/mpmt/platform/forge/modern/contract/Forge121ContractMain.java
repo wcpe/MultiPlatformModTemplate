@@ -2,6 +2,7 @@ package top.wcpe.mc.mpmt.platform.forge.modern.contract;
 
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,27 +15,60 @@ import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** 不依赖测试框架的独立车道静态与产物契约入口。 */
+/**
+ * 不依赖测试框架的独立车道静态与产物契约入口。
+ *
+ * <p>断言对象只允许是**编译产物与结构化数据**：构建注入的 {@code mpmt.test.*} 系统属性矩阵、产品 / 验收
+ * JAR 的条目与 class 常量池、JAR 内已展开的 {@code META-INF/mods.toml}、期望值 fixture
+ * （{@code wire-v1.json}）。构建脚本 / 源码文本一律不作断言依据——它们既不是运行期行为，
+ * 也把实现细节固化成了契约（ADR-0027 记录的同代反模式）。
+ */
 public final class Forge121ContractMain {
+
+    /** 产品 / 验收 JAR 内平台包前缀。 */
+    private static final String MODERN = "top/wcpe/mc/mpmt/platform/forge/modern/";
+
+    private static final String ACCEPTANCE = MODERN + "acceptance/";
+
+    /** 验收 JAR 内已展开的 mod 元数据。 */
+    private static final String MODS_TOML = "META-INF/mods.toml";
 
     private static final Pattern ENCODED =
             Pattern.compile("\\\"encoded\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+
+    /** 服务端收包器形参签名：{@code BiConsumer<ServerPlayer, byte[]>}。 */
+    private static final Pattern SERVER_RECEIVER =
+            Pattern.compile("Ljava/util/function/BiConsumer<Lnet/minecraft/server/level/ServerPlayer;\\[B>;");
+
+    /** 客户端收包器形参签名：{@code Consumer<byte[]>}。 */
+    private static final Pattern CLIENT_RECEIVER =
+            Pattern.compile("Ljava/util/function/Consumer<\\[B>;");
+
+    /** mods.toml 自身版本声明（行首 version=，避免匹配到 loaderVersion）。 */
+    private static final Pattern MOD_VERSION = Pattern.compile("(?m)^version=\"([^\"]+)\"");
+
+    /** mods.toml 中产品 mpmt 依赖的版本区间。 */
+    private static final Pattern PRODUCT_VERSION_RANGE =
+            Pattern.compile("modId=\"mpmt\"[\\s\\S]*?versionRange=\"([^\"]+)\"");
+
+    private static final List<String> REQUIRED_SCENARIOS =
+            List.of("product-handshake", "product-roundtrip", "client-hud");
 
     private Forge121ContractMain() {
         // 契约入口不实例化
     }
 
     public static void main(String[] args) throws Exception {
-        Path repositoryRoot = propertyPath("mpmt.test.repositoryRoot");
         Path projectDir = propertyPath("mpmt.test.projectDir");
         verifyFrozenMatrix();
-        verifyIndependentBuild(repositoryRoot, projectDir);
-        verifyNetworkSources(projectDir);
-        verifyAcceptanceSources(projectDir);
         verifyGoldenVectors(projectDir);
-        verifyJars(
-                propertyPath("mpmt.test.productJar"),
-                propertyPath("mpmt.test.acceptanceJar"));
+        try (JarFile product = new JarFile(propertyPath("mpmt.test.productJar").toFile());
+                JarFile acceptance = new JarFile(propertyPath("mpmt.test.acceptanceJar").toFile())) {
+            verifyJars(product, acceptance);
+            verifyNetworkArtifacts(product);
+            verifyAcceptanceArtifacts(acceptance);
+            verifyAcceptanceMetadata(acceptance);
+        }
     }
 
     private static void verifyFrozenMatrix() {
@@ -42,81 +76,91 @@ public final class Forge121ContractMain {
                 "Minecraft 版本未冻结为 1.21.1");
         require("1.21.1-52.1.0".equals(System.getProperty("mpmt.test.forgeVersion")),
                 "Forge 版本未冻结为 1.21.1-52.1.0");
-        require("1.17.2".equals(System.getProperty("mpmt.test.loomVersion")),
-                "WCPE Loom 版本未冻结为 1.17.1");
+        require("1.17.13".equals(System.getProperty("mpmt.test.loomVersion")),
+                "WCPE Loom 版本未冻结为 1.17.13");
         require("9.6.1".equals(System.getProperty("mpmt.test.gradleVersion")),
                 "Gradle 版本未冻结为 9.6.1");
         require(Runtime.version().feature() == 21, "契约测试必须运行于 Java 21");
     }
 
-    private static void verifyIndependentBuild(Path repositoryRoot, Path projectDir)
-            throws IOException {
-        String build = read(projectDir.resolve("build.gradle.kts"));
-        String rootSettings = read(repositoryRoot.resolve("settings.gradle.kts"));
-        // ADR-0026：车道为根构建子模块——不再持有独立 settings / 自有 wrapper / 反向 includeBuild
-        require(!Files.exists(projectDir.resolve("settings.gradle.kts")),
-                "子模块车道不得再持有独立 settings");
-        require(!Files.exists(projectDir.resolve("gradlew")),
-                "子模块车道不得再持有自有 wrapper");
-        require(!build.contains("includeBuild"), "子模块车道不得复合加载根构建");
-        // ADR-0025：构建插件统一 top.wcpe.loom，版本在根 settings 单点 pin
-        require(build.contains("id(\"top.wcpe.loom\")"), "构建插件必须为 top.wcpe.loom（WCPE Loom）");
-        require(rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.2"),
-                "根 settings 未冻结 top.wcpe.loom 1.17.1");
-        require(build.contains("officialMojangMappings()"), "映射必须为 Mojang 官方映射");
-        require(build.contains("options.release.set(21)"), "Java 编译目标必须为 21");
-        // ADR-0026 决策 6：共享核心经同根构建项目产物消费，不再按 build/libs 路径硬编码
-        require(build.contains("moduleJar("), "共享模块必须经同根构建项目产物消费");
-        require(!build.contains("sharedJars"), "不得再按 build/libs 路径硬编码共享 JAR");
-        String acceptanceToml = read(projectDir.resolve("src/acceptance/resources/META-INF/mods.toml"));
-        require(acceptanceToml.contains("versionRange=\"[${version},)\""),
-                "验收 mod 对产品的版本约束必须跟随构建版本");
-        require(build.contains("runAcceptanceServer")
-                        && build.contains("runAcceptanceClient")
-                        && build.contains("runRealServerAcceptance"),
-                "缺少要求的验收运行入口");
-        require(build.contains("mpmt.acceptance.artifact.server-runtime"),
-                "真实服务端运行文件必须由调用方显式传入");
-        require(projectDir.endsWith(Paths.get("platform", "forge", "1.21.1")),
-                "车道工程目录必须为 platform/forge/1.21.1");
-    }
-
-    private static void verifyNetworkSources(Path projectDir) throws IOException {
-        String payload = read(projectDir.resolve(
-                "src/main/java/top/wcpe/mc/mpmt/platform/forge/modern/net/ForgeTypedPayload.java"));
-        String channel = read(projectDir.resolve(
-                "src/main/java/top/wcpe/mc/mpmt/platform/forge/modern/net/ForgeTypedPayloadChannel.java"));
-        String entry = read(projectDir.resolve(
-                "src/main/java/top/wcpe/mc/mpmt/platform/forge/modern/MpmtForge121Mod.java"));
-        require(payload.contains("CustomPacketPayload"), "L4 必须实现 CustomPacketPayload");
-        require(payload.contains("StreamCodec"), "L4 必须使用 StreamCodec");
-        require(channel.contains("ChannelBuilder") && channel.contains("PayloadConnection"),
-                "L4 必须使用 Forge PayloadChannel API");
-        require(channel.contains(".optional()"), "产品与控制 payload 通道必须为 optional");
-        require(entry.contains("fromNamespaceAndPath(\"mpmt\", \"main\")"),
+    /**
+     * 产品侧网络契约：只看产品 JAR 内 net 相关 class 的常量池。
+     *
+     * <p>L4 实现 {@code CustomPacketPayload}（直接接口表）、用 {@code StreamCodec} 编解码、
+     * 用 Forge {@code ChannelBuilder} / {@code PayloadConnection} 注册 optional 通道、
+     * 通道名为 {@code mpmt:main}、对上层只暴露裸 {@code byte[]}。
+     */
+    private static void verifyNetworkArtifacts(JarFile product) throws IOException {
+        ClassFileConstantPool payload = classPool(product, MODERN + "net/ForgeTypedPayload.class");
+        require(payload.interfaces().contains("net/minecraft/network/protocol/common/custom/CustomPacketPayload"),
+                "L4 载荷未实现 CustomPacketPayload");
+        require(payload.classReferences().contains("net/minecraft/network/codec/StreamCodec"),
+                "L4 载荷未使用 StreamCodec");
+        ClassFileConstantPool channel =
+                classPool(product, MODERN + "net/ForgeTypedPayloadChannel.class");
+        require(channel.classReferences().contains("net/minecraftforge/network/ChannelBuilder"),
+                "L4 通道未使用 ChannelBuilder");
+        require(channel.classReferences().contains("net/minecraftforge/network/payload/PayloadConnection"),
+                "L4 通道未使用 Forge PayloadConnection");
+        require(channel.memberReferences().contains("net/minecraftforge/network/ChannelBuilder.optional"),
+                "产品与控制载荷通道必须为 optional");
+        requireUtf8Matching(channel, SERVER_RECEIVER, "服务端上层必须只接收裸 byte[]");
+        requireUtf8Matching(channel, CLIENT_RECEIVER, "客户端上层必须只接收裸 byte[]");
+        ClassFileConstantPool entry = classPool(product, MODERN + "MpmtForge121Mod.class");
+        require(entry.stringConstants().contains("mpmt") && entry.stringConstants().contains("main"),
                 "产品通道必须为 mpmt:main");
-        require(channel.contains("BiConsumer<ServerPlayer, byte[]>"), "服务端上层必须只接收裸 byte[]");
-        require(channel.contains("Consumer<byte[]>"), "客户端上层必须只接收裸 byte[]");
+        requireMemberNamed(entry, "fromNamespaceAndPath", "产品通道必须由资源定位符工厂声明");
     }
 
-    private static void verifyAcceptanceSources(Path projectDir) throws IOException {
-        String acceptance = read(projectDir.resolve(
-                "src/acceptance/java/top/wcpe/mc/mpmt/platform/forge/modern/acceptance/MpmtForge121AcceptanceMod.java"));
-        String driver = read(projectDir.resolve(
-                "src/acceptance/java/top/wcpe/mc/mpmt/platform/forge/modern/acceptance/AcceptanceDriver.java"));
-        String companion = read(projectDir.resolve(
-                "src/acceptance/java/top/wcpe/mc/mpmt/platform/forge/modern/acceptance/ForgeAcceptanceClientCompanion.java"));
-        require(acceptance.contains("mpmt-test") && acceptance.contains("acceptance"),
+    /**
+     * 验收侧契约：只看验收 JAR 内 acceptance 相关 class 的常量池。
+     *
+     * <p>控制通道为 {@code mpmt-test:acceptance}、同栈服务端调用 {@code AcceptanceReportV2Factory.create}、
+     * 客户端上报 v2 {@code ClientReadyPacket} 与实际 Java major / executable、required 场景齐全、
+     * client-hud 校验 {@code HudKind.ACTIONBAR}。
+     */
+    private static void verifyAcceptanceArtifacts(JarFile acceptance) throws IOException {
+        ClassFileConstantPool mod = classPool(acceptance, ACCEPTANCE + "MpmtForge121AcceptanceMod.class");
+        require(mod.stringConstants().contains("mpmt-test") && mod.stringConstants().contains("acceptance"),
                 "验收控制通道必须为 mpmt-test:acceptance");
-        require(driver.contains("AcceptanceReportV2Factory.create"),
-                "同栈服务端必须调用 AcceptanceReportV2Factory");
-        require(companion.contains("new ClientReadyPacket"), "客户端必须上报 v2 ClientReadyPacket");
-        require(companion.contains("getMajor()") && companion.contains("getExecutable()"),
-                "客户端必须上报实际 Java major 和 executable");
-        for (String scenario : List.of("product-handshake", "product-roundtrip", "client-hud")) {
-            require(companion.contains(scenario), "客户端缺少 required 场景：" + scenario);
+        requireMemberNamed(mod, "fromNamespaceAndPath", "验收控制通道必须由资源定位符工厂声明");
+        ClassFileConstantPool driver = classPool(acceptance, ACCEPTANCE + "AcceptanceDriver.class");
+        require(driver.memberReferences().contains(
+                        "top/wcpe/mc/mpmt/acceptance/report/AcceptanceReportV2Factory.create"),
+                "同栈服务端必须调用 AcceptanceReportV2Factory.create");
+        ClassFileConstantPool companion = classPool(acceptance, ACCEPTANCE + "ForgeAcceptanceClientCompanion.class");
+        require(companion.memberReferences().contains(
+                        "top/wcpe/mc/mpmt/acceptance/control/ClientReadyPacket.<init>"),
+                "客户端必须上报 v2 ClientReadyPacket");
+        requireMemberNamed(companion, "getMajor", "客户端必须上报实际 Java major");
+        requireMemberNamed(companion, "getExecutable", "客户端必须上报实际 Java executable");
+        for (String scenario : REQUIRED_SCENARIOS) {
+            require(companion.stringConstants().contains(scenario), "客户端缺少 required 场景：" + scenario);
         }
-        require(companion.contains("HudKind.ACTIONBAR"), "client-hud 必须验证 ACTIONBAR");
+        require(companion.memberReferences().contains(
+                        "top/wcpe/mc/mpmt/protocol/packet/HudKind.ACTIONBAR"),
+                "client-hud 必须验证 ACTIONBAR");
+    }
+
+    /**
+     * 验收 mod 元数据：读验收 JAR 内**已展开**的 {@code mods.toml}。
+     *
+     * <p>对产品的版本区间下限必须等于本次构建实际产出的版本（占位符已由构建替换），
+     * 以此保证「验收伴侣声明的产品依赖下限跟随版本真源」而非靠脚本文本。
+     */
+    private static void verifyAcceptanceMetadata(JarFile acceptance) throws IOException {
+        JarEntry entry = acceptance.getJarEntry(MODS_TOML);
+        require(entry != null, "验收 JAR 缺少 " + MODS_TOML);
+        String toml;
+        try (InputStream input = acceptance.getInputStream(entry)) {
+            toml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        require(!toml.contains("${version}"), "验收 mods.toml 的版本占位符未被构建展开");
+        String version = requiredGroup(MOD_VERSION, toml, "验收 mods.toml 缺少自身版本声明");
+        String productRange =
+                requiredGroup(PRODUCT_VERSION_RANGE, toml, "验收 mod 未声明对产品 mpmt 的依赖区间");
+        require(("[" + version + ",)").equals(productRange),
+                "验收 mod 对产品的版本约束必须跟随构建版本：期望 [" + version + ",)，实际 " + productRange);
     }
 
     private static void verifyGoldenVectors(Path projectDir) throws IOException {
@@ -129,35 +173,24 @@ public final class Forge121ContractMain {
         require(count == 37, "wire-v1 golden 向量数量不是 37：" + count);
     }
 
-    private static void verifyJars(Path productPath, Path acceptancePath) throws IOException {
-        try (JarFile product = new JarFile(productPath.toFile());
-                JarFile acceptance = new JarFile(acceptancePath.toFile())) {
-            require(product.getEntry(
-                            "top/wcpe/mc/mpmt/platform/forge/modern/MpmtForge121Mod.class")
-                    != null, "产品 JAR 缺少入口");
-            require(product.getEntry(
-                            "top/wcpe/mc/mpmt/core/server/ServerNetworkFeature.class")
-                    != null, "产品 JAR 缺少 core-server");
-            require(product.getEntry("top/wcpe/mc/mpmt/protocol/PacketCodec.class") != null,
-                    "产品 JAR 缺少 protocol");
-            require(entries(product, "top/wcpe/mc/mpmt/acceptance/").isEmpty(),
-                    "产品 JAR 误包含 acceptance");
-            require(acceptance.getEntry(
-                            "top/wcpe/mc/mpmt/platform/forge/modern/acceptance/MpmtForge121AcceptanceMod.class")
-                    != null, "验收 JAR 缺少入口");
-            require(acceptance.getEntry(
-                            "top/wcpe/mc/mpmt/acceptance/report/AcceptanceReportV2Factory.class")
-                    != null, "验收 JAR 缺少共享 acceptance 核心");
-            require(entries(acceptance, "top/wcpe/mc/mpmt/core/").isEmpty(),
-                    "验收 JAR 重复包含产品 core");
-            require(entries(acceptance, "top/wcpe/mc/mpmt/protocol/").isEmpty(),
-                    "验收 JAR 重复包含 protocol");
-            require(acceptance.getEntry(
-                            "top/wcpe/mc/mpmt/platform/forge/modern/MpmtForge121Mod.class")
-                    == null, "验收 JAR 重复包含产品入口");
-            verifyMajor(product, "top/wcpe/mc/mpmt/platform/forge/modern/", 65);
-            verifyMajor(acceptance, "top/wcpe/mc/mpmt/platform/forge/modern/acceptance/", 65);
-        }
+    private static void verifyJars(JarFile product, JarFile acceptance) throws IOException {
+        require(product.getEntry(MODERN + "MpmtForge121Mod.class") != null, "产品 JAR 缺少入口");
+        require(product.getEntry("top/wcpe/mc/mpmt/core/server/ServerNetworkFeature.class") != null,
+                "产品 JAR 缺少 core-server");
+        require(product.getEntry("top/wcpe/mc/mpmt/protocol/PacketCodec.class") != null,
+                "产品 JAR 缺少 protocol");
+        require(entries(product, "top/wcpe/mc/mpmt/acceptance/").isEmpty(),
+                "产品 JAR 误包含 acceptance");
+        require(acceptance.getEntry(ACCEPTANCE + "MpmtForge121AcceptanceMod.class") != null,
+                "验收 JAR 缺少入口");
+        require(acceptance.getEntry(
+                        "top/wcpe/mc/mpmt/acceptance/report/AcceptanceReportV2Factory.class")
+                != null, "验收 JAR 缺少共享 acceptance 核心");
+        require(entries(acceptance, "top/wcpe/mc/mpmt/core/").isEmpty(), "验收 JAR 重复包含产品 core");
+        require(entries(acceptance, "top/wcpe/mc/mpmt/protocol/").isEmpty(), "验收 JAR 重复包含 protocol");
+        require(acceptance.getEntry(MODERN + "MpmtForge121Mod.class") == null, "验收 JAR 重复包含产品入口");
+        verifyMajor(product, MODERN, 65);
+        verifyMajor(acceptance, ACCEPTANCE, 65);
     }
 
     private static void verifyMajor(JarFile jar, String prefix, int expected) throws IOException {
@@ -173,6 +206,29 @@ public final class Forge121ContractMain {
                         "平台类 class major 错误：" + entry.getName() + " major=" + major);
             }
         }
+    }
+
+    /** 取 JAR 内某个类文件的常量池视图；条目缺失即失败（不静默跳过）。 */
+    private static ClassFileConstantPool classPool(JarFile jar, String entryName) throws IOException {
+        JarEntry entry = jar.getJarEntry(entryName);
+        require(entry != null, "JAR 缺少类文件：" + entryName);
+        try (InputStream input = jar.getInputStream(entry)) {
+            return ClassFileConstantPool.read(input);
+        }
+    }
+
+    private static void requireUtf8Matching(ClassFileConstantPool pool, Pattern pattern, String message) {
+        require(pool.utf8Constants().stream().anyMatch(value -> pattern.matcher(value).matches()), message);
+    }
+
+    private static void requireMemberNamed(ClassFileConstantPool pool, String member, String message) {
+        require(pool.memberReferences().stream().anyMatch(value -> value.endsWith("." + member)), message);
+    }
+
+    private static String requiredGroup(Pattern pattern, String text, String message) {
+        Matcher matcher = pattern.matcher(text);
+        require(matcher.find(), message);
+        return matcher.group(1);
     }
 
     private static List<JarEntry> entries(JarFile jar, String prefix) {

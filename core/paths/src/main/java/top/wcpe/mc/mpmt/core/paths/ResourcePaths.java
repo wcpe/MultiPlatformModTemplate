@@ -2,7 +2,7 @@ package top.wcpe.mc.mpmt.core.paths;
 
 import java.nio.file.Path;
 import java.util.Objects;
-import top.wcpe.mc.mpmt.core.domain.port.DataDirectoryPort;
+import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
 
 /**
  * 资源路径预设（L1，ADR-0010）：在平台经 {@link DataDirectoryPort} 提供的基目录下，

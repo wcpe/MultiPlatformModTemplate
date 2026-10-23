@@ -3,7 +3,7 @@ package top.wcpe.mc.mpmt.platform.neoforge.net;
 import java.util.Objects;
 import java.util.UUID;
 import net.minecraft.server.level.ServerPlayer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 
 /**
  * NeoForge 服务端连接句柄（L3）：把平台原生 {@link ServerPlayer} 封装为 L0/L1 只见的不透明 {@link ConnectionHandle}。
