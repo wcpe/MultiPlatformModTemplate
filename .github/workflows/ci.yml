@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: read
+  # actions/cache 保存 Loom 制品缓存需要写权限；缺它会静默无法保存（或直接报错）。
+  actions: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -120,13 +122,13 @@ jobs:
 
       - name: 配置 Gradle 缓存
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
-        with:
-          # 默认行为下 PR 只读缓存、不写；显式允许写入，让首个 PR 预热后
-          # 同分支后续提交与 main 的构建都能命中，显著缩短冷构建时间。
-          cache-read-only: false
 
       # Loom 的 MC 映射 / dev jar（约数 GB）不在 setup-gradle 默认缓存范围内，
       # 每次冷启动都要重新派生，是矩阵各格的主要固定开销。单独按车道锁存。
+      #
+      # 只缓存 Loom 制品，不改 setup-gradle 的 cache-read-only：后者会让 PR 写入并
+      # 命中 Gradle 构建缓存（org.gradle.caching=true），而 CodeQL 的 manual build
+      # 依赖真实 javac 调用提取源码，命中缓存会报 "didn't build any of it"（Exit 32）。
       - name: 缓存 Loom 制品
         uses: actions/cache@v4
         with:

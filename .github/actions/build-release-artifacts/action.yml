@@ -46,14 +46,16 @@ runs:
 
     - name: 配置 Gradle 缓存
       uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
-      with:
-        # 默认行为下 PR 只读缓存、不写；显式允许写入，让首个 PR 预热后
-        # 同分支后续提交与 main 的构建都能命中，显著缩短冷构建时间。
-        cache-read-only: false
 
     # Loom 的 MC 映射 / dev jar（约数 GB）不在 setup-gradle 默认缓存范围内，
-    # 每次冷启动都要重新派生，是 :buildAll 的主要固定开销。按全车道锁存。
+    # 每次冷启动都要重新派生，是 :buildAll 的主要固定开销。
+    #
+    # 只缓存 Loom 制品（映射与 dev jar），不动 setup-gradle 的 cache-read-only：
+    # 本 action 也被 CodeQL 以 disable-build-cache=true 调用，若开启构建缓存写入/命中，
+    # compileJava 会取缓存产物而不调用 javac，CodeQL 报 Exit 32。
+    # CodeQL 路径跳过本步骤，避免与其 build-cache 策略相互干扰。
     - name: 缓存 Loom 制品
+      if: inputs.disable-build-cache != 'true'
       uses: actions/cache@v4
       with:
         path: |
