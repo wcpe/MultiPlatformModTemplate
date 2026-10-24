@@ -51,7 +51,11 @@ internal const val MPMT_ACCEPTANCE_PRODUCT_JAR_PROPERTY: String = "mpmt.acceptan
 
 /** 报告标识本轮提交：commit 配置期一次取定（与迁移前车道脚本同一口径）。 */
 internal fun gitHeadCommit(project: Project): String =
-    project.providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim()
+    project.providers
+        .exec { commandLine("git", "rev-parse", "HEAD") }
+        .standardOutput.asText
+        .get()
+        .trim()
 
 /**
  * dev run 配置：loom 已为 forge 系预建默认 client / server 运行配置（`client()` / `server()` 模板已应用），
@@ -68,11 +72,16 @@ internal fun gitHeadCommit(project: Project): String =
 internal fun configureNeoForgeRuns(project: Project, lane: NeoForgeLaneExtension) {
     val runs = neoforgeLoomRuns(project)
     val main = project.extensions.getByType(SourceSetContainer::class.java).getByName("main")
-    configureClientRun(project, runs, main)
+    configureClientRun(project, runs, main, lane)
     configureServerRun(project, runs, main, lane)
 }
 
-private fun configureClientRun(project: Project, runs: NamedDomainObjectContainer<*>, main: SourceSet) {
+private fun configureClientRun(
+    project: Project,
+    runs: NamedDomainObjectContainer<*>,
+    main: SourceSet,
+    lane: NeoForgeLaneExtension,
+) {
     val run = neoforgeRunConfig(runs, NEOFORGE_CLIENT_RUN_NAME)
     run.invokeGroovy("setConfigName", NEOFORGE_CLIENT_CONFIG_NAME)
     run.invokeGroovy("source", main)
@@ -84,6 +93,44 @@ private fun configureClientRun(project: Project, runs: NamedDomainObjectContaine
         MPMT_ACCEPTANCE_SERVER_PROPERTY,
         (project.findProperty(MPMT_ACCEPTANCE_SERVER_PROPERTY) as String?) ?: NEOFORGE_DEFAULT_ACCEPTANCE_SERVER,
     )
+    // 单机/LAN 验收（-Pmpmt.acceptance.singleplayer=true）：伴侣据此创建单人世界，
+    // 由客户端内置服务端承载验收场景，无需另起专用服。
+    if (project.findProperty("mpmt.acceptance.singleplayer") == "true") {
+        run.invokeGroovy("property", "mpmt.acceptance.singleplayer", "true")
+        run.invokeGroovy(
+            "property",
+            "mpmt.acceptance.report",
+            project.file("$NEOFORGE_CLIENT_RUN_DIR/singleplayer-acceptance-report.txt").absolutePath,
+        )
+        run.invokeGroovy("property", "mpmt.acceptance.deadlineMs", "600000")
+        run.invokeGroovy("property", "mpmt.acceptance.platform", "neoforge")
+        run.invokeGroovy("property", "mpmt.acceptance.mcVersion", lane.mcVersion.get())
+        run.invokeGroovy(
+            "property",
+            "mpmt.acceptance.serverVersion",
+            "NeoForge ${lane.mcVersion.get()}",
+        )
+        run.invokeGroovy("property", "mpmt.acceptance.version", project.version.toString())
+        run.invokeGroovy(
+            "property",
+            "mpmt.acceptance.commit",
+            project.providers
+                .exec { commandLine("git", "rev-parse", "HEAD") }
+                .standardOutput.asText
+                .get()
+                .trim(),
+        )
+        // 产品 jar 取 neoforgeProductJarFile：与产物命名同源（archivesName + 工程版本）。
+        // 手工拼 "$项目名-$版本.jar" 会忽略 archivesName 的 mpmt- 前缀，
+        // 驱动读不到 jar 就算不出 SHA-256，整轨直接 FAIL。
+        run.invokeGroovy(
+            "property",
+            "mpmt.acceptance.productJar",
+            neoforgeProductJarFile(project).absolutePath,
+        )
+        // 不显式传 productJarSha256：配置期产物尚未构建，求值必然失败；
+        // 驱动侧 NeoForgeDefaultSimulation.productJarSha256() 会在执行期按 productJar 自行计算摘要。
+    }
 }
 
 /** loom server 模板已自带 nogui 程序参数，无需（不可）重复声明。 */

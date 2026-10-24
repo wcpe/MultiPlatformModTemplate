@@ -68,3 +68,30 @@ dependencies {
     mappings(loom.officialMojangMappings())
     "neoForge"("net.neoforged:neoforge:${neoforgeLane.neoForgeVersion.get()}")
 }
+
+// 单机/LAN 验收（-Pmpmt.acceptance.singleplayer=true）需要验收驱动 mod 与产品 mod 同处 mods/：
+// 产品 mod 只提供能力，验收场景由独立 mod 执行。此前 run 只经 source(main) 提供产品类，
+// 验收 jar 从不落位，故单机即使开了 -Dmpmt.acceptance 也没有任何场景在跑。
+if (project.findProperty("mpmt.acceptance.singleplayer") == "true") {
+    tasks.matching { it.name == "runClient" }.configureEach {
+        dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"))
+        // 产品 shade jar 必须先落位：验收驱动依赖 core:kernel 等类，而 FML 的模块层不向 dev 源集
+        // 暴露 core（NoClassDefFoundError: top/wcpe/mc/mpmt/kernel/port/ConnectionHandle）。
+        // 只有把含 core 的产品 jar 当真实 mod 放进 mods/，验收 jar 才能解析到这些类。
+        val productJar = tasks.named<Jar>("shadowJar").flatMap { it.archiveFile }
+        val acceptanceJar = tasks.named<Jar>("acceptanceJar").flatMap { it.archiveFile }
+        val modsDir = layout.projectDirectory.dir("run-client/mods")
+        inputs.file(productJar)
+        inputs.file(acceptanceJar)
+        doFirst {
+            val target = modsDir.asFile.apply { mkdirs() }
+            // 清掉旧副本，避免改名或旧版本残留被 NeoForge 重复加载
+            target.listFiles { f -> f.name.endsWith(".jar") }?.forEach { it.delete() }
+            copy {
+                from(productJar)
+                from(acceptanceJar)
+                into(target)
+            }
+        }
+    }
+}

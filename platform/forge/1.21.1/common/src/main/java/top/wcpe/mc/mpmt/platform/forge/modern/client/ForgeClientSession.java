@@ -95,4 +95,9 @@ public final class ForgeClientSession {
     public ForgeHudSnapshot hudSnapshot() {
         return hud.snapshot();
     }
+
+    /** 最近一条 ACTIONBAR 快照（供 HUD 验收断言，不受 TITLE/TOAST/CHAT 覆盖）。 */
+    public ForgeHudSnapshot actionBarSnapshot() {
+        return hud.actionBarSnapshot();
+    }
 }

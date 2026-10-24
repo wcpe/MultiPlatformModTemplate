@@ -25,12 +25,13 @@ import java.io.File
  * ```
  */
 object McSharedSources {
-
     /** 源码树根目录名（相对根工程）。 */
     const val ROOT_DIR = "mc-shared"
 
     /** 端目录名。 */
-    enum class Side(val dir: String) {
+    enum class Side(
+        val dir: String,
+    ) {
         COMMON("common"),
         CLIENT("client"),
         SERVER("server"),
@@ -84,7 +85,8 @@ object McSharedSources {
             return 0
         }
         var mounted = 0
-        gensrc.listFiles()
+        gensrc
+            .listFiles()
             .orEmpty()
             .filter { it.isDirectory }
             .filter { McSharedRanges.matches(it.name, mcVersion) }

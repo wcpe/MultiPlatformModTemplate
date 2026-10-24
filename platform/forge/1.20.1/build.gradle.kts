@@ -111,6 +111,37 @@ loom {
             // dev 源集的 refmap 回映射注入，故 dev 关闭 refmap、直接按注解里的 Mojmap 名解析（ADR-0018）。
             // 生产（真实 Forge 服，SRG 运行期）不经本 run 配置、照常用 refmap，不受影响。
             property("mixin.env.disableRefMap", "true")
+            // 单机/LAN 验收（-Pmpmt.acceptance.singleplayer=true）：单机时客户端内置服务端，
+            // 验收驱动的 ServerStartedEvent 同样会触发，故把服务端侧所需的报告路径与矩阵元数据
+            // 一并注入本 run；报告落 run-client/ 以区别于专用服的 run-server/ 报告。
+            if (project.findProperty("mpmt.acceptance.singleplayer") == "true") {
+                // 伴侣据此走「创建单人世界」分支，而非连入外部服务端
+                property("mpmt.acceptance.singleplayer", "true")
+                property(
+                    "mpmt.acceptance.report",
+                    project.file("run-client/singleplayer-acceptance-report.txt").absolutePath,
+                )
+                property("mpmt.acceptance.deadlineMs", "660000")
+                property("mpmt.acceptance.mcVersion", "1.20.1")
+                property("mpmt.acceptance.serverVersion", forgeVersion)
+                property(
+                    "mpmt.acceptance.commit",
+                    providers
+                        .exec { commandLine("git", "rev-parse", "HEAD") }
+                        .standardOutput.asText
+                        .get()
+                        .trim(),
+                )
+                property("mpmt.acceptance.version", project.version.toString())
+                property(
+                    "mpmt.acceptance.productJar",
+                    project.layout.buildDirectory
+                        .file("libs/mpmt-forge-1.20.1-${project.version}.jar")
+                        .get()
+                        .asFile
+                        .absolutePath,
+                )
+            }
         }
         // realserver 验收用服务端运行配置（dev 服）：与客户端同为 dev / Mojmap，使 FML 握手 dev↔dev 兼容
         // （dev 客户端连真实生产服会握手不通）。同样从 run-server/mods 加载 shaded jar，绕过 dev classpath 墙。
@@ -158,14 +189,30 @@ listOf("runClient" to "run-client", "runServer" to "run-server").forEach { (task
     tasks.named(taskName).configure {
         dependsOn(tasks.named("shadowJar"))
         val devJar = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile }
+        // 单机/LAN 验收需要验收驱动 mod（mpmt_acceptance）与产品 mod 同处 mods/：
+        // 产品 mod 只提供能力，验收场景由独立 mod 执行。此前只部署产品 jar，
+        // 故单机即使开了 -Dmpmt.acceptance=true 也没有任何场景在跑。
+        val acceptanceJar =
+            if (project.findProperty("mpmt.acceptance.singleplayer") == "true") {
+                dependsOn(tasks.named("acceptanceJar"))
+                tasks.named<ShadowJar>("acceptanceJar").flatMap { it.archiveFile }
+            } else {
+                null
+            }
         val modsDir = layout.projectDirectory.dir("$runDir/mods")
         inputs.file(devJar)
+        if (acceptanceJar != null) {
+            inputs.file(acceptanceJar)
+        }
         doFirst {
             val target = modsDir.asFile.apply { mkdirs() }
             // 清掉旧副本，避免改名或旧版本残留被 FML 重复加载
             target.listFiles { f -> f.name.endsWith(".jar") }?.forEach { it.delete() }
             copy {
                 from(devJar)
+                if (acceptanceJar != null) {
+                    from(acceptanceJar)
+                }
                 into(target)
             }
         }

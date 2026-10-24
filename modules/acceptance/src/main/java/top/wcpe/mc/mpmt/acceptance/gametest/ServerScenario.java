@@ -65,4 +65,21 @@ public abstract class ServerScenario implements ServerGameTest {
         }
         return result;
     }
+
+    /**
+     * 默认的「服务端已观测到产品握手 ESTABLISHED」等待（N 次 tick 超时）。
+     *
+     * <p>握手验收若只让客户端自证，同一份 PASS 报告在不同车道的含义会不一致：
+     * 能读到服务端状态机的车道实际验了两端，读不到的只验了客户端。
+     * 子类应覆写本方法，用本平台的产品网络特性走
+     * {@code ServerNetworkFeature.handshakeService().stateOf(connection)} 做服务端断言。
+     *
+     * <p>默认实现为空操作，供确实无法访问产品服务端状态的平台（如跨类加载器分 jar 的宿主）沿用；
+     * 覆写方应在等待失败时通过 {@code context.assertTrue} 记为 FAIL。
+     *
+     * @param context 服务端上下文
+     */
+    protected void awaitServerHandshakeEstablished(ServerGameTestContext context) {
+        // 默认不额外断言：平台无法访问产品服务端状态时保持既有行为
+    }
 }

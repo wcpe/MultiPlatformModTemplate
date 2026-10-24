@@ -62,8 +62,10 @@ internal const val BUKKIT_ACCEPTANCE_JAR_TASK = "acceptanceJar"
  */
 internal fun configureBukkitArchiveTasks(project: Project, lane: BukkitLaneExtension, acceptance: SourceSet) {
     val mcVersion = lane.mcVersion.get()
-    project.extensions.getByType(BasePluginExtension::class.java)
-        .archivesName.set("$BUKKIT_PRODUCT_JAR_BASE_NAME_PREFIX-$mcVersion")
+    project.extensions
+        .getByType(BasePluginExtension::class.java)
+        .archivesName
+        .set("$BUKKIT_PRODUCT_JAR_BASE_NAME_PREFIX-$mcVersion")
     project.tasks.named("jar", Jar::class.java).configure { archiveClassifier.set("plain") }
     configureBukkitProductArchive(project)
     registerBukkitAcceptanceArchive(project, mcVersion, acceptance)
@@ -143,7 +145,11 @@ private fun Task.forceRerun() {
  * （装饰类的父类即原始 `ShadowJar`，注册时由 Gradle 实例化该类型）。
  */
 private fun bukkitShadowJarTaskClass(project: Project): Class<Jar> {
-    val decorated = project.tasks.named(BUKKIT_PRODUCT_JAR_TASK, Jar::class.java).get().javaClass
+    val decorated =
+        project.tasks
+            .named(BUKKIT_PRODUCT_JAR_TASK, Jar::class.java)
+            .get()
+            .javaClass
     @Suppress("UNCHECKED_CAST")
     return decorated.superclass as Class<Jar>
 }

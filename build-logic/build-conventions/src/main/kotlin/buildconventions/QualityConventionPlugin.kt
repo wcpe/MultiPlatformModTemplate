@@ -154,7 +154,8 @@ class QualityConventionPlugin : Plugin<Project> {
     /** Kotlin 工具链：ktlint 检 `.gradle.kts`（含插件工程脚本）、detekt 扫 Kotlin 源、kover 备 Kotlin 覆盖率。 */
     private fun applyKotlinToolchain(project: Project) {
         project.pluginManager.apply("org.jlleitschuh.gradle.ktlint")
-        project.pluginManager.apply("io.gitlab.arturbosch.detekt")
+        // detekt 2.x 改用新插件 id（旧 io.gitlab.arturbosch.detekt 仅存在于 1.x）
+        project.pluginManager.apply("dev.detekt")
         project.pluginManager.apply("org.jetbrains.kotlinx.kover")
     }
 
@@ -164,7 +165,8 @@ class QualityConventionPlugin : Plugin<Project> {
      */
     private fun wireCompileInputs(project: Project) {
         project.tasks.withType(JavaCompile::class.java).configureEach {
-            inputs.file(project.rootProject.file("lombok.config"))
+            inputs
+                .file(project.rootProject.file("lombok.config"))
                 .withPropertyName("lombokConfig")
                 .withPathSensitivity(PathSensitivity.RELATIVE)
         }

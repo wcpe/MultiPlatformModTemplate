@@ -78,13 +78,21 @@ fun Project.matrixJavaExecutable(environmentVariable: String, purpose: String): 
 
 /** 产品 jar 文件：车道以任务名声明产品任务（`remapJar`；26.2 无 remap 时为 `shadowJar`）。 */
 internal fun Project.productJarFile(lane: FabricLaneExtension): File =
-    tasks.named(lane.productTaskName.get(), AbstractArchiveTask::class.java).get().archiveFile.get().asFile
+    tasks
+        .named(lane.productTaskName.get(), AbstractArchiveTask::class.java)
+        .get()
+        .archiveFile
+        .get()
+        .asFile
 
 /** 当前提交（报告元数据绑定）。 */
 private fun Project.gitHeadCommit(): String =
-    providers.exec {
-        commandLine("git", "rev-parse", "HEAD")
-    }.standardOutput.asText.get().trim()
+    providers
+        .exec {
+            commandLine("git", "rev-parse", "HEAD")
+        }.standardOutput.asText
+        .get()
+        .trim()
 
 /** 矩阵五类制品：`-P` 显式指定则用之，否则以产品 jar 占位（Loom dev 无独立运行期 jar）。 */
 private fun Project.artifactOrProduct(property: String, productJar: File): File {

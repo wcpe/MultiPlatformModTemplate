@@ -71,7 +71,12 @@ class RealServerGateContractTest {
         Files.newInputStream(repositoryRoot().resolve("gradle.properties")).use(properties::load)
         val declared = properties.getProperty(LOCAL_MAVEN_GROUPS_PROPERTY)
         assertNotNull(declared, "缺少 $LOCAL_MAVEN_GROUPS_PROPERTY")
-        val groups = declared.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        val groups =
+            declared
+                .split(",")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .toSet()
         assertEquals(
             setOf(
                 "top.wcpe.mc-testkit",

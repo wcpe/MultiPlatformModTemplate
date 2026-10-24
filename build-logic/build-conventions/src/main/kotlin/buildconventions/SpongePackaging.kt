@@ -67,7 +67,12 @@ internal fun registerSpongePackagingVerification(project: Project) {
         dependsOn(project.tasks.named(SPONGE_SHADOW_JAR_TASK))
         // 两条可复现性断言所需的打包配置在配置期取出：动作内不得再访问 project / Task（配置缓存要求），
         // 断言取值与判定顺序、失败文案与迁移前逐字一致。
-        val plainArchive = plainJar.get().archiveFile.get().asFile
+        val plainArchive =
+            plainJar
+                .get()
+                .archiveFile
+                .get()
+                .asFile
         val shadowPreservesTimestamps = productJar.get().isPreserveFileTimestamps
         val shadowReproducibleOrder = productJar.get().isReproducibleFileOrder
         packagingVerification(

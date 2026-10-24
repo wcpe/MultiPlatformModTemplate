@@ -22,7 +22,8 @@ object AcceptanceReportGate {
         }
         val text = reportFile.readText()
         val lines =
-            text.lineSequence()
+            text
+                .lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
                 .toList()

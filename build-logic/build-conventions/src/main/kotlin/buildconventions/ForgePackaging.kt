@@ -98,14 +98,21 @@ fun registerForgeModernSourceSets(project: Project) {
         runtimeClasspath += output + compileClasspath
     }
     listOf(main, acceptance).forEach { sourceSet ->
-        sourceSet.output.setResourcesDir(sourceSet.java.destinationDirectory.get().asFile)
+        sourceSet.output.setResourcesDir(
+            sourceSet.java.destinationDirectory
+                .get()
+                .asFile,
+        )
     }
     // acceptance 编译需要 main 的 compileOnly 共享类；不 extends implementation（已无 runtime 共享 jar）
-    project.configurations.getByName("acceptanceCompileOnly")
+    project.configurations
+        .getByName("acceptanceCompileOnly")
         .extendsFrom(project.configurations.getByName("compileOnly"))
-    project.configurations.getByName("contractTestImplementation")
+    project.configurations
+        .getByName("contractTestImplementation")
         .extendsFrom(project.configurations.getByName("testImplementation"))
-    project.configurations.getByName("contractTestRuntimeOnly")
+    project.configurations
+        .getByName("contractTestRuntimeOnly")
         .extendsFrom(project.configurations.getByName("testRuntimeOnly"))
 }
 
@@ -157,7 +164,12 @@ fun registerForgeAcceptanceJar(
         archiveVersion.set(project.version.toString())
         destinationDirectory.set(project.layout.buildDirectory.dir("devlibs"))
     }
-    from(project.extensions.getByType(SourceSetContainer::class.java).getByName("acceptance").output)
+    from(
+        project.extensions
+            .getByType(SourceSetContainer::class.java)
+            .getByName("acceptance")
+            .output,
+    )
     from(project.provider { project.configurations.getByName(FORGE_ACCEPTANCE_BUNDLE).map { project.zipTree(it) } })
     // 同产品薄包：provider 内解包不携带任务依赖，显式补配置级依赖。
     dependsOn(project.configurations.named(FORGE_ACCEPTANCE_BUNDLE))

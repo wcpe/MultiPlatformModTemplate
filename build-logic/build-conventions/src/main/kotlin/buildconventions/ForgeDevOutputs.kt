@@ -85,8 +85,18 @@ private fun wireForgeDevModOutputDependencies(
 /** 校验 dev SecureJar 目录内容完整（run 任务启动前兜底，缺 @Mod 入口或元数据即失败）。 */
 fun verifyForgeDevSecureJarOutputs(project: Project, lane: ForgeLaneExtension) {
     val sourceSets = project.extensions.getByType(SourceSetContainer::class.java)
-    val mainDir = sourceSets.getByName("main").java.destinationDirectory.get().asFile
-    val acceptanceDir = sourceSets.getByName("acceptance").java.destinationDirectory.get().asFile
+    val mainDir =
+        sourceSets
+            .getByName("main")
+            .java.destinationDirectory
+            .get()
+            .asFile
+    val acceptanceDir =
+        sourceSets
+            .getByName("acceptance")
+            .java.destinationDirectory
+            .get()
+            .asFile
     val mainToml = File(mainDir, "META-INF/mods.toml")
     val acceptanceToml = File(acceptanceDir, "META-INF/mods.toml")
     val mainModClass = File(mainDir, lane.productModClass.get())

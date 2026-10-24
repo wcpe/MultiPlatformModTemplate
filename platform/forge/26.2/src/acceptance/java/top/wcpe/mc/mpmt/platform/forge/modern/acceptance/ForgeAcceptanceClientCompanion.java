@@ -172,6 +172,36 @@ public final class ForgeAcceptanceClientCompanion {
         if (!CONNECT_ATTEMPTED.compareAndSet(false, true)) {
             return;
         }
+        // 单机轨（-Dmpmt.acceptance.singleplayer=true）：不连外部服，改为创建单人世界，
+        // 由客户端内置服务端承载验收场景；此时服务端与客户端同进程，控制通道直接可用。
+        if (Boolean.getBoolean("mpmt.acceptance.singleplayer")) {
+            String world = System.getProperty("mpmt.acceptance.singleplayer.world", "mpmt-acceptance");
+            LOGGER.info("realserver Forge 验收伴侣：单机轨，创建单人世界 {}", world);
+            client.execute(
+                    () ->
+                            client.createWorldOpenFlows()
+                                    .createFreshLevel(
+                                            world,
+                                            // 26.2 的 LevelSettings 改用 DifficultySettings 记录，
+                                            // 不再接收 Difficulty + GameRules 两个独立参数
+                                            new net.minecraft.world.level.LevelSettings(
+                                                    world,
+                                                    net.minecraft.world.level.GameType.SURVIVAL,
+                                                    net.minecraft.world.level.LevelSettings
+                                                            .DifficultySettings.DEFAULT,
+                                                    true,
+                                                    net.minecraft.world.level.WorldDataConfiguration
+                                                            .DEFAULT),
+                                            new net.minecraft.world.level.levelgen.WorldOptions(
+                                                    net.minecraft.world.level.levelgen.WorldOptions
+                                                            .randomSeed(),
+                                                    true,
+                                                    false),
+                                            net.minecraft.world.level.levelgen.presets.WorldPresets
+                                                    ::createNormalWorldDimensions,
+                                            client.gui.screen()));
+            return;
+        }
         String address = System.getProperty(SERVER_PROPERTY, "127.0.0.1");
         if (address == null || address.trim().isEmpty()) {
             address = "127.0.0.1";

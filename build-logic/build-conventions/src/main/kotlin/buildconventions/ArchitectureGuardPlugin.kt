@@ -72,7 +72,11 @@ object ArchitectureGuardSupport {
      * @return 版本列表
      */
     fun declaredLaneVersions(project: Project): List<String> {
-        val raw = project.rootProject.findProperty(PROPERTY)?.toString().orEmpty()
+        val raw =
+            project.rootProject
+                .findProperty(PROPERTY)
+                ?.toString()
+                .orEmpty()
         val parsed = raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
         return parsed.ifEmpty { FALLBACK }
     }
@@ -94,8 +98,7 @@ object ArchitectureGuardSupport {
                     sub.configurations
                         .flatMap { configuration ->
                             configuration.dependencies.withType(org.gradle.api.artifacts.ProjectDependency::class.java)
-                        }
-                        .map { it.path }
+                        }.map { it.path }
                         .toSet()
                 sub.path to deps
             }

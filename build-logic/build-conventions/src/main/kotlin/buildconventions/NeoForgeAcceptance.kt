@@ -56,7 +56,8 @@ internal fun registerNeoForgeAcceptanceSourceSets(project: Project) {
         acceptance.compileClasspath += main.compileClasspath + main.output
         acceptance.runtimeClasspath += main.runtimeClasspath + main.output
         val configurations = project.configurations
-        configurations.getByName(acceptance.implementationConfigurationName)
+        configurations
+            .getByName(acceptance.implementationConfigurationName)
             .extendsFrom(configurations.getByName("implementation"))
 
         val acceptanceTest = sourceSets.create(NEOFORGE_ACCEPTANCE_TEST_SOURCE_SET)
@@ -68,7 +69,8 @@ internal fun registerNeoForgeAcceptanceSourceSets(project: Project) {
             extendsFrom(configurations.getByName("testImplementation"))
             extendsFrom(configurations.getByName(acceptance.implementationConfigurationName))
         }
-        configurations.getByName(acceptanceTest.runtimeOnlyConfigurationName)
+        configurations
+            .getByName(acceptanceTest.runtimeOnlyConfigurationName)
             .extendsFrom(configurations.getByName("testRuntimeOnly"))
     }
 }
@@ -143,7 +145,12 @@ private fun registerNeoForgeSimulationAcceptance(
         classpath = acceptance.runtimeClasspath
         mainClass.set(lane.acceptanceMainClass.get())
         dependsOn(project.tasks.named(acceptance.classesTaskName), project.tasks.named(NEOFORGE_REMAP_JAR_TASK))
-        systemProperty(MPMT_ACCEPTANCE_REPORT_PROPERTY, lane.simulatorReport.get().asFile.absolutePath)
+        systemProperty(
+            MPMT_ACCEPTANCE_REPORT_PROPERTY,
+            lane.simulatorReport
+                .get()
+                .asFile.absolutePath,
+        )
         systemProperty(MPMT_ACCEPTANCE_VERSION_PROPERTY, project.version.toString())
         systemProperty(MPMT_ACCEPTANCE_PLATFORM_PROPERTY, NEOFORGE_PLATFORM_ID)
         systemProperty(MPMT_ACCEPTANCE_MC_VERSION_PROPERTY, lane.mcVersion.get())

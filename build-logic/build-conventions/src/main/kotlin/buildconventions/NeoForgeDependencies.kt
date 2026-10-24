@@ -13,7 +13,6 @@ private val NEOFORGE_PRODUCT_INTERNAL_PROJECTS =
         ":core:spi",
         ":core:server",
         ":core:client",
-        ":platform:neoforge:neoforge-api",
     )
 
 /** 平台无关验收核心（控制协议 / 协调 / GameTest 框架 / 报告）：验收 jar 独有，shade 进去。 */

@@ -16,7 +16,6 @@ package buildconventions
  * 区间目录让"同组共享、跨组独立"成为机制而不是约定。
  */
 object McSharedRanges {
-
     /**
      * 把 MC 版本字符串编码成可比较的整数序列。
      *
@@ -68,18 +67,30 @@ object McSharedRanges {
         if (b.isEmpty()) {
             return 1
         }
-        if (prefixAware) {
-            // 前缀语义：只比较 b 覆盖到的段，b 的每个段都必须与 a 相等
-            if (a.size < b.size) {
-                return -1
+        return if (prefixAware) comparePrefixAware(a, b) else comparePadded(a, b)
+    }
+
+    /**
+     * 前缀语义比较：只比较 b 覆盖到的段，b 的每个段都必须与 a 相等。
+     *
+     * @return a 短于 b 时为 -1，首个不等段给出顺序，全部相等为 0
+     */
+    private fun comparePrefixAware(a: List<Int>, b: List<Int>): Int {
+        // a 短于 b 时无法覆盖 b 的全部段，直接判定为「小于」；否则只比较 b 覆盖到的段
+        var result = 0
+        if (a.size < b.size) {
+            result = -1
+        } else {
+            val diffIndex = b.indices.firstOrNull { a[it] != b[it] }
+            if (diffIndex != null) {
+                result = a[diffIndex].compareTo(b[diffIndex])
             }
-            for (i in b.indices) {
-                if (a[i] != b[i]) {
-                    return a[i].compareTo(b[i])
-                }
-            }
-            return 0
         }
+        return result
+    }
+
+    /** 逐段比较，缺省段补 0。 */
+    private fun comparePadded(a: List<Int>, b: List<Int>): Int {
         val size = maxOf(a.size, b.size)
         for (i in 0 until size) {
             val left = a.getOrElse(i) { 0 }

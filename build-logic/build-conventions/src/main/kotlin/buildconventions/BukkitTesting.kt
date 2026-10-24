@@ -68,4 +68,7 @@ private fun bukkitTestLauncher(toolchains: JavaToolchainService, lane: BukkitLan
 
 /** 展开后的验收 `plugin.yml`（`processAcceptanceResources` 输出）。 */
 private fun bukkitAcceptanceMetadataFile(project: Project): File =
-    project.layout.buildDirectory.file(BUKKIT_ACCEPTANCE_METADATA_PATH).get().asFile
+    project.layout.buildDirectory
+        .file(BUKKIT_ACCEPTANCE_METADATA_PATH)
+        .get()
+        .asFile

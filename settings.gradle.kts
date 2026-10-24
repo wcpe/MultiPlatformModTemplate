@@ -97,8 +97,6 @@ include(
     "core:runtime",
     "core:server",
     "core:client",
-    "core:paths",
-    "core:config",
     "core:protocol",
     "core:spi",
 )
@@ -141,7 +139,6 @@ include(
 include(
     "platform:fabric:fabric-api",
     "platform:forge:forge-api",
-    "platform:neoforge:neoforge-api",
     "platform:sponge:sponge-api",
 )
 

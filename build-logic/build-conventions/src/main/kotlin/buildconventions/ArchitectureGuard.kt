@@ -10,7 +10,6 @@ import java.io.File
  * 所有源码扫描都先经 [SourceMasker] 脱敏，避免注释与字符串造成误报。
  */
 object ArchitectureGuard {
-
     /**
      * 允许出现在 `settings.gradle.kts` include 里的顶层前缀（护栏「顶层目录语义唯一」）。
      *
@@ -29,15 +28,14 @@ object ArchitectureGuard {
      */
     fun scanSources(root: File, managedDir: String, tier: ArchitectureTier): List<ArchitectureViolation> {
         val dir = File(root, managedDir)
-        if (!dir.isDirectory) {
-            return emptyList()
-        }
         val forbidden = tier.forbiddenPrefixes()
-        if (forbidden.isEmpty()) {
+        // 目录不存在或该档位不限制任何前缀时无事可做
+        if (!dir.isDirectory || forbidden.isEmpty()) {
             return emptyList()
         }
         val violations = mutableListOf<ArchitectureViolation>()
-        dir.walkTopDown()
+        dir
+            .walkTopDown()
             .filter { it.isFile && it.extension == "java" }
             .sortedBy { it.path }
             .forEach { file ->
@@ -69,7 +67,8 @@ object ArchitectureGuard {
         if (!dir.isDirectory) {
             return emptyList()
         }
-        return dir.walkTopDown()
+        return dir
+            .walkTopDown()
             .filter { it.isFile && it.name.startsWith("build.gradle") }
             .sortedBy { it.path }
             .map {
@@ -78,8 +77,7 @@ object ArchitectureGuard {
                     relative(root, it),
                     "mc-shared 是源码树，不得出现构建脚本（否则退化为 Gradle 模块）",
                 )
-            }
-            .toList()
+            }.toList()
     }
 
     /**

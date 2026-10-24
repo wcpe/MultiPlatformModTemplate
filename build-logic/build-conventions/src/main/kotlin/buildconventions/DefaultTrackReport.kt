@@ -39,7 +39,12 @@ fun verifyDefaultTrackReport(
     }
     val text = report.readText()
     logger.lifecycle("[realserver] 服务端权威验收报告：\n$text")
-    val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+    val lines =
+        text
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toList()
     if (lines.firstOrNull() != DEFAULT_TRACK_REPORT_HEADER) {
         throw GradleException("[realserver] 报告不是 acceptance v2")
     }
