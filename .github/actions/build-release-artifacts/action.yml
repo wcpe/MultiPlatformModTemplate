@@ -46,6 +46,23 @@ runs:
 
     - name: 配置 Gradle 缓存
       uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+      with:
+        # 默认行为下 PR 只读缓存、不写；显式允许写入，让首个 PR 预热后
+        # 同分支后续提交与 main 的构建都能命中，显著缩短冷构建时间。
+        cache-read-only: false
+
+    # Loom 的 MC 映射 / dev jar（约数 GB）不在 setup-gradle 默认缓存范围内，
+    # 每次冷启动都要重新派生，是 :buildAll 的主要固定开销。按全车道锁存。
+    - name: 缓存 Loom 制品
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches/fabric-loom
+          ${{ github.workspace }}/.gradle/loom-user-cache
+        key: loom-${{ runner.os }}-all-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
+        restore-keys: |
+          loom-${{ runner.os }}-all-
+          loom-${{ runner.os }}-
 
     # 单一根构建：全部平台车道为根子模块，一条命令构建 + 校验 + 聚合发布产物。
     # JDK 25 守护（26.2 车道配置期硬校验）；MPMT_JAVA*_HOME 供矩阵轨与跨代车道显式选 JDK。
