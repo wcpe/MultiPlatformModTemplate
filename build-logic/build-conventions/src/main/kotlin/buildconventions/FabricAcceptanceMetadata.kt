@@ -85,14 +85,31 @@ internal fun Project.productJarFile(lane: FabricLaneExtension): File =
         .get()
         .asFile
 
-/** 当前提交（报告元数据绑定）。 */
-private fun Project.gitHeadCommit(): String =
-    providers
-        .exec {
+/** 无法取得提交号时的占位值。 */
+private const val UNKNOWN_COMMIT = "unknown"
+
+/**
+ * 当前提交（报告元数据绑定）；各车道共用同一实现。
+ *
+ * <p>取不到时降级为 [UNKNOWN_COMMIT] 而不是让构建失败：commit 只是报告溯源信息，
+ * 仓库尚无提交（刚由 init.sh 换名的新项目）、源码以 tarball 分发、CI 浅克隆或
+ * `.git` 被剥离时都应照常构建。
+ *
+ * <p>必须按退出码判断而非只看输出：`git rev-parse HEAD` 失败时仍会向 stdout 回显参数
+ * `HEAD`，仅用空白判断会把 `HEAD` 误当成有效提交号。
+ */
+fun Project.gitHeadCommit(): String {
+    val result =
+        providers.exec {
             commandLine("git", "rev-parse", "HEAD")
-        }.standardOutput.asText
-        .get()
-        .trim()
+            isIgnoreExitValue = true
+        }
+    return if (result.result.get().exitValue == 0) {
+        result.standardOutput.asText.get().trim().ifEmpty { UNKNOWN_COMMIT }
+    } else {
+        UNKNOWN_COMMIT
+    }
+}
 
 /** 矩阵五类制品：`-P` 显式指定则用之，否则以产品 jar 占位（Loom dev 无独立运行期 jar）。 */
 private fun Project.artifactOrProduct(property: String, productJar: File): File {

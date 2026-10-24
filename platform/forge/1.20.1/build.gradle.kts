@@ -2,6 +2,7 @@ import buildconventions.ForgeLaneExtension
 import buildconventions.LaneBundle
 import buildconventions.configureForgeShadowProductChain
 import buildconventions.declareLaneBundles
+import buildconventions.gitHeadCommit
 import buildconventions.mpmtDomains
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
@@ -124,14 +125,7 @@ loom {
                 property("mpmt.acceptance.deadlineMs", "660000")
                 property("mpmt.acceptance.mcVersion", "1.20.1")
                 property("mpmt.acceptance.serverVersion", forgeVersion)
-                property(
-                    "mpmt.acceptance.commit",
-                    providers
-                        .exec { commandLine("git", "rev-parse", "HEAD") }
-                        .standardOutput.asText
-                        .get()
-                        .trim(),
-                )
+                property("mpmt.acceptance.commit", project.gitHeadCommit())
                 property("mpmt.acceptance.version", project.version.toString())
                 property(
                     "mpmt.acceptance.productJar",
@@ -154,14 +148,7 @@ loom {
             property("mpmt.acceptance.report", project.file("run-server/acceptance-report.txt").absolutePath)
             property("mpmt.acceptance.deadlineMs", "660000")
             // v2 元数据：commit 配置期取 git；productJar 供驱动算 SHA（remapJar 无 classifier 产物，即最终产品 jar）
-            property(
-                "mpmt.acceptance.commit",
-                providers
-                    .exec { commandLine("git", "rev-parse", "HEAD") }
-                    .standardOutput.asText
-                    .get()
-                    .trim(),
-            )
+            property("mpmt.acceptance.commit", project.gitHeadCommit())
             property("mpmt.acceptance.version", project.version.toString())
             property("mpmt.acceptance.platform", "forge")
             property("mpmt.acceptance.mcVersion", "1.20.1")
@@ -417,12 +404,7 @@ val runSimNetworkAcceptance =
                     .asFile
             val digest = MessageDigest.getInstance("SHA-256").digest(product.readBytes())
             systemProperty("mpmt.acceptance.productJarSha256", digest.joinToString("") { byte -> "%02x".format(byte) })
-            val commit =
-                providers
-                    .exec { commandLine("git", "rev-parse", "HEAD") }
-                    .standardOutput.asText
-                    .get()
-                    .trim()
+            val commit = project.gitHeadCommit()
             systemProperty("mpmt.acceptance.commit", commit)
         }
     }

@@ -157,7 +157,7 @@ private fun registerNeoForgeSimulationAcceptance(
         systemProperty(MPMT_ACCEPTANCE_SERVER_VERSION_PROPERTY, lane.neoForgeVersion.get())
         doFirst {
             systemProperty(MPMT_ACCEPTANCE_PRODUCT_SHA_PROPERTY, Hashes.sha256(neoforgeProductJarFile(project)))
-            systemProperty(MPMT_ACCEPTANCE_COMMIT_PROPERTY, gitHeadCommit(project))
+            systemProperty(MPMT_ACCEPTANCE_COMMIT_PROPERTY, project.gitHeadCommit())
         }
     }
 }

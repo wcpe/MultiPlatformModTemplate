@@ -149,14 +149,7 @@ private fun configureAcceptanceClientRun(
             "property"("mpmt.acceptance.mcVersion", lane.mcVersion.get())
             "property"("mpmt.acceptance.serverVersion", "Fabric ${lane.mcVersion.get()}")
             "property"("mpmt.acceptance.version", project.version.toString())
-            "property"(
-                "mpmt.acceptance.commit",
-                project.providers
-                    .exec { commandLine("git", "rev-parse", "HEAD") }
-                    .standardOutput.asText
-                    .get()
-                    .trim(),
-            )
+            "property"("mpmt.acceptance.commit", project.gitHeadCommit())
             "property"(
                 "mpmt.acceptance.productJar",
                 // 与产物命名同源：手工拼 "$项目名-$版本.jar" 会忽略 archivesName 的 mpmt- 前缀

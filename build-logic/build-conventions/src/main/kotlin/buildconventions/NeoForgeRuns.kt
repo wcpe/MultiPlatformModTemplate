@@ -49,13 +49,6 @@ internal const val MPMT_ACCEPTANCE_MC_VERSION_PROPERTY: String = "mpmt.acceptanc
 internal const val MPMT_ACCEPTANCE_SERVER_VERSION_PROPERTY: String = "mpmt.acceptance.serverVersion"
 internal const val MPMT_ACCEPTANCE_PRODUCT_JAR_PROPERTY: String = "mpmt.acceptance.productJar"
 
-/** 报告标识本轮提交：commit 配置期一次取定（与迁移前车道脚本同一口径）。 */
-internal fun gitHeadCommit(project: Project): String =
-    project.providers
-        .exec { commandLine("git", "rev-parse", "HEAD") }
-        .standardOutput.asText
-        .get()
-        .trim()
 
 /**
  * dev run 配置：loom 已为 forge 系预建默认 client / server 运行配置（`client()` / `server()` 模板已应用），
@@ -114,11 +107,7 @@ private fun configureClientRun(
         run.invokeGroovy(
             "property",
             "mpmt.acceptance.commit",
-            project.providers
-                .exec { commandLine("git", "rev-parse", "HEAD") }
-                .standardOutput.asText
-                .get()
-                .trim(),
+            project.gitHeadCommit(),
         )
         // 产品 jar 取 neoforgeProductJarFile：与产物命名同源（archivesName + 工程版本）。
         // 手工拼 "$项目名-$版本.jar" 会忽略 archivesName 的 mpmt- 前缀，
@@ -150,7 +139,7 @@ private fun configureServerRun(
     run.invokeGroovy("property", MPMT_ACCEPTANCE_REPORT_PROPERTY, report)
     run.invokeGroovy("property", MPMT_ACCEPTANCE_DEADLINE_PROPERTY, NEOFORGE_ACCEPTANCE_DEADLINE_MS)
     // v2 元数据：commit 配置期取 git；productJar 供驱动算 SHA（对齐 Forge realserver）
-    run.invokeGroovy("property", MPMT_ACCEPTANCE_COMMIT_PROPERTY, gitHeadCommit(project))
+    run.invokeGroovy("property", MPMT_ACCEPTANCE_COMMIT_PROPERTY, project.gitHeadCommit())
     run.invokeGroovy("property", MPMT_ACCEPTANCE_VERSION_PROPERTY, project.version.toString())
     run.invokeGroovy("property", MPMT_ACCEPTANCE_PLATFORM_PROPERTY, NEOFORGE_PLATFORM_ID)
     run.invokeGroovy("property", MPMT_ACCEPTANCE_MC_VERSION_PROPERTY, lane.mcVersion.get())
