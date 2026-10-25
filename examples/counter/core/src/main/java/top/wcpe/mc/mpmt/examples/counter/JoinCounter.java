@@ -82,6 +82,19 @@ public final class JoinCounter {
                 .orElse(0L);
     }
 
+    /**
+     * 把累计次数重置为 0；首次加入时间保持不变。
+     *
+     * <p>写回 {@code 0} 而不是删键：{@link PersistencePort} 没有删除语义，
+     * 且「无记录」与「记录为 0」在 {@link #current} 上都读成 0，行为一致。
+     *
+     * @param uuid 玩家 UUID 字符串
+     */
+    public void resetCount(String uuid) {
+        Objects.requireNonNull(uuid, "UUID 不能为空");
+        persistence.write(CounterKeys.NAMESPACE, CounterKeys.joinCountKey(uuid), "0");
+    }
+
     /** 解析计数；非法值按 0 处理。 */
     static int parseCount(String raw) {
         try {

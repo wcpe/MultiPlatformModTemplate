@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import top.wcpe.mc.mpmt.kernel.event.DomainEvent;
 import top.wcpe.mc.mpmt.kernel.event.EventBusPort;
@@ -21,8 +22,13 @@ import top.wcpe.mc.mpmt.kernel.ref.WorldRef;
 /** 服务端安装点测试：装到上下文即完成事件订阅（示范域 counter）。 */
 class CounterServerInstallerTest {
 
+    @BeforeEach
+    void clearRegistry() {
+        CounterServerInstallers.clearForTest();
+    }
+
     @Test
-    void 安装后订阅加入事件并登记到注册表() {
+    void 安装后订阅加入事件但不自我登记() {
         RecordingBus bus = new RecordingBus();
         CounterServerInstaller installer =
                 new CounterServerInstaller(
@@ -31,23 +37,30 @@ class CounterServerInstallerTest {
         installer.install(context(bus));
 
         assertTrue(bus.subscribed, "安装后必须订阅共用加入事件");
-        assertTrue(CounterServerInstallers.installAll(context(bus)) >= 1, "已注册安装点应被执行");
+        // install() 是由 installAll 遍历调用的，若在其中 register(this) 会让注册表每轮增长一份。
+        // 因此安装完不应有任何自我登记：由外部显式 register 才是唯一入口。
+        assertEquals(0, CounterServerInstallers.installAll(context(bus)), "安装点不应在 install 中自我登记");
     }
 
     @Test
-    void 重置清空累计次数为非零基准() {
+    void 重置把累计次数清零且保留首次加入时间() {
         Store store = new Store();
         PlayerRef player = new PlayerRef(UUID.randomUUID(), "Eve");
         CounterServerService service = new CounterServerService(store, new Sched(), () -> 0L);
-        store.write(CounterKeys.NAMESPACE, CounterKeys.joinCountKey(player.getUuid().toString()), "9");
+        String uuid = player.getUuid().toString();
+        store.write(CounterKeys.NAMESPACE, CounterKeys.joinCountKey(uuid), "9");
+        store.write(CounterKeys.NAMESPACE, CounterKeys.firstJoinKey(uuid), "1700000000000");
 
         service.reset(player);
 
-        assertEquals(9, service.joinCount(player), "reset 只重置首次加入时间，不改累计次数");
-        assertTrue(
-                store.read(CounterKeys.NAMESPACE, CounterKeys.firstJoinKey(player.getUuid().toString()))
-                        .isPresent(),
-                "reset 应写入首次加入记录");
+        // 契约（CounterAdminPort#reset）就是「重置该玩家的累计次数」，所以这里必须归零。
+        // 曾经的实现改调 recordFirstJoin(uuid, 0L)，而它在键已存在时直接返回，对已存在玩家是 no-op，
+        // 于是本条断言被写成 assertEquals(9, ...) 去迁就错误实现——那是把缺陷固化成规范。
+        assertEquals(0, service.joinCount(player), "reset 必须把累计次数清零");
+        assertEquals(
+                1700000000000L,
+                service.read(player).firstJoinMillis(),
+                "reset 不应改动首次加入时间");
     }
 
     private static RuntimeContext context(RecordingBus bus) {

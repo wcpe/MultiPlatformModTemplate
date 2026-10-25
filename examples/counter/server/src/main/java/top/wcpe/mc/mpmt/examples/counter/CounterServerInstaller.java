@@ -27,7 +27,8 @@ public final class CounterServerInstaller implements CounterServerInstallPoint {
         Objects.requireNonNull(context, "运行时上下文不能为空");
         // 域内只经 EventBus 协作（ADR-0011）：订阅共用加入事件
         service.register(context.eventBus());
-        CounterServerInstallers.register(this);
+        // 这里不能再调 CounterServerInstallers.register(this)：install() 是由 installAll 遍历调用的，
+        // 在遍历中把自己重新登记进注册表会让列表每次都增长一份，多次安装后重复执行且无上限。
     }
 
     /** 暴露已装配的计数服务（供同域其它实现读取）。 */

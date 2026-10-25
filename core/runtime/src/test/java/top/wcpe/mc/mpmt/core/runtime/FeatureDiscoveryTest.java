@@ -56,7 +56,9 @@ class FeatureDiscoveryTest {
 
         int count = registry.discover(getClass().getClassLoader());
 
-        assertTrue(count >= 1, "至少应发现测试资源中声明的特性");
+        // services 文件只声明了 DiscoveredTestFeature 一个，因此这里可以精确断言 1。
+        // 写成 >=1 会漏掉「重复登记同一特性」这类缺陷。
+        assertEquals(1, count, "services 文件只声明了一个特性，应恰好登记一个");
         List<String> names = new ArrayList<>();
         for (Feature feature : registry.features()) {
             names.add(feature.name());
@@ -105,6 +107,6 @@ class FeatureDiscoveryTest {
         int count = registry.discoverLenient(getClass().getClassLoader(), failures);
 
         assertNotNull(failures, "失败收集列表不得为空引用");
-        assertTrue(count >= 1, "正常特性仍应被登记");
+        assertEquals(1, count, "唯一声明的特性实例化正常，应被登记");
     }
 }

@@ -69,7 +69,9 @@ public final class CounterServerService implements CounterQueryPort, CounterAdmi
     @Override
     public void reset(PlayerRef player) {
         Objects.requireNonNull(player, "玩家不能为空");
-        counter.recordFirstJoin(player.getUuid().toString(), 0L);
+        // 契约（CounterAdminPort#reset）只要求重置累计次数，首次加入时间保持不变。
+        // 不能改调 recordFirstJoin：它在键已存在时直接返回，对已存在玩家是 no-op。
+        counter.resetCount(player.getUuid().toString());
     }
 
     /**

@@ -1,8 +1,8 @@
 package top.wcpe.mc.mpmt.examples.counter;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import top.wcpe.mc.mpmt.kernel.event.EventBusPort;
 import top.wcpe.mc.mpmt.kernel.feature.RuntimeContext;
@@ -10,25 +10,32 @@ import top.wcpe.mc.mpmt.kernel.feature.RuntimeContext;
 /** 客户端安装点测试：装配登记与展示实现可用（示范域 counter）。 */
 class ChatCounterInstallerTest {
 
-    @Test
-    void 安装后登记到注册表并保留展示实现() {
-        ChatCounterDisplay display = new ChatCounterDisplay((p, text) -> { }, new NoopScheduler());
-        ChatCounterInstaller installer = new ChatCounterInstaller(display);
-
-        int installed = CounterClientInstallers.installAll(new NoopContext());
-
-        assertTrue(installed >= 0, "安装点执行不应失败");
-        assertEquals(display, installer.display());
+    @BeforeEach
+    void clearRegistry() {
+        CounterClientInstallers.clearForTest();
     }
 
     @Test
-    void 注册后install调用可重复统计() {
+    void 安装后保留展示实现且装配不报错() {
+        ChatCounterDisplay display = new ChatCounterDisplay((p, text) -> { }, new NoopScheduler());
+        ChatCounterInstaller installer = new ChatCounterInstaller(display);
+
+        installer.install(new NoopContext());
+
+        assertEquals(display, installer.display(), "安装后应保留构造期注入的展示实现");
+    }
+
+    @Test
+    void 安装点登记后由installAll执行且不自我复制() {
         ChatCounterInstaller installer =
                 new ChatCounterInstaller(
                         new ChatCounterDisplay((p, text) -> { }, new NoopScheduler()));
-        installer.install(new NoopContext());
+        CounterClientInstallers.register(installer);
 
-        assertTrue(CounterClientInstallers.installAll(new NoopContext()) >= 1, "已注册安装点应被执行");
+        // install() 不得在遍历中把自己重新登记：连续两轮都只应执行同一个安装点。
+        // 曾经实现里有 register(this)，两轮之后注册表会膨胀成 2 个，这条断言会红。
+        assertEquals(1, CounterClientInstallers.installAll(new NoopContext()), "第一轮应执行一个安装点");
+        assertEquals(1, CounterClientInstallers.installAll(new NoopContext()), "第二轮仍应只有一个安装点");
     }
 
     /** 上下文桩：只提供空事件总线。 */

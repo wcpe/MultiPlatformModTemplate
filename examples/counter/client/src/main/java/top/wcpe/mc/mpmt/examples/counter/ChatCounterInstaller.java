@@ -25,8 +25,11 @@ public final class ChatCounterInstaller implements CounterClientInstallPoint {
     @Override
     public void install(RuntimeContext context) {
         Objects.requireNonNull(context, "运行时上下文不能为空");
-        // 客户端只用到展示端口；此处按上下文取消息/调度端口完成装配
-        CounterClientInstallers.register(this);
+        // 本安装点的依赖（展示实现）在构造期已注入，客户端也没有需要订阅的事件，
+        // 因此装配动作只有「确认上下文可用」这一步。
+        //
+        // 注意：不得在此调用 CounterClientInstallers.register(this)。install() 正是由
+        // installAll 遍历调用的，遍历中自注册会让注册表每执行一次就增长一份，导致重复安装且无上限。
     }
 
     /** 暴露已装配的展示实现（供同域其它实现读取）。 */

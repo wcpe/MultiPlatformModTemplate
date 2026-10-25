@@ -30,6 +30,20 @@ class JoinCounterTest {
     }
 
     @Test
+    void 清空累计次数但保留首次加入时间() {
+        InMemoryPersistence store = new InMemoryPersistence();
+        JoinCounter counter = new JoinCounter(store);
+        counter.increment("uuid-4");
+        counter.increment("uuid-4");
+        counter.recordFirstJoin("uuid-4", 5000L);
+
+        counter.resetCount("uuid-4");
+
+        assertEquals(0, counter.current("uuid-4"), "清零后累计次数应为 0");
+        assertEquals(5000L, counter.firstJoinMillis("uuid-4"), "清零不应动首次加入时间");
+    }
+
+    @Test
     void 脏数据按零处理不阻断主流程() {
         InMemoryPersistence store = new InMemoryPersistence();
         store.write(CounterKeys.NAMESPACE, CounterKeys.joinCountKey("uuid-3"), "not-a-number");
