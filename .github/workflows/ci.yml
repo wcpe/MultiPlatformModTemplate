@@ -132,9 +132,9 @@ jobs:
       - name: 缓存 Loom 制品
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.gradle/caches/fabric-loom
-            ${{ github.workspace }}/.gradle/loom-user-cache
+          # 只缓存 ~/.gradle 下的共享制品；工作区内的 .gradle/loom-user-cache
+          # 是构建的工作目录，缓存其中间产物会引入「文件在、内容不可用」的半成品。
+          path: ~/.gradle/caches/fabric-loom
           key: loom-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
           restore-keys: |
             loom-${{ runner.os }}-${{ matrix.name }}-

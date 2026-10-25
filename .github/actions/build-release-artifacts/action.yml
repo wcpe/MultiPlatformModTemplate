@@ -58,9 +58,11 @@ runs:
       if: inputs.disable-build-cache != 'true'
       uses: actions/cache@v4
       with:
-        path: |
-          ~/.gradle/caches/fabric-loom
-          ${{ github.workspace }}/.gradle/loom-user-cache
+        # 只缓存 ~/.gradle 下的共享制品（MC jar / 映射 / dev jar）。
+        # 不缓存工作区内的 .gradle/loom-user-cache：那是构建本身的工作目录，
+        # 缓存其中间产物会让下游构建读到「文件在、内容不可用」的半成品，
+        # 表现为 genSourcesWithCfr 报「Minecraft jar 尚不存在」而任务创建失败。
+        path: ~/.gradle/caches/fabric-loom
         key: loom-${{ runner.os }}-all-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
         restore-keys: |
           loom-${{ runner.os }}-all-
