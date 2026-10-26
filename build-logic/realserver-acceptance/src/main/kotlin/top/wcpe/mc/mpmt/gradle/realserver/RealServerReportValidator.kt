@@ -69,7 +69,10 @@ object RealServerReportValidator {
 
     private fun verifyTotals(parsed: ParsedReport, lane: String) {
         val totals = parsed.totals ?: fail(lane, "报告缺少 TOTAL")
-        val actual = parsed.scenarios.values.groupingBy { it }.eachCount()
+        val actual =
+            parsed.scenarios.values
+                .groupingBy { it }
+                .eachCount()
         val expected =
             ReportTotals(
                 total = parsed.scenarios.size,
@@ -92,7 +95,9 @@ object RealServerReportValidator {
         val skip: Int,
     )
 
-    private class ParsedReport(private val lane: String) {
+    private class ParsedReport(
+        private val lane: String,
+    ) {
         var runId: String? = null
         var matrix: String? = null
         var startEpochMs: Long? = null

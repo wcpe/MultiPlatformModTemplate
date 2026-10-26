@@ -3,8 +3,8 @@ package top.wcpe.mc.mpmt.platform.forge.modern.net;
 import java.util.Objects;
 import java.util.function.BiConsumer;
 import net.minecraft.network.Connection;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 
 /** Forge 26.2 客户端裸字节传输适配。 */
 public final class ForgeClientTransport implements TransportPort {

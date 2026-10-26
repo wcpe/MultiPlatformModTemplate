@@ -4,9 +4,9 @@ import java.util.Objects;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.ref.EntityRef;
 import top.wcpe.mc.mpmt.platform.forge.modern.net.ForgeConnectionHandle;
 
 /** Forge 连接控制端口：按底层玩家断开连接。 */

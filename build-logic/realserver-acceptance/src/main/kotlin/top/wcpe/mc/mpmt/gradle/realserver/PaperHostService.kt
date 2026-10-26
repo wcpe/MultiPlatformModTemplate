@@ -99,7 +99,9 @@ abstract class PaperHostService :
         val acceptanceProductJarSha256: Property<String>
     }
 
-    private val logger = org.gradle.api.logging.Logging.getLogger(PaperHostService::class.java)
+    private val logger =
+        org.gradle.api.logging.Logging
+            .getLogger(PaperHostService::class.java)
     private val lock = Any()
     private var process: Process? = null
     private var watchdog: Thread? = null
@@ -177,7 +179,12 @@ abstract class PaperHostService :
             }
             purgeStalePluginJars(pluginsDir, acceptanceJar.name)
             deployPluginJarSafely(acceptanceJar, File(pluginsDir, acceptanceJar.name))
-            runCatching { parameters.acceptanceReportFile.get().asFile.delete() }
+            runCatching {
+                parameters.acceptanceReportFile
+                    .get()
+                    .asFile
+                    .delete()
+            }
             logger.lifecycle("[mpmt-realserver] acceptance 模式：已部署验收驱动 + 启用 -Dmpmt.acceptance")
         }
 

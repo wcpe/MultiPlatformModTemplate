@@ -11,8 +11,8 @@ import java.util.function.Supplier;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import top.wcpe.mc.mpmt.core.domain.ban.BanEntry;
-import top.wcpe.mc.mpmt.core.domain.ban.MachineCode;
+import top.wcpe.mc.mpmt.kernel.ban.BanEntry;
+import top.wcpe.mc.mpmt.kernel.ban.MachineCode;
 import top.wcpe.mc.mpmt.core.server.BanService;
 
 /** NeoForge 原生 Brigadier 机器码封禁命令。 */

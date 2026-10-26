@@ -4,7 +4,7 @@ import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
-import top.wcpe.mc.mpmt.core.domain.net.HandshakeStateMachine;
+import top.wcpe.mc.mpmt.kernel.net.HandshakeStateMachine;
 import top.wcpe.mc.mpmt.platform.sponge.MpmtSpongePlugin;
 
 /**
@@ -29,12 +29,17 @@ public final class ProductHandshakeServerScenario extends ServerScenario {
     @Override
     public void run(ServerGameTestContext context) {
         awaitClientReady();
+        awaitServerHandshakeEstablished(context);
+        runClientStep("verify-handshake", "{}");
+    }
+
+    @Override
+    protected void awaitServerHandshakeEstablished(ServerGameTestContext context) {
         MpmtSpongePlugin plugin = SpongeScenarioSupport.productPlugin(context);
         boolean established =
                 context.awaitUntil(
                         HANDSHAKE_TIMEOUT_TICKS, () -> productHandshakeEstablished(plugin));
         context.assertTrue(established, "等待产品握手 ESTABLISHED 超时");
-        runClientStep("verify-handshake", "{}");
     }
 
     private static boolean productHandshakeEstablished(MpmtSpongePlugin plugin) {

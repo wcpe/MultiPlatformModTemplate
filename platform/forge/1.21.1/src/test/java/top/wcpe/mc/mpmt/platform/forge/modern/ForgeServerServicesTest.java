@@ -17,12 +17,12 @@ class ForgeServerServicesTest {
     private static MpmtRuntime runtimeWithPorts() {
         MpmtRuntime runtime = new MpmtRuntime();
         runtime.ports().register(
-                top.wcpe.mc.mpmt.core.domain.port.PersistencePort.class, Fixtures.emptyPersistence());
+                top.wcpe.mc.mpmt.kernel.port.PersistencePort.class, Fixtures.emptyPersistence());
         runtime.ports().register(
-                top.wcpe.mc.mpmt.core.domain.port.SchedulerPort.class, Fixtures.immediateScheduler());
+                top.wcpe.mc.mpmt.kernel.port.SchedulerPort.class, Fixtures.immediateScheduler());
         runtime.ports().register(
-                top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort.class,
-                Fixtures.recordingConnections(new top.wcpe.mc.mpmt.core.domain.ref.EntityRef(UUID.randomUUID())));
+                top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort.class,
+                Fixtures.recordingConnections(new top.wcpe.mc.mpmt.kernel.ref.EntityRef(UUID.randomUUID())));
         return runtime;
     }
 
@@ -62,8 +62,8 @@ class ForgeServerServicesTest {
             // 工具类不实例化
         }
 
-        static top.wcpe.mc.mpmt.core.domain.port.PersistencePort emptyPersistence() {
-            return new top.wcpe.mc.mpmt.core.domain.port.PersistencePort() {
+        static top.wcpe.mc.mpmt.kernel.port.PersistencePort emptyPersistence() {
+            return new top.wcpe.mc.mpmt.kernel.port.PersistencePort() {
                 @Override
                 public java.util.Optional<String> read(String namespace, String key) {
                     return java.util.Optional.empty();
@@ -76,16 +76,16 @@ class ForgeServerServicesTest {
             };
         }
 
-        static top.wcpe.mc.mpmt.core.domain.port.SchedulerPort immediateScheduler() {
-            return new top.wcpe.mc.mpmt.core.domain.port.SchedulerPort() {
+        static top.wcpe.mc.mpmt.kernel.port.SchedulerPort immediateScheduler() {
+            return new top.wcpe.mc.mpmt.kernel.port.SchedulerPort() {
                 @Override
-                public void runForEntity(top.wcpe.mc.mpmt.core.domain.ref.EntityRef entity, Runnable task) {
+                public void runForEntity(top.wcpe.mc.mpmt.kernel.ref.EntityRef entity, Runnable task) {
                     task.run();
                 }
 
                 @Override
                 public void runForLocation(
-                        top.wcpe.mc.mpmt.core.domain.ref.WorldRef world, int x, int z, Runnable task) {
+                        top.wcpe.mc.mpmt.kernel.ref.WorldRef world, int x, int z, Runnable task) {
                     task.run();
                 }
 
@@ -106,18 +106,18 @@ class ForgeServerServicesTest {
             };
         }
 
-        static top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort recordingConnections(
-                top.wcpe.mc.mpmt.core.domain.ref.EntityRef entity) {
-            return new top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort() {
+        static top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort recordingConnections(
+                top.wcpe.mc.mpmt.kernel.ref.EntityRef entity) {
+            return new top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort() {
                 @Override
-                public top.wcpe.mc.mpmt.core.domain.ref.EntityRef entityOf(
-                        top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle connection) {
+                public top.wcpe.mc.mpmt.kernel.ref.EntityRef entityOf(
+                        top.wcpe.mc.mpmt.kernel.port.ConnectionHandle connection) {
                     return entity;
                 }
 
                 @Override
                 public void disconnect(
-                        top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle connection, String reason) {
+                        top.wcpe.mc.mpmt.kernel.port.ConnectionHandle connection, String reason) {
                     // 装配测试不断开
                 }
             };

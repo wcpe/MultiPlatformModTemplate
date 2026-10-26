@@ -4,7 +4,7 @@
 plugins {
     `kotlin-dsl`
     id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
-    id("io.gitlab.arturbosch.detekt") version "1.23.8"
+    id("dev.detekt") version "2.0.0-alpha.6"
     id("org.jetbrains.kotlinx.kover") version "0.9.9"
 }
 
@@ -38,7 +38,13 @@ gradlePlugin {
 }
 
 dependencies {
+    // detekt 2.x 应用插件时即需要 KotlinBasePlugin 类型（1.x 内嵌，2.x 改为依赖 Kotlin 插件）。
+    implementation(kotlin("gradle-plugin"))
+
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    // ProjectBuilder 行为断言：把插件应用到假工程上检查任务注册与属性契约，
+    // 取代原先「读插件源码做文本包含判断」的写法（ADR-0029）。仅从本地 Gradle 分发解析，无需联网。
+    testImplementation(gradleTestKit())
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

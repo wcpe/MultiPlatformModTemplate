@@ -16,7 +16,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
 import top.wcpe.mc.mpmt.platform.fabric.FabricTestSupport.LoaderStub;
@@ -247,18 +247,18 @@ class MpmtFabricBootstrapTest {
     /** 连接句柄断言辅助：把不透明句柄还原为可断言的玩家信息。 */
     private static final class FabricConnectionHandleProbe {
 
-        private final top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle connection;
+        private final top.wcpe.mc.mpmt.kernel.port.ConnectionHandle connection;
 
-        FabricConnectionHandleProbe(top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle connection) {
+        FabricConnectionHandleProbe(top.wcpe.mc.mpmt.kernel.port.ConnectionHandle connection) {
             this.connection = connection;
         }
 
-        top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle connection() {
+        top.wcpe.mc.mpmt.kernel.port.ConnectionHandle connection() {
             return connection;
         }
 
         ServerPlayer player() {
-            return ((top.wcpe.mc.mpmt.platform.fabric.net.FabricConnectionHandle) connection).player();
+            return ((top.wcpe.mc.mpmt.mcshared.server.net.FabricConnectionHandle) connection).player();
         }
     }
 }

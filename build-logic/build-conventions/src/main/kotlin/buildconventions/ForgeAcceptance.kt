@@ -45,12 +45,21 @@ fun configureForgeReportProperties(
 ) {
     val javaVersion = lane.targetJavaVersion.get()
     val product =
-        project.tasks.named(
-            lane.productTaskName.get(),
-            AbstractArchiveTask::class.java,
-        ).get().archiveFile.get().asFile
+        project.tasks
+            .named(
+                lane.productTaskName.get(),
+                AbstractArchiveTask::class.java,
+            ).get()
+            .archiveFile
+            .get()
+            .asFile
     val acceptanceJarFile =
-        project.tasks.named(FORGE_ACCEPTANCE_JAR_TASK, AbstractArchiveTask::class.java).get().archiveFile.get().asFile
+        project.tasks
+            .named(FORGE_ACCEPTANCE_JAR_TASK, AbstractArchiveTask::class.java)
+            .get()
+            .archiveFile
+            .get()
+            .asFile
     val serverRuntimeProperty = project.findProperty("mpmt.acceptance.artifact.server-runtime")
     val serverRuntime =
         when {
@@ -70,7 +79,9 @@ fun configureForgeReportProperties(
     )
     task.systemProperty(
         "mpmt.acceptance.javaExecutable",
-        forgeJavaLauncher(project, javaVersion).get().executablePath.asFile.absolutePath,
+        forgeJavaLauncher(project, javaVersion)
+            .get()
+            .executablePath.asFile.absolutePath,
     )
     task.systemProperty("mpmt.acceptance.artifact.server-runtime", serverRuntime.absolutePath)
     task.systemProperty("mpmt.acceptance.artifact.server-product", product.absolutePath)
@@ -99,7 +110,12 @@ internal fun registerForgeAcceptanceReportGate(project: Project, lane: ForgeLane
             if (!report.isFile) {
                 throw GradleException("未找到 $laneLabel 验收报告：${report.absolutePath}\n" + lane.acceptanceReportHint.get())
             }
-            val lines = report.readText(Charsets.UTF_8).lines().map { it.trim() }.filter { it.isNotEmpty() }
+            val lines =
+                report
+                    .readText(Charsets.UTF_8)
+                    .lines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
             if (lines.isEmpty()) {
                 throw GradleException("验收报告为空：${report.absolutePath}")
             }
@@ -175,8 +191,20 @@ internal fun registerForgeContractTest(project: Project, lane: ForgeLaneExtensio
         mainClass.set(lane.contractTestMainClass.get())
         javaLauncher.set(forgeJavaLauncher(project, lane.targetJavaVersion.get()))
         systemProperty("mpmt.test.repositoryRoot", project.rootProject.projectDir.absolutePath)
-        systemProperty("mpmt.test.productJar", productTask.flatMap { it.archiveFile }.get().asFile.absolutePath)
-        systemProperty("mpmt.test.acceptanceJar", acceptanceTask.flatMap { it.archiveFile }.get().asFile.absolutePath)
+        systemProperty(
+            "mpmt.test.productJar",
+            productTask
+                .flatMap { it.archiveFile }
+                .get()
+                .asFile.absolutePath,
+        )
+        systemProperty(
+            "mpmt.test.acceptanceJar",
+            acceptanceTask
+                .flatMap { it.archiveFile }
+                .get()
+                .asFile.absolutePath,
+        )
         lane.contractTestProperties.get().forEach { (name, value) -> systemProperty(name, value) }
     }
 }

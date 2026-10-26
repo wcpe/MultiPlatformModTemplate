@@ -47,6 +47,27 @@ runs:
     - name: 配置 Gradle 缓存
       uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
 
+    # Loom 的 MC 映射 / dev jar（约数 GB）不在 setup-gradle 默认缓存范围内，
+    # 每次冷启动都要重新派生，是 :buildAll 的主要固定开销。
+    #
+    # 只缓存 Loom 制品（映射与 dev jar），不动 setup-gradle 的 cache-read-only：
+    # 本 action 也被 CodeQL 以 disable-build-cache=true 调用，若开启构建缓存写入/命中，
+    # compileJava 会取缓存产物而不调用 javac，CodeQL 报 Exit 32。
+    # CodeQL 路径跳过本步骤，避免与其 build-cache 策略相互干扰。
+    - name: 缓存 Loom 制品
+      if: inputs.disable-build-cache != 'true'
+      uses: actions/cache@v4
+      with:
+        # 只缓存 ~/.gradle 下的共享制品（MC jar / 映射 / dev jar）。
+        # 不缓存工作区内的 .gradle/loom-user-cache：那是构建本身的工作目录，
+        # 缓存其中间产物会让下游构建读到「文件在、内容不可用」的半成品，
+        # 表现为 genSourcesWithCfr 报「Minecraft jar 尚不存在」而任务创建失败。
+        path: ~/.gradle/caches/fabric-loom
+        key: loom-${{ runner.os }}-all-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
+        restore-keys: |
+          loom-${{ runner.os }}-all-
+          loom-${{ runner.os }}-
+
     # 单一根构建：全部平台车道为根子模块，一条命令构建 + 校验 + 聚合发布产物。
     # JDK 25 守护（26.2 车道配置期硬校验）；MPMT_JAVA*_HOME 供矩阵轨与跨代车道显式选 JDK。
     #

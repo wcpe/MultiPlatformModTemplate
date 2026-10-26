@@ -2,8 +2,8 @@ package top.wcpe.mc.mpmt.platform.fabric.client;
 
 import java.util.Objects;
 import top.wcpe.mc.mpmt.core.client.ClientNetworkFeature;
-import top.wcpe.mc.mpmt.core.domain.port.MachineCodeProvider;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.MachineCodeProvider;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.platform.fabric.capability.FabricHudRenderer;
 import top.wcpe.mc.mpmt.platform.fabric.net.FabricClientTransport;

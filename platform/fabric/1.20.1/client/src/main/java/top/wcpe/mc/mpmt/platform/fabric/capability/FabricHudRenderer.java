@@ -1,6 +1,9 @@
 package top.wcpe.mc.mpmt.platform.fabric.capability;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
@@ -23,6 +26,17 @@ public final class FabricHudRenderer {
 
     private static volatile ServerHudMessagePacket lastRendered;
 
+    /**
+     * 本次连接内收到过的全部 HUD（按到达顺序）。
+     *
+     * <p>与 {@link #lastRendered} 并存的原因：产品握手流程会在进世界后连续下发
+     * ACTIONBAR / TOAST / CHAT 三条演示 HUD，而验收场景自己还要发一条 ACTIONBAR。
+     * 只看「最后一条」时，后到的演示 HUD 会把场景自己发的那条覆盖掉，
+     * 于是「是否收到某条 HUD」这类断言会误判。
+     */
+    private static List<ServerHudMessagePacket> receivedList =
+            Collections.synchronizedList(new ArrayList<>());
+
     private FabricHudRenderer() {
         // 工具类不实例化
     }
@@ -32,9 +46,17 @@ public final class FabricHudRenderer {
         return lastRendered;
     }
 
+    /** {@return 本次连接内收到过的全部 HUD 快照} 用于「是否收到过某条 HUD」类的断言. */
+    public static List<ServerHudMessagePacket> receivedHuds() {
+        synchronized (receivedList) {
+            return new ArrayList<>(receivedList);
+        }
+    }
+
     /** 断线时清空 HUD 快照，避免旧会话状态泄漏到下一 play 连接。 */
     public static void clear() {
         lastRendered = null;
+        receivedList.clear();
     }
 
     /** 在客户端收发管线上注册 HUD 收包处理器。 */
@@ -44,6 +66,7 @@ public final class FabricHudRenderer {
                 (connection, packet) -> {
                     ServerHudMessagePacket hud = (ServerHudMessagePacket) packet;
                     lastRendered = hud;
+                    receivedList.add(hud);
                     Minecraft.getInstance().execute(() -> render(hud));
                 });
     }

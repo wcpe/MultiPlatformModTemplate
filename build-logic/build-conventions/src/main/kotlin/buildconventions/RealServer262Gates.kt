@@ -38,11 +38,19 @@ private fun registerBuildRealServerArtifacts262(
         )
         doLast {
             val forgeProduct =
-                project.project(":platform:forge:forge-26.2").layout.buildDirectory
-                    .file("libs/mpmt-forge-26.2-$version.jar").get().asFile
+                project
+                    .project(":platform:forge:forge-26.2")
+                    .layout.buildDirectory
+                    .file("libs/mpmt-forge-26.2-$version.jar")
+                    .get()
+                    .asFile
             val forgeAcceptance =
-                project.project(":platform:forge:forge-26.2").layout.buildDirectory
-                    .file("libs/mpmt-forge-acceptance-26.2-$version.jar").get().asFile
+                project
+                    .project(":platform:forge:forge-26.2")
+                    .layout.buildDirectory
+                    .file("libs/mpmt-forge-acceptance-26.2-$version.jar")
+                    .get()
+                    .asFile
             if (!forgeProduct.isFile || !forgeAcceptance.isFile) {
                 throw GradleException(
                     "缺少 Forge 26.2 产品或验收产物（已于本次依赖 :platform:forge:forge-26.2:packageArtifacts，仍缺失说明该任务未产出预期命名）：" +

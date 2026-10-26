@@ -7,8 +7,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import top.wcpe.mc.mpmt.core.domain.port.PlayerPort;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.port.PlayerPort;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
 
 /** Bukkit 玩家查询端口：把在线玩家转换为平台无关引用。 */
 public final class BukkitPlayerPort implements PlayerPort {

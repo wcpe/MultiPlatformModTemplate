@@ -1,5 +1,5 @@
 // L1 core-client：客户端公共逻辑（跨所有客户端加载器一致的部分），平台无关，严格 Java 8。
-// 当前承载握手客户端服务；经 protocol 收发（protocol 已 api 暴露 core-domain）。不含具体渲染调用。
+// 当前承载握手客户端服务；经 protocol 收发（protocol 已 api 暴露 core-kernel）。不含具体渲染调用。
 
 plugins {
     id("build-conventions.quality")

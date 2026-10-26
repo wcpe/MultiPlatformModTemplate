@@ -14,9 +14,9 @@ import net.minecraft.server.level.ServerPlayer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import top.wcpe.mc.mpmt.core.domain.port.WorldPort;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
-import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
+import top.wcpe.mc.mpmt.kernel.port.WorldPort;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.ref.WorldRef;
 import top.wcpe.mc.mpmt.platform.forge.ForgeMinecraftTestSupport;
 
 /** Forge 世界 / 玩家 / 消息 / 持久化 / 数据目录端口的真实行为。 */

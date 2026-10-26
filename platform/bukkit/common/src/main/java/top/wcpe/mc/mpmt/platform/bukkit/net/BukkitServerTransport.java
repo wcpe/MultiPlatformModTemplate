@@ -3,8 +3,8 @@ package top.wcpe.mc.mpmt.platform.bukkit.net;
 import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.platform.bukkit.version.BukkitServerNetwork;
 
 /** Bukkit 服务端传输端口：把上层裸字节收发委托给启动期选定的版本适配器。 */

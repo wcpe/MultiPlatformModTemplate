@@ -121,7 +121,11 @@ class RealServerReportGatePlugin : Plugin<Project> {
     private fun artifact(root: File, path: String): File = File(root, path)
 
     private fun required(project: Project, property: String): String {
-        val value = project.providers.gradleProperty(property).orNull?.trim()
+        val value =
+            project.providers
+                .gradleProperty(property)
+                .orNull
+                ?.trim()
         if (value.isNullOrEmpty()) throw GradleException("真服门需要 -P$property")
         return value
     }

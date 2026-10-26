@@ -6,20 +6,22 @@ import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import top.wcpe.mc.mpmt.core.domain.event.DomainEvent;
-import top.wcpe.mc.mpmt.core.domain.event.EventBusPort;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.DataDirectoryPort;
-import top.wcpe.mc.mpmt.core.domain.port.MessagePort;
-import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
-import top.wcpe.mc.mpmt.core.domain.port.PlayerPort;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.port.WorldPort;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.event.DomainEvent;
+import top.wcpe.mc.mpmt.kernel.event.EventBusPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
+import top.wcpe.mc.mpmt.kernel.port.MessagePort;
+import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
+import top.wcpe.mc.mpmt.kernel.port.PlayerPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.WorldPort;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
-import top.wcpe.mc.mpmt.domain.capability.PlatformCapabilityExample;
 import top.wcpe.mc.mpmt.domain.capability.PlayerJoinedEvent;
 import top.wcpe.mc.mpmt.domain.capability.PlayerLeftEvent;
+import top.wcpe.mc.mpmt.mcshared.common.capability.FabricConnectionControlPort;
+import top.wcpe.mc.mpmt.mcshared.common.capability.FabricMessagePort;
+import top.wcpe.mc.mpmt.mcshared.common.capability.FabricPlayerPort;
 
 /**
  * Fabric 平台能力装配：在服务端运行时启用前注册能力端口，并把玩家事件桥接到唯一的运行时 EventBus。
@@ -54,10 +56,10 @@ public final class FabricCapabilityBootstrap {
         runtime.ports().register(WorldPort.class, worlds);
         runtime.ports().register(SchedulerPort.class, scheduler);
 
-        EventBusPort eventBus = runtime.eventBus();
-        PlatformCapabilityExample example =
-                new PlatformCapabilityExample(persistence, message, scheduler, System::currentTimeMillis);
-        example.register(eventBus);
+        // 功能域经 META-INF/services 自动发现装配（ADR-0028）：车道不认识任何具体域，
+        // 新增域不需要改这里。discover 只是登记，真正的 onEnable（取端口、订阅）发生在
+        // runtime.enable()，故此刻端口已全部注册完毕。
+        runtime.features().discover(FabricCapabilityBootstrap.class.getClassLoader());
 
         registerConnectionListeners();
         activateRuntime(runtime);

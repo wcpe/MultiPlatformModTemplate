@@ -1,7 +1,7 @@
 package top.wcpe.mc.mpmt.core.server;
 
 import java.util.Objects;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 import top.wcpe.mc.mpmt.protocol.PacketDispatcher;
 import top.wcpe.mc.mpmt.protocol.packet.HudKind;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;

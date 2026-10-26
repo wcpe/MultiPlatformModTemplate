@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import top.wcpe.mc.mpmt.kernel.feature.RuntimeContext;
 
 /**
  * 端口注册表：按端口接口类型持有平台注入的端口实现（类型安全的 {@code Class<T> -> T} 映射）。

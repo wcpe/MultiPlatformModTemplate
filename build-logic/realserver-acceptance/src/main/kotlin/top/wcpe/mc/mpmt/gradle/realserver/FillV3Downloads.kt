@@ -47,7 +47,11 @@ internal object FillV3Downloads {
         }
 
     fun parseLatestBuildId(json: String): Int =
-        Regex(""""id"\s*:\s*(\d+)""").find(json)?.groupValues?.get(1)?.toInt()
+        Regex(""""id"\s*:\s*(\d+)""")
+            .find(json)
+            ?.groupValues
+            ?.get(1)
+            ?.toInt()
             ?: throw IllegalStateException("未从 Fill v3 构建响应解析到 id 字段。")
 
     fun parseDownloadUrl(json: String, key: String): String =

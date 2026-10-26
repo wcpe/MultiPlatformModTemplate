@@ -41,7 +41,8 @@ fun registerGametestSourceSet(project: Project) {
         gametest.resources.setSrcDirs(listOf("$GAMETEST_SOURCE_SET/src/main/resources"))
         gametest.compileClasspath += main.compileClasspath + main.output
         gametest.runtimeClasspath += main.runtimeClasspath + main.output
-        project.configurations.getByName("${GAMETEST_SOURCE_SET}Implementation")
+        project.configurations
+            .getByName("${GAMETEST_SOURCE_SET}Implementation")
             .extendsFrom(project.configurations.getByName("implementation"))
         project.tasks.named("build").configure { dependsOn("${GAMETEST_SOURCE_SET}Classes") }
     }
@@ -72,7 +73,11 @@ fun expandModMetadata(project: Project, lane: FabricLaneExtension) {
 /** 单测的版本/验收系统属性：`mpmt.test.*` 一组，与产品元数据同口径。 */
 fun configureGametestTestTask(project: Project, lane: FabricLaneExtension) {
     val mcVersion = lane.mcVersion.get()
-    val acceptanceMetadata = project.layout.buildDirectory.file("resources/gametest/fabric.mod.json").get().asFile
+    val acceptanceMetadata =
+        project.layout.buildDirectory
+            .file("resources/gametest/fabric.mod.json")
+            .get()
+            .asFile
     project.tasks.named("test", Test::class.java).configure {
         useJUnitPlatform()
         dependsOn("processGametestResources")
@@ -116,7 +121,12 @@ private fun Task.verifySimulatorReport(report: File, scenarios: List<String>) {
     }
     val text = report.readText()
     logger.lifecycle("[sim] 模拟服 GameTest 权威报告：\n$text")
-    val lines = text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+    val lines =
+        text
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toList()
     if (lines.firstOrNull() != ACCEPTANCE_REPORT_HEADER) {
         throw GradleException("[sim] 模拟服报告不是 acceptance v2")
     }

@@ -4,6 +4,10 @@ import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Project
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.api.tasks.bundling.Jar
+
+/** 产品 shade 任务名（与 NeoForgePackaging 内保持一致）。 */
+private const val NEOFORGE_DEV_SHADOW_JAR_TASK: String = "shadowJar"
 
 /** loom 为 forge 系预建的 run 名（loom 已套用 `client()` / `server()` 模板，这里只做等价移植）。 */
 internal const val NEOFORGE_CLIENT_RUN_NAME: String = "client"
@@ -45,9 +49,6 @@ internal const val MPMT_ACCEPTANCE_MC_VERSION_PROPERTY: String = "mpmt.acceptanc
 internal const val MPMT_ACCEPTANCE_SERVER_VERSION_PROPERTY: String = "mpmt.acceptance.serverVersion"
 internal const val MPMT_ACCEPTANCE_PRODUCT_JAR_PROPERTY: String = "mpmt.acceptance.productJar"
 
-/** 报告标识本轮提交：commit 配置期一次取定（与迁移前车道脚本同一口径）。 */
-internal fun gitHeadCommit(project: Project): String =
-    project.providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim()
 
 /**
  * dev run 配置：loom 已为 forge 系预建默认 client / server 运行配置（`client()` / `server()` 模板已应用），
@@ -64,11 +65,16 @@ internal fun gitHeadCommit(project: Project): String =
 internal fun configureNeoForgeRuns(project: Project, lane: NeoForgeLaneExtension) {
     val runs = neoforgeLoomRuns(project)
     val main = project.extensions.getByType(SourceSetContainer::class.java).getByName("main")
-    configureClientRun(project, runs, main)
+    configureClientRun(project, runs, main, lane)
     configureServerRun(project, runs, main, lane)
 }
 
-private fun configureClientRun(project: Project, runs: NamedDomainObjectContainer<*>, main: SourceSet) {
+private fun configureClientRun(
+    project: Project,
+    runs: NamedDomainObjectContainer<*>,
+    main: SourceSet,
+    lane: NeoForgeLaneExtension,
+) {
     val run = neoforgeRunConfig(runs, NEOFORGE_CLIENT_RUN_NAME)
     run.invokeGroovy("setConfigName", NEOFORGE_CLIENT_CONFIG_NAME)
     run.invokeGroovy("source", main)
@@ -80,6 +86,40 @@ private fun configureClientRun(project: Project, runs: NamedDomainObjectContaine
         MPMT_ACCEPTANCE_SERVER_PROPERTY,
         (project.findProperty(MPMT_ACCEPTANCE_SERVER_PROPERTY) as String?) ?: NEOFORGE_DEFAULT_ACCEPTANCE_SERVER,
     )
+    // 单机/LAN 验收（-Pmpmt.acceptance.singleplayer=true）：伴侣据此创建单人世界，
+    // 由客户端内置服务端承载验收场景，无需另起专用服。
+    if (project.findProperty("mpmt.acceptance.singleplayer") == "true") {
+        run.invokeGroovy("property", "mpmt.acceptance.singleplayer", "true")
+        run.invokeGroovy(
+            "property",
+            "mpmt.acceptance.report",
+            project.file("$NEOFORGE_CLIENT_RUN_DIR/singleplayer-acceptance-report.txt").absolutePath,
+        )
+        run.invokeGroovy("property", "mpmt.acceptance.deadlineMs", "600000")
+        run.invokeGroovy("property", "mpmt.acceptance.platform", "neoforge")
+        run.invokeGroovy("property", "mpmt.acceptance.mcVersion", lane.mcVersion.get())
+        run.invokeGroovy(
+            "property",
+            "mpmt.acceptance.serverVersion",
+            "NeoForge ${lane.mcVersion.get()}",
+        )
+        run.invokeGroovy("property", "mpmt.acceptance.version", project.version.toString())
+        run.invokeGroovy(
+            "property",
+            "mpmt.acceptance.commit",
+            project.gitHeadCommit(),
+        )
+        // 产品 jar 取 neoforgeProductJarFile：与产物命名同源（archivesName + 工程版本）。
+        // 手工拼 "$项目名-$版本.jar" 会忽略 archivesName 的 mpmt- 前缀，
+        // 驱动读不到 jar 就算不出 SHA-256，整轨直接 FAIL。
+        run.invokeGroovy(
+            "property",
+            "mpmt.acceptance.productJar",
+            neoforgeProductJarFile(project).absolutePath,
+        )
+        // 不显式传 productJarSha256：配置期产物尚未构建，求值必然失败；
+        // 驱动侧 NeoForgeDefaultSimulation.productJarSha256() 会在执行期按 productJar 自行计算摘要。
+    }
 }
 
 /** loom server 模板已自带 nogui 程序参数，无需（不可）重复声明。 */
@@ -99,10 +139,43 @@ private fun configureServerRun(
     run.invokeGroovy("property", MPMT_ACCEPTANCE_REPORT_PROPERTY, report)
     run.invokeGroovy("property", MPMT_ACCEPTANCE_DEADLINE_PROPERTY, NEOFORGE_ACCEPTANCE_DEADLINE_MS)
     // v2 元数据：commit 配置期取 git；productJar 供驱动算 SHA（对齐 Forge realserver）
-    run.invokeGroovy("property", MPMT_ACCEPTANCE_COMMIT_PROPERTY, gitHeadCommit(project))
+    run.invokeGroovy("property", MPMT_ACCEPTANCE_COMMIT_PROPERTY, project.gitHeadCommit())
     run.invokeGroovy("property", MPMT_ACCEPTANCE_VERSION_PROPERTY, project.version.toString())
     run.invokeGroovy("property", MPMT_ACCEPTANCE_PLATFORM_PROPERTY, NEOFORGE_PLATFORM_ID)
     run.invokeGroovy("property", MPMT_ACCEPTANCE_MC_VERSION_PROPERTY, lane.mcVersion.get())
     run.invokeGroovy("property", MPMT_ACCEPTANCE_SERVER_VERSION_PROPERTY, lane.neoForgeVersion.get())
     run.invokeGroovy("property", MPMT_ACCEPTANCE_PRODUCT_JAR_PROPERTY, neoforgeProductJarFile(project).absolutePath)
+}
+
+/**
+ * dev run 前把 shade 后的 dev 产物放进 run 目录的 mods/。
+ *
+ * 仅靠 `source(main)` 注入 dev 源集不够：核心库（core:kernel 等）不在 FML 模块层里，
+ * mod 类引用这些类型时会抛 NoClassDefFoundError。改由 mods/ 以真实 jar mod 加载，
+ * 核心类随 jar 一起进模块层，与产品部署形态一致。
+ */
+internal fun registerNeoForgeDevModsStaging(project: Project) {
+    listOf(
+        "runClient" to NEOFORGE_CLIENT_RUN_DIR,
+        "runServer" to NEOFORGE_SERVER_RUN_DIR,
+    ).forEach { (taskName, runDir) ->
+        project.tasks.named(taskName).configure {
+            dependsOn(project.tasks.named(NEOFORGE_DEV_SHADOW_JAR_TASK))
+            val devJar =
+                project.tasks
+                    .named(NEOFORGE_DEV_SHADOW_JAR_TASK, Jar::class.java)
+                    .flatMap { it.archiveFile }
+            val modsDir = project.layout.projectDirectory.dir("$runDir/mods")
+            inputs.file(devJar)
+            doFirst {
+                val target = modsDir.asFile.apply { mkdirs() }
+                // 清掉旧副本，避免改名或旧版本残留被 FML 重复加载
+                target.listFiles { f -> f.name.endsWith(".jar") }?.forEach { it.delete() }
+                project.copy {
+                    from(devJar)
+                    into(target)
+                }
+            }
+        }
+    }
 }

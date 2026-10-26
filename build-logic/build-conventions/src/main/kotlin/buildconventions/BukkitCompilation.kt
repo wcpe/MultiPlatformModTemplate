@@ -20,10 +20,13 @@ private const val BUKKIT_SOURCE_ENCODING = "UTF-8"
  */
 internal fun configureBukkitJavaCompilation(project: Project, lane: BukkitLaneExtension) {
     val compilerJavaVersion = JavaLanguageVersion.of(lane.compilerJavaVersion.get())
-    project.extensions.getByType(JavaPluginExtension::class.java)
-        .toolchain.languageVersion.set(compilerJavaVersion)
+    project.extensions
+        .getByType(JavaPluginExtension::class.java)
+        .toolchain.languageVersion
+        .set(compilerJavaVersion)
     val compiler =
-        project.extensions.getByType(JavaToolchainService::class.java)
+        project.extensions
+            .getByType(JavaToolchainService::class.java)
             .compilerFor { languageVersion.set(compilerJavaVersion) }
     project.tasks.withType(JavaCompile::class.java).configureEach {
         javaCompiler.set(compiler)

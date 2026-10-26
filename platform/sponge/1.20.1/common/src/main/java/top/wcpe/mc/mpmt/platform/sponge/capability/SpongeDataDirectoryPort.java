@@ -2,7 +2,7 @@ package top.wcpe.mc.mpmt.platform.sponge.capability;
 
 import java.nio.file.Path;
 import java.util.Objects;
-import top.wcpe.mc.mpmt.core.domain.port.DataDirectoryPort;
+import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
 
 /**
  * Sponge 数据基目录端口（L3，FR-30）：以插件专属配置目录（{@code config/mpmt/}，经 {@code @ConfigDir} 注入）
