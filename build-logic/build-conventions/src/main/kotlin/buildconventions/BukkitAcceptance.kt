@@ -54,9 +54,11 @@ internal fun registerBukkitAcceptanceTestSourceSet(
             compileClasspath += acceptance.output + acceptance.compileClasspath + main.output
             runtimeClasspath += output + acceptance.runtimeClasspath + compileClasspath
         }
-    project.configurations.getByName("${BUKKIT_ACCEPTANCE_TEST_SOURCE_SET}Implementation")
+    project.configurations
+        .getByName("${BUKKIT_ACCEPTANCE_TEST_SOURCE_SET}Implementation")
         .extendsFrom(project.configurations.getByName("testImplementation"))
-    project.configurations.getByName("${BUKKIT_ACCEPTANCE_TEST_SOURCE_SET}RuntimeOnly")
+    project.configurations
+        .getByName("${BUKKIT_ACCEPTANCE_TEST_SOURCE_SET}RuntimeOnly")
         .extendsFrom(project.configurations.getByName("testRuntimeOnly"))
     return acceptanceTest
 }

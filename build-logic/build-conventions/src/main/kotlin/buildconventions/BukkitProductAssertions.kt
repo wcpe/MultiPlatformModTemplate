@@ -48,7 +48,7 @@ fun PackagingAssertions.verifyBukkitProducts(
         }
     must(l4AdapterCount, "产品包含零个或多个 L4 适配器")
     mustServiceEquals(product, adapterService, adapterClass, "产品 adapter services 与目标不符")
-    mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "产品未 shade 核心")
+    mustContain(product, "top/wcpe/mc/mpmt/kernel/Mpmt.class", "产品未 shade 核心")
     mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "产品未 shade SPI")
     mustContain(product, "top/wcpe/mc/mpmt/platform/bukkit/MpmtBukkitPlugin.class", "产品缺少入口")
     if (expectFoliaSchedulerClass) {

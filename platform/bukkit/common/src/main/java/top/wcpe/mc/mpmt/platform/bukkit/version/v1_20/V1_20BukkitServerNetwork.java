@@ -6,7 +6,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.messaging.Messenger;
 import org.bukkit.plugin.messaging.PluginMessageListener;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 import top.wcpe.mc.mpmt.platform.bukkit.net.BukkitConnectionHandle;
 import top.wcpe.mc.mpmt.platform.bukkit.net.BukkitConnectionRegistry;
 import top.wcpe.mc.mpmt.platform.bukkit.version.BukkitServerNetwork;

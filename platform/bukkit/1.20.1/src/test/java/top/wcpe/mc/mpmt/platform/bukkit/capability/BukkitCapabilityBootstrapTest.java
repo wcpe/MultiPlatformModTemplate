@@ -21,9 +21,9 @@ import org.bukkit.plugin.Plugin;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.port.PlayerPort;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.port.WorldPort;
+import top.wcpe.mc.mpmt.kernel.port.PlayerPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.WorldPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.platform.bukkit.net.BukkitConnectionRegistry;
 import top.wcpe.mc.mpmt.platform.bukkit.version.BukkitChannels;
@@ -58,6 +58,9 @@ class BukkitCapabilityBootstrapTest {
         // 非 Folia：注入主线程调度适配器（测试 classpath 可能无 services）
         BukkitCapabilityBootstrap.register(
                 plugin, runtime, capability -> false, new BukkitConnectionRegistry(), stubAdapter());
+        // 功能域经 Feature 自动发现（ADR-0028）：register 只做登记，真正的 onEnable（订阅事件）
+        // 由 enable 触发——生产路径同样如此（MpmtBukkitPlugin:58），故测试须显式启用。
+        runtime.enable();
         assertTrue(runtime.ports().contains(PlayerPort.class));
         assertTrue(runtime.ports().contains(WorldPort.class));
 
@@ -83,6 +86,9 @@ class BukkitCapabilityBootstrapTest {
         MpmtRuntime runtime = new MpmtRuntime();
         BukkitCapabilityBootstrap.register(
                 plugin, runtime, capability -> false, new BukkitConnectionRegistry(), stubAdapter());
+        // 功能域经 Feature 自动发现（ADR-0028）：register 只做登记，真正的 onEnable（订阅事件）
+        // 由 enable 触发——生产路径同样如此（MpmtBukkitPlugin:58），故测试须显式启用。
+        runtime.enable();
         assertTrue(runtime.ports().contains(PlayerPort.class));
         assertTrue(runtime.ports().contains(WorldPort.class));
 

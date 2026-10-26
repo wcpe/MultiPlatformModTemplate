@@ -1,7 +1,7 @@
 package top.wcpe.mc.mpmt.platform.neoforge;
 
 import net.minecraft.server.MinecraftServer;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.platform.neoforge.capability.NeoForgeCapabilityBootstrap;
 import top.wcpe.mc.mpmt.platform.neoforge.net.NeoForgeServerTransport;

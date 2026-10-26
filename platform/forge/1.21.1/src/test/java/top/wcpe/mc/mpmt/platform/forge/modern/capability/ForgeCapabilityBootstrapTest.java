@@ -12,14 +12,14 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.event.EventBusPort;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.DataDirectoryPort;
-import top.wcpe.mc.mpmt.core.domain.port.MessagePort;
-import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
-import top.wcpe.mc.mpmt.core.domain.port.PlayerPort;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.port.WorldPort;
+import top.wcpe.mc.mpmt.kernel.event.EventBusPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
+import top.wcpe.mc.mpmt.kernel.port.MessagePort;
+import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
+import top.wcpe.mc.mpmt.kernel.port.PlayerPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.WorldPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.domain.capability.PlayerJoinedEvent;
 import top.wcpe.mc.mpmt.domain.capability.PlayerLeftEvent;
@@ -63,9 +63,9 @@ class ForgeCapabilityBootstrapTest {
 
         // 订阅状态经事件发布可观测：玩家进出事件可被示例订阅者确认接收
         runtime.eventBus().publish(new PlayerJoinedEvent(
-                new top.wcpe.mc.mpmt.core.domain.ref.PlayerRef(UUID.randomUUID(), "示例")));
+                new top.wcpe.mc.mpmt.kernel.ref.PlayerRef(UUID.randomUUID(), "示例")));
         runtime.eventBus().publish(new PlayerLeftEvent(
-                new top.wcpe.mc.mpmt.core.domain.ref.PlayerRef(UUID.randomUUID(), "示例")));
+                new top.wcpe.mc.mpmt.kernel.ref.PlayerRef(UUID.randomUUID(), "示例")));
 
         assertNotNull(runtime.eventBus());
     }

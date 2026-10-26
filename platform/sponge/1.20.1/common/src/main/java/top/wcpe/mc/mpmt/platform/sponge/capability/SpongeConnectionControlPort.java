@@ -3,9 +3,9 @@ package top.wcpe.mc.mpmt.platform.sponge.capability;
 import java.util.Objects;
 import net.kyori.adventure.text.Component;
 import org.spongepowered.api.Sponge;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.ref.EntityRef;
 import top.wcpe.mc.mpmt.platform.sponge.net.SpongeConnectionHandle;
 import top.wcpe.mc.mpmt.platform.sponge.net.SpongeConnectionRegistry;
 

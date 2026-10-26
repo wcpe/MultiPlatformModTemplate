@@ -29,7 +29,7 @@ import org.spongepowered.api.event.lifecycle.StartedEngineEvent;
 import org.spongepowered.api.event.lifecycle.StoppingEngineEvent;
 import org.spongepowered.api.network.channel.raw.RawDataChannel;
 import org.spongepowered.plugin.PluginContainer;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.core.server.BanService;
 import top.wcpe.mc.mpmt.platform.spi.PlatformProvider;

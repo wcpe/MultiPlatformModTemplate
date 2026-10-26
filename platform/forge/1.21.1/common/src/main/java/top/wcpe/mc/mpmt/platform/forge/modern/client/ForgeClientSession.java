@@ -3,8 +3,8 @@ package top.wcpe.mc.mpmt.platform.forge.modern.client;
 import java.util.Objects;
 import net.minecraft.network.Connection;
 import top.wcpe.mc.mpmt.core.client.ClientNetworkFeature;
-import top.wcpe.mc.mpmt.core.domain.port.MachineCodeProvider;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.MachineCodeProvider;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.platform.forge.modern.net.ForgeClientTransport;
 import top.wcpe.mc.mpmt.platform.forge.modern.net.ForgeTypedPayloadChannel;
@@ -94,5 +94,10 @@ public final class ForgeClientSession {
 
     public ForgeHudSnapshot hudSnapshot() {
         return hud.snapshot();
+    }
+
+    /** 最近一条 ACTIONBAR 快照（供 HUD 验收断言，不受 TITLE/TOAST/CHAT 覆盖）。 */
+    public ForgeHudSnapshot actionBarSnapshot() {
+        return hud.actionBarSnapshot();
     }
 }

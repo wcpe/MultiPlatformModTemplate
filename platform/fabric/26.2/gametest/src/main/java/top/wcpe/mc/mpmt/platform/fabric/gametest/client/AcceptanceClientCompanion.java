@@ -14,6 +14,11 @@ import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.TransferState;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.wcpe.mc.mpmt.acceptance.control.AcceptanceControlCodec;
@@ -43,6 +48,9 @@ public final class AcceptanceClientCompanion {
     private static final int AUTO_CONNECT_DELAY_TICKS = 40;
     private static final String SERVER_PROPERTY = "mpmt.acceptance.server";
     private static final String DEFAULT_SERVER = "127.0.0.1:25571";
+    /** 单机/LAN 轨开关：开启后由伴侣创建单人世界，不再连外部验收服。 */
+    private static final boolean SINGLEPLAYER =
+            Boolean.getBoolean("mpmt.acceptance.singleplayer");
 
     private final ClientVerifierRegistry verifiers = new ClientVerifierRegistry();
     private final Queue<RunStepPacket> inbound = new ConcurrentLinkedQueue<>();
@@ -50,6 +58,8 @@ public final class AcceptanceClientCompanion {
             FabricNetworkBindings.selectedAdapter()
                     .clientNetwork(AcceptanceControlChannelId.CHANNEL);
     private final AtomicBoolean connectAttempted = new AtomicBoolean(false);
+    /** 单机轨创建世界只发起一次。 */
+    private final AtomicBoolean singleplayerStartAttempted = new AtomicBoolean(false);
 
     private RunStepPacket active;
     private int ticksInStep;
@@ -69,8 +79,51 @@ public final class AcceptanceClientCompanion {
     }
 
     private void onClientTick(Minecraft client) {
-        tryAutoConnect(client);
+        if (SINGLEPLAYER) {
+            tryStartSingleplayerWorld(client);
+        } else {
+            tryAutoConnect(client);
+        }
         serveTick(client);
+    }
+
+    /**
+     * 单机轨：等启动加载遮罩退场后创建单人世界（只发起一次）。
+     *
+     * <p>{@code Minecraft#doWorldLoad} 是阻塞式加载循环，退出条件是「内置服务端 isReady 且
+     * {@code Minecraft#getOverlay()} 为 null」；若在启动加载遮罩仍在时调用，该条件永远不成立，
+     * 客户端会一直卡在加载界面（世界已建好却永不进世界）。故必须先等遮罩自然淡出。
+     */
+    private void tryStartSingleplayerWorld(Minecraft client) {
+        if (client.level != null) {
+            return; // 已在世界
+        }
+        if (client.gui.overlay() != null) {
+            return; // 启动加载遮罩未退场，此时创建世界会死等
+        }
+        Screen screen = client.gui.screen();
+        if (screen == null || screen instanceof ConnectScreen) {
+            return; // 还在加载或正在连接
+        }
+        if (!singleplayerStartAttempted.compareAndSet(false, true)) {
+            return; // 只发起一次
+        }
+        String world = System.getProperty("mpmt.acceptance.singleplayer.world", "mpmt-acceptance");
+        LOGGER.info("realserver 验收伴侣：单机轨，创建单人世界 {}", world);
+        client.createWorldOpenFlows()
+                .createFreshLevel(
+                        world,
+                        // 26.2 的 LevelSettings 改用 DifficultySettings 记录，
+                        // 不再接收 Difficulty + GameRules 两个独立参数
+                        new LevelSettings(
+                                world,
+                                GameType.SURVIVAL,
+                                LevelSettings.DifficultySettings.DEFAULT,
+                                true,
+                                WorldDataConfiguration.DEFAULT),
+                        new WorldOptions(WorldOptions.randomSeed(), true, false),
+                        WorldPresets::createNormalWorldDimensions,
+                        screen);
     }
 
     /**

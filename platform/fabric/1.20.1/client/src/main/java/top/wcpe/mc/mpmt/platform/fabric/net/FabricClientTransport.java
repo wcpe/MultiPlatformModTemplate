@@ -4,8 +4,8 @@ import java.util.Objects;
 import java.util.function.BiConsumer;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricClientNetwork;
 
 /**

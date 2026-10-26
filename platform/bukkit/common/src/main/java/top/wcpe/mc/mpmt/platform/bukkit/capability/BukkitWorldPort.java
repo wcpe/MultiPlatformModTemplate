@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.Optional;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
-import top.wcpe.mc.mpmt.core.domain.port.WorldPort;
-import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
+import top.wcpe.mc.mpmt.kernel.port.WorldPort;
+import top.wcpe.mc.mpmt.kernel.ref.WorldRef;
 
 /** Bukkit 世界查询端口：只暴露当前已加载世界的字符串标识。 */
 public final class BukkitWorldPort implements WorldPort {

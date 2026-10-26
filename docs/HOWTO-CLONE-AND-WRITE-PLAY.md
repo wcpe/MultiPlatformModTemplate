@@ -111,7 +111,7 @@ public final class PlayerJoinCounterService {
 
 ```bash
 # 编译 core + examples（快）
-./gradlew --no-daemon :core:domain:compileJava :examples:counter:compileJava
+./gradlew --no-daemon :core:kernel:compileJava :examples:counter:compileJava
 
 # 跑 examples 单测（纯 JVM，无需起服）
 ./gradlew --no-daemon :examples:counter:test

@@ -14,7 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 import top.wcpe.mc.mpmt.protocol.packet.FragmentPacket;
 
 /** 可靠性层：分片 → 重组往返 + 乱序 + CRC 检出 + 超时清理（FR-24，testing-and-quality §2）。 */

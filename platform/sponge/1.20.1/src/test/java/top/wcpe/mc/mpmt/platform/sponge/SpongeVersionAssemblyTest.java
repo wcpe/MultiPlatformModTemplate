@@ -16,7 +16,7 @@ import org.spongepowered.api.network.channel.raw.RawDataChannel;
 import org.spongepowered.api.network.channel.raw.play.RawPlayDataChannel;
 import org.spongepowered.api.network.channel.raw.play.RawPlayDataHandler;
 import org.spongepowered.plugin.PluginContainer;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.platform.sponge.version.SupportedVersion;
 import top.wcpe.mc.mpmt.platform.sponge.version.v1_20.V1_20SpongeServerNetwork;

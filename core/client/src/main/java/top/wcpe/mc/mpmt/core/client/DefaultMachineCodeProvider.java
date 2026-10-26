@@ -5,7 +5,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Objects;
 import java.util.function.Supplier;
-import top.wcpe.mc.mpmt.core.domain.port.MachineCodeProvider;
+import top.wcpe.mc.mpmt.kernel.port.MachineCodeProvider;
 
 /**
  * 默认弱客户端标识提供者：取若干弱系统属性拼接后求 SHA-256（hex）。

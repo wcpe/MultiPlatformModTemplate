@@ -8,8 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.ban.MachineCode;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.ban.MachineCode;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 
 /** 会话注册表登记 / 查询 / 下线穷举（FR-28）。 */
 class SessionRegistryTest {

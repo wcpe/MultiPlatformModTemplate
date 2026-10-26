@@ -7,8 +7,17 @@ import java.nio.charset.StandardCharsets
 import java.util.zip.ZipFile
 
 /** 一个 jar 的只读视图：条目名集合与条目文本，避免各车道各写一遍 zip 读取。 */
-class JarView(val file: File) {
-    val entries: Set<String> = ZipFile(file).use { zip -> zip.entries().asSequence().map { it.name }.toSet() }
+class JarView(
+    val file: File,
+) {
+    val entries: Set<String> =
+        ZipFile(file).use { zip ->
+            zip
+                .entries()
+                .asSequence()
+                .map { it.name }
+                .toSet()
+        }
 
     fun text(name: String): String =
         ZipFile(file).use { zip ->

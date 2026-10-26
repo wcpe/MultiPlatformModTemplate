@@ -67,7 +67,12 @@ internal fun registerSpongePackagingVerification(project: Project) {
         dependsOn(project.tasks.named(SPONGE_SHADOW_JAR_TASK))
         // 两条可复现性断言所需的打包配置在配置期取出：动作内不得再访问 project / Task（配置缓存要求），
         // 断言取值与判定顺序、失败文案与迁移前逐字一致。
-        val plainArchive = plainJar.get().archiveFile.get().asFile
+        val plainArchive =
+            plainJar
+                .get()
+                .archiveFile
+                .get()
+                .asFile
         val shadowPreservesTimestamps = productJar.get().isPreserveFileTimestamps
         val shadowReproducibleOrder = productJar.get().isReproducibleFileOrder
         packagingVerification(
@@ -78,7 +83,7 @@ internal fun registerSpongePackagingVerification(project: Project) {
             must(plainArchive != product.file, "普通 jar 与最终 shadowJar 输出路径冲突")
             must(!shadowPreservesTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
             must(shadowReproducibleOrder, "最终产品未启用可复现文件顺序")
-            mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "核心类未 shade 进插件 jar")
+            mustContain(product, "top/wcpe/mc/mpmt/kernel/Mpmt.class", "核心类未 shade 进插件 jar")
             mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "platform-spi 未 shade 进插件 jar")
             mustContain(product, "top/wcpe/mc/mpmt/platform/sponge/MpmtSpongePlugin.class", "缺少插件主类")
             mustContainPrefix(

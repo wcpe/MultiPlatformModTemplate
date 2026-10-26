@@ -21,8 +21,8 @@ import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.platform.forge.modern.ForgeTestSupport;
 import top.wcpe.mc.mpmt.platform.forge.modern.net.ForgeTypedPayloadChannel;
 import top.wcpe.mc.mpmt.protocol.PacketCodec;
@@ -210,7 +210,7 @@ class ForgeClientHudTest {
                 () -> new ForgeClientSession(channel, (String) null, () -> "code"));
         assertThrows(NullPointerException.class,
                 () -> new ForgeClientSession(channel, "1.0.0",
-                        (top.wcpe.mc.mpmt.core.domain.port.MachineCodeProvider) null));
+                        (top.wcpe.mc.mpmt.kernel.port.MachineCodeProvider) null));
         assertThrows(NullPointerException.class,
                 () -> new ForgeClientSession((ForgeTypedPayloadChannel) null, "1.0.0", () -> "code"));
     }

@@ -44,7 +44,12 @@ internal const val NEOFORGE_MAVEN_METADATA_EXCLUDE: String = "META-INF/maven/**"
  * 取值与产物命名同源（`base { archivesName }` + 工程版本），避免两处各写一遍路径。
  */
 internal fun neoforgeProductJarFile(project: Project): File =
-    project.tasks.named(NEOFORGE_REMAP_JAR_TASK, Jar::class.java).get().archiveFile.get().asFile
+    project.tasks
+        .named(NEOFORGE_REMAP_JAR_TASK, Jar::class.java)
+        .get()
+        .archiveFile
+        .get()
+        .asFile
 
 /**
  * 打包链路：薄包 `jar`（classifier `dev`）→ 自包含中间产物 `shadowJar` → 最终产品 `remapJar`。
@@ -98,7 +103,12 @@ internal fun registerNeoForgePackagingVerification(project: Project) {
         dependsOn(productJar)
         // 输出冲突与可复现性断言所需取值在配置期取出：动作内不得再访问 project / Task（配置缓存要求），
         // 断言取值与判定顺序、失败文案与迁移前逐字一致。
-        val plainArchive = plainJar.get().archiveFile.get().asFile
+        val plainArchive =
+            plainJar
+                .get()
+                .archiveFile
+                .get()
+                .asFile
         val shadowPreservesTimestamps = shadowJar.get().isPreserveFileTimestamps
         val shadowReproducibleOrder = shadowJar.get().isReproducibleFileOrder
         packagingVerification(
@@ -109,7 +119,7 @@ internal fun registerNeoForgePackagingVerification(project: Project) {
             must(plainArchive != product.file, "普通 jar 与最终产品 jar 输出路径冲突")
             must(!shadowPreservesTimestamps, "最终产品仍保留源文件时间戳，无法确定性构建")
             must(shadowReproducibleOrder, "最终产品未启用可复现文件顺序")
-            mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "核心类未 shade 进 mod jar")
+            mustContain(product, "top/wcpe/mc/mpmt/kernel/Mpmt.class", "核心类未 shade 进 mod jar")
             mustContain(
                 product,
                 "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class",

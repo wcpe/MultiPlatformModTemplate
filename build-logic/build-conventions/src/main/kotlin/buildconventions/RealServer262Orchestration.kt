@@ -53,7 +53,12 @@ fun launchAcceptanceProcess(task: JavaExec, logFile: File, workDir: File): Proce
     if (!workDir.isDirectory && !workDir.mkdirs()) {
         throw GradleException("无法创建验收运行目录：${workDir.absolutePath}")
     }
-    val command: MutableList<String> = mutableListOf(task.javaLauncher.get().executablePath.asFile.absolutePath)
+    val command: MutableList<String> =
+        mutableListOf(
+            task.javaLauncher
+                .get()
+                .executablePath.asFile.absolutePath,
+        )
     // Loom 预置的参数可能与任务在矩阵轨重新注入的同名系统属性重复；以后者为准。
     val systemPropertyPrefixes = task.systemProperties.keys.map { "-D$it=" }
     command += task.allJvmArgs.filterNot { argument -> systemPropertyPrefixes.any(argument::startsWith) }
@@ -64,7 +69,12 @@ fun launchAcceptanceProcess(task: JavaExec, logFile: File, workDir: File): Proce
     task.argumentProviders.forEach { provider ->
         providerArguments.addAll(provider.asArguments().map { argument -> argument as Any? })
     }
-    val nonStringTypes = providerArguments.filterNotNull().filter { it !is String }.map { it.javaClass.name }.distinct()
+    val nonStringTypes =
+        providerArguments
+            .filterNotNull()
+            .filter { it !is String }
+            .map { it.javaClass.name }
+            .distinct()
     if (nonStringTypes.isNotEmpty()) {
         task.logger.lifecycle("[realserver] ${task.name} 命令行含非 String 参数，已按字符串归一：$nonStringTypes")
     }
@@ -210,7 +220,12 @@ fun awaitAcceptanceRoundReport(report: File, runId: String, serverAlive: () -> B
  * fabric（v2 五判据）与 1.21.1 以前报告门走各自校验器，不经此函数；仅 forge/26.2 单进程编排用。
  */
 fun verifySimpleResultPass(report: File, onFailure: (last: String) -> Nothing) {
-    val lines = report.readText(Charsets.UTF_8).lines().map { it.trim() }.filter { it.isNotEmpty() }
+    val lines =
+        report
+            .readText(Charsets.UTF_8)
+            .lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
     val last = lines.last()
     if (last != "RESULT PASS") {
         onFailure(last)

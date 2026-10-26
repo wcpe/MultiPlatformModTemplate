@@ -1,5 +1,6 @@
 package top.wcpe.mc.mpmt.platform.forge.contract;
 
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -25,7 +26,7 @@ import net.minecraftforge.fml.common.network.internal.FMLProxyPacket;
 import net.minecraftforge.fml.relauncher.Side;
 import top.wcpe.mc.mpmt.acceptance.control.AcceptanceControlCodec;
 import top.wcpe.mc.mpmt.acceptance.control.ClientReadyPacket;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 import top.wcpe.mc.mpmt.platform.forge.MpmtForgeMod;
 import top.wcpe.mc.mpmt.platform.forge.acceptance.MpmtForgeAcceptanceMod;
 import top.wcpe.mc.mpmt.platform.forge.client.ForgeClientSession;
@@ -45,10 +46,25 @@ import top.wcpe.mc.mpmt.protocol.packet.ServerHelloPacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 import top.wcpe.mc.mpmt.protocol.packet.ServerMessagePacket;
 
-/** 不依赖外部测试框架的 1.12.2 严格契约测试入口。 */
+/**
+ * 不依赖外部测试框架的 1.12.2 严格契约测试入口。
+ *
+ * <p>全部断言只落在三类可信输入上：构建注入的 {@code mpmt.test.*} 系统属性、jar 内编译产物
+ * （条目 / class 常量池 / 已展开的元数据）、运行期行为。不回读 {@code build.gradle.kts} 或
+ * {@code .java} 源码做文本判断。
+ */
 public final class Forge112ContractTest {
 
     private static final int EXPECTED_GOLDEN_VECTORS = 37;
+    /** 产品入口类在 jar 内的路径：产品通道常量与目标 MC 版本契约都落在它的常量池上。 */
+    private static final String PRODUCT_ENTRY = "top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class";
+    /** 验收入口类在 jar 内的路径：验收独占通道常量落在它的常量池上。 */
+    private static final String ACCEPTANCE_ENTRY =
+            "top/wcpe/mc/mpmt/platform/forge/acceptance/MpmtForgeAcceptanceMod.class";
+    /** 产品通道的裸名称（不带命名空间冒号）。 */
+    private static final String PRODUCT_CHANNEL = "MPMT";
+    /** 验收控制通道的裸名称（不带命名空间冒号）。 */
+    private static final String ACCEPTANCE_CHANNEL = "MPMTTEST";
     private static final Pattern GOLDEN_VECTOR =
             Pattern.compile(
                     "\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\".*?"
@@ -59,65 +75,29 @@ public final class Forge112ContractTest {
     }
 
     public static void main(String[] args) throws Exception {
-        verifyFrozenBuildLane();
+        verifyJava8Runtime();
         verifyClientOnlyOptionalMetadata();
         verifyAcceptanceControlV2();
         verifyJoinAfterPlayerReadyTick();
         verifyHandshakeLifecycle();
         verifyWireGoldenVectors();
+        verifyPackagedContract();
         verifyArtifactIsolation();
         System.out.println("1.12.2 契约测试全部通过");
     }
 
-    private static void verifyFrozenBuildLane() throws IOException {
+    /**
+     * 契约测试自身必须跑在 Java 8 上：1.12.2 客户端与本车道全部字节码都以 Java 8 为上限，
+     * 换更高 JVM 运行会掩盖运行期不兼容。
+     */
+    private static void verifyJava8Runtime() {
         require("1.8".equals(System.getProperty("java.specification.version")), "契约测试必须运行于 Java 8");
-        File repositoryRoot = propertyFile("mpmt.test.repositoryRoot");
-        // 布局收纳后：platform/forge/1.12.2（ADR-0007 / 目录即工程）
-        File lane = new File(repositoryRoot, "platform/forge/1.12.2");
-        String build = read(new File(lane, "build.gradle.kts"));
-        String rootSettings = read(new File(repositoryRoot, "settings.gradle.kts"));
-
-        // ADR-0026：车道为根构建子模块——不再持有独立 settings / 自有 wrapper / 反向 includeBuild
-        require(!new File(lane, "settings.gradle.kts").exists(), "子模块车道不得再持有独立 settings");
-        require(!new File(lane, "gradlew").exists(), "子模块车道不得再持有自有 wrapper");
-        require(!build.contains("includeBuild"), "子模块车道不得复合加载根构建");
-
-        // ADR-0025：构建插件统一 top.wcpe.loom，版本在根 settings 单点 pin
-        require(build.contains("id(\"top.wcpe.loom\")"), "未应用 top.wcpe.loom 插件");
-        require(
-                rootSettings.contains("top.wcpe.loom") && rootSettings.contains("1.17.2"),
-                "根 settings 未冻结 top.wcpe.loom 1.17.2");
-
-        require(build.contains("1.12.2-14.23.5.2860"), "未冻结 Forge 1.12.2-14.23.5.2860");
-
-        // legacy（FG2 时代）链路前置条件（ADR-0025 决策 5）：必须声明 Pack200 provider，
-        // 且不得改用 no-remap 变体（本车道走 MCP 映射 + 重映射链路）。
-        require(build.contains("pack200Provider"), "legacy 链路必须声明 Pack200 provider");
-        require(!build.contains("loom-no-remap"), "legacy 链路不得使用 no-remap 变体");
-
-        // ADR-0026 决策 6：共享核心经同根构建的项目产物消费，不再按 build/libs 路径硬编码。
-        // Java 8 字节码约束由 verifyArtifactIsolation() 的 requireJava8Classes() 对实际产物校验。
-        require(build.contains("moduleJar("), "共享模块必须经同根构建项目产物消费");
-        require(!build.contains("sharedJars"), "不得再按 build/libs 路径硬编码共享 JAR");
     }
 
-    private static void verifyClientOnlyOptionalMetadata() throws IOException {
+    /** 客户端 mod 的可选性：{@code @Mod} 注解契约 + 服务端缺失时的运行期放行行为。 */
+    private static void verifyClientOnlyOptionalMetadata() {
         assertOptionalMod(MpmtForgeMod.class, "mpmt");
         assertOptionalMod(MpmtForgeAcceptanceMod.class, "mpmt_acceptance");
-        require("MPMT".equals(MpmtForgeMod.PRODUCT_CHANNEL), "产品通道必须为 MPMT");
-        require(MpmtForgeMod.PRODUCT_CHANNEL.indexOf(':') < 0, "产品通道必须为裸 MPMT");
-        require(
-                "MPMTTEST".equals(MpmtForgeAcceptanceMod.ACCEPTANCE_CHANNEL),
-                "验收通道必须为 MPMTTEST");
-        require(
-                MpmtForgeAcceptanceMod.ACCEPTANCE_CHANNEL.indexOf(':') < 0,
-                "验收通道必须为裸 MPMTTEST");
-
-        File repositoryRoot = propertyFile("mpmt.test.repositoryRoot");
-        File lane = new File(repositoryRoot, "platform/forge/1.12.2");
-        assertOptionalMetadata(new File(lane, "src/main/resources/mcmod.info"), "mpmt");
-        assertOptionalMetadata(
-                new File(lane, "src/acceptance/resources/mcmod.info"), "mpmt_acceptance");
 
         MpmtForgeMod product = new MpmtForgeMod();
         require(product.acceptRemoteVersions(Collections.emptyMap(), Side.SERVER), "optional 检查必须放行");
@@ -138,16 +118,6 @@ public final class Forge112ContractTest {
             }
         }
         require(handlerFound, "缺少 NetworkCheckHandler：" + expectedModId);
-    }
-
-    private static void assertOptionalMetadata(File metadataFile, String expectedModId)
-            throws IOException {
-        String metadata = read(metadataFile);
-        require(metadata.contains("\"modid\": \"" + expectedModId + "\""), "mcmod.info modid 不符");
-        require(metadata.contains("\"clientSideOnly\": true"), "mcmod.info 缺少 clientSideOnly");
-        require(
-                metadata.contains("\"acceptableRemoteVersions\": \"*\""),
-                "mcmod.info 缺少 acceptableRemoteVersions");
     }
 
     private static void verifyAcceptanceControlV2() {
@@ -266,8 +236,9 @@ public final class Forge112ContractTest {
     }
 
     private static void verifyWireGoldenVectors() throws IOException {
-        File repositoryRoot = propertyFile("mpmt.test.repositoryRoot");
-        File golden = new File(repositoryRoot, "core/protocol/src/test/resources/golden/wire-v1.json");
+        // wire-v1.json 是结构化期望值 fixture（非 .java / 非 .gradle.kts），作为编码金标读入
+        File golden = new File(propertyFile("mpmt.test.repositoryRoot"),
+                "core/protocol/src/test/resources/golden/wire-v1.json");
         Matcher matcher = GOLDEN_VECTOR.matcher(read(golden));
         PacketCodec codec = new PacketCodec();
         int count = 0;
@@ -276,17 +247,86 @@ public final class Forge112ContractTest {
             byte[] expected = Base64.getDecoder().decode(matcher.group(2));
             Packet decoded = codec.decode(expected);
             require(equal(expected, codec.encode(decoded)), "PacketCodec 偏离 wire-v1：" + name);
-            FMLProxyPacket carrier = ForgePayloadCodec.outgoing("MPMT", expected);
+            FMLProxyPacket carrier = ForgePayloadCodec.outgoing(PRODUCT_CHANNEL, expected);
             require(equal(expected, ForgePayloadCodec.incoming(carrier)), "1.12.2 外层改变裸 payload：" + name);
             count++;
         }
         require(count == EXPECTED_GOLDEN_VECTORS, "wire-v1 向量数量不符：" + count);
     }
 
+    /**
+     * 发布物契约：通道常量、目标 MC 版本、元数据展开与 MCP→SRG 重映射痕迹。
+     *
+     * <p>这些约束原本靠回读 {@code build.gradle.kts} 文本保证，现全部改为读 jar 内真实内容：
+     * 常量池精确匹配（不会像字节子串匹配那样把 {@code MPMT} 命中到 {@code MPMTTEST}）。
+     */
+    private static void verifyPackagedContract() throws IOException {
+        String version = propertyValue("mpmt.test.version");
+        JarView product = JarView.read(propertyFile("mpmt.test.productJar"));
+        JarView acceptance = JarView.read(propertyFile("mpmt.test.acceptanceJar"));
+
+        ClassFileConstantPool productEntry = product.constantPool(PRODUCT_ENTRY);
+        ClassFileConstantPool acceptanceEntry = acceptance.constantPool(ACCEPTANCE_ENTRY);
+
+        // 通道常量：产品与验收各占一条裸通道，且互不复用（含 ':' 的命名空间形式不合契约）
+        require(productEntry.hasUtf8(PRODUCT_CHANNEL), "产品入口类常量池缺少裸通道 MPMT");
+        require(!productEntry.hasUtf8Prefix(PRODUCT_CHANNEL + ":"), "产品通道必须为裸 MPMT，不得带命名空间");
+        require(!productEntry.hasUtf8(ACCEPTANCE_CHANNEL), "产品入口类不得引用验收通道 MPMTTEST");
+        require(acceptanceEntry.hasUtf8(ACCEPTANCE_CHANNEL), "验收入口类常量池缺少独占控制通道 MPMTTEST");
+        require(
+                !acceptanceEntry.hasUtf8Prefix(ACCEPTANCE_CHANNEL + ":"),
+                "验收通道必须为裸 MPMTTEST，不得带命名空间");
+        require(
+                !product.containsConstant(ACCEPTANCE_CHANNEL),
+                "产品 JAR 泄漏验收通道 MPMTTEST");
+
+        // 目标 MC 版本与 Forge 入口注解都落在产物上：版本 pin 写错会让客户端在真实服上被拒载
+        require(productEntry.hasUtf8("[1.12.2]"), "产品入口类未声明 acceptedMinecraftVersions=[1.12.2]");
+        require(
+                productEntry.hasUtf8("Lnet/minecraftforge/fml/common/Mod;"),
+                "产品入口类未应用 Forge @Mod 注解");
+        // 共享核心接入：入口类常量池必须引用共享核心实现，证明 L0–L2 是经项目产物消费而非桩
+        require(
+                productEntry.hasClassReference("top/wcpe/mc/mpmt/core/client/DefaultMachineCodeProvider"),
+                "产品入口类未接入共享核心 DefaultMachineCodeProvider");
+
+        // 重映射痕迹：生产 jar 的成员名必须是 SRG（func_/field_）形态，
+        // 否则客户端加载即崩——这条同时排除了走 no-remap 变体的链路（Forge 版本错配也会在此暴露）
+        require(product.hasSrgMemberNames(), "产品 JAR 未见 SRG 成员名，疑似走了 no-remap 链路");
+        require(!productEntry.hasUtf8("getMinecraft"), "产品入口类仍用 MCP 名 getMinecraft，未重映射");
+
+        // 元数据：构建期必须把 ${version} 占位符展开成真实版本（发布物可见契约）
+        assertPackagedMetadata(product.entryText("mcmod.info"), "mpmt", version, false);
+        assertPackagedMetadata(
+                acceptance.entryText("mcmod.info"), "mpmt_acceptance", version, true);
+    }
+
+    /** 校验 jar 内已展开的 {@code mcmod.info}：modid / 客户端独有 / 容忍服务端缺失 / 版本已展开。 */
+    private static void assertPackagedMetadata(
+            String metadata, String expectedModId, String expectedVersion, boolean acceptanceCompanion) {
+        require(metadata.contains("\"modid\": \"" + expectedModId + "\""), "mcmod.info modid 不符：" + expectedModId);
+        require(metadata.contains("\"clientSideOnly\": true"), "mcmod.info 缺少 clientSideOnly：" + expectedModId);
+        require(
+                metadata.contains("\"acceptableRemoteVersions\": \"*\""),
+                "mcmod.info 缺少 acceptableRemoteVersions：" + expectedModId);
+        require(metadata.contains("\"mcversion\": \"1.12.2\""), "mcmod.info mcversion 不符：" + expectedModId);
+        require(
+                metadata.contains("\"version\": \"" + expectedVersion + "\""),
+                "mcmod.info 版本占位符未展开：" + expectedModId);
+        require(!metadata.contains("${version}"), "mcmod.info 残留未展开占位符：" + expectedModId);
+        if (acceptanceCompanion) {
+            // 验收伴侣不打包产品实现类（同 classloader 下由产品 jar 提供），故必须声明对 mpmt 的依赖
+            require(
+                    metadata.contains("\"dependencies\": [\"mpmt\"]"),
+                    "验收 mcmod.info 未声明对产品的依赖");
+        }
+    }
+
+    /** 双 JAR 隔离：产品与验收各自只含自己的实现，且字节码上限为 Java 8。 */
     private static void verifyArtifactIsolation() throws IOException {
         File productJar = propertyFile("mpmt.test.productJar");
         File acceptanceJar = propertyFile("mpmt.test.acceptanceJar");
-        String version = System.getProperty("mpmt.test.version");
+        String version = propertyValue("mpmt.test.version");
         require(
                 productJar.getName().equals("mpmt-forge-1.12.2-" + version + ".jar"),
                 "产品 JAR 命名不符：" + productJar.getName());
@@ -299,13 +339,12 @@ public final class Forge112ContractTest {
         JarView acceptance = JarView.read(acceptanceJar);
         // 源码包路径为 platform.forge（不含 1.12.2 段）；目录 1.12.2 仅表示版本车道
         product.requireEntry("top/wcpe/mc/mpmt/platform/forge/MpmtForgeMod.class");
+        // 共享核心已进产品 JAR：这条同时替代了"共享模块经同根构建项目产物消费"的构建脚本断言
         product.requireEntry("top/wcpe/mc/mpmt/core/client/ClientNetworkFeature.class");
         product.requireEntry("top/wcpe/mc/mpmt/protocol/PacketCodec.class");
         product.requireEntry("mcmod.info");
         require(!product.hasPrefix("top/wcpe/mc/mpmt/acceptance/"), "产品 JAR 混入 acceptance 共享模块");
         require(!product.hasPrefix("top/wcpe/mc/mpmt/platform/forge/acceptance/"), "产品 JAR 混入验收伴侣");
-        require(product.containsAscii("MPMT"), "产品 JAR 缺少裸通道 MPMT");
-        require(!product.containsAscii("MPMTTEST"), "产品 JAR 泄漏验收通道 MPMTTEST");
 
         acceptance.requireEntry(
                 "top/wcpe/mc/mpmt/platform/forge/acceptance/MpmtForgeAcceptanceMod.class");
@@ -323,7 +362,6 @@ public final class Forge112ContractTest {
         require(!acceptance.hasPrefix("top/wcpe/mc/mpmt/platform/forge/client/"), "验收 JAR 混入产品会话实现");
         require(!acceptance.hasPrefix("top/wcpe/mc/mpmt/platform/forge/hud/"), "验收 JAR 混入产品 HUD 实现");
         require(!acceptance.hasPrefix("top/wcpe/mc/mpmt/platform/forge/net/"), "验收 JAR 混入产品传输实现");
-        require(acceptance.containsAscii("MPMTTEST"), "验收 JAR 缺少独占控制通道 MPMTTEST");
 
         require(!product.hasEntry("top/wcpe/mc/mpmt/core/server/ServerNetworkFeature.class"), "产品 JAR 不得含服务端产品逻辑");
         require(!acceptance.hasEntry("top/wcpe/mc/mpmt/core/server/ServerNetworkFeature.class"), "验收 JAR 不得含服务端产品逻辑");
@@ -331,10 +369,14 @@ public final class Forge112ContractTest {
         acceptance.requireJava8Classes();
     }
 
-    private static File propertyFile(String name) {
+    private static String propertyValue(String name) {
         String value = System.getProperty(name);
         require(value != null && !value.isEmpty(), "缺少系统属性：" + name);
-        File file = new File(value);
+        return value;
+    }
+
+    private static File propertyFile(String name) {
+        File file = new File(propertyValue(name));
         require(file.exists(), "路径不存在：" + file);
         return file;
     }
@@ -427,6 +469,7 @@ public final class Forge112ContractTest {
         }
     }
 
+    /** jar 产物视图：条目、条目内容、class 常量池与字节码版本都从 jar 内真实数据读取。 */
     private static final class JarView {
 
         private final File file;
@@ -465,37 +508,53 @@ public final class Forge112ContractTest {
             return false;
         }
 
-        private boolean containsAscii(String text) throws IOException {
-            byte[] needle = text.getBytes(StandardCharsets.US_ASCII);
+        /** 读取 jar 内单个条目的原始字节；条目缺失直接判失败。 */
+        private byte[] entryBytes(String entry) throws IOException {
             try (ZipFile zip = new ZipFile(file)) {
-                Enumeration<? extends ZipEntry> enumeration = zip.entries();
-                while (enumeration.hasMoreElements()) {
-                    ZipEntry entry = enumeration.nextElement();
-                    if (entry.isDirectory()) {
-                        continue;
+                ZipEntry zipEntry = zip.getEntry(entry);
+                require(zipEntry != null, file.getName() + " 缺少条目：" + entry);
+                try (InputStream input = zip.getInputStream(zipEntry)) {
+                    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                    byte[] chunk = new byte[4096];
+                    int read = input.read(chunk);
+                    while (read > 0) {
+                        buffer.write(chunk, 0, read);
+                        read = input.read(chunk);
                     }
-                    try (InputStream input = zip.getInputStream(entry)) {
-                        if (contains(input, needle)) {
-                            return true;
-                        }
-                    }
+                    return buffer.toByteArray();
+                }
+            }
+        }
+
+        /** 读取 jar 内文本条目（如已展开的 mcmod.info）。 */
+        private String entryText(String entry) throws IOException {
+            return new String(entryBytes(entry), StandardCharsets.UTF_8);
+        }
+
+        /** 解析 jar 内某个 class 的常量池。 */
+        private ClassFileConstantPool constantPool(String entry) throws IOException {
+            return ClassFileConstantPool.read(entryBytes(entry));
+        }
+
+        /** jar 内是否有任一类的常量池含该 UTF8 原文（精确匹配，避免子串误判）。 */
+        private boolean containsConstant(String value) throws IOException {
+            for (String entry : entries) {
+                if (entry.endsWith(".class") && constantPool(entry).hasUtf8(value)) {
+                    return true;
                 }
             }
             return false;
         }
 
-        private static boolean contains(InputStream input, byte[] needle) throws IOException {
-            int matched = 0;
-            int value;
-            while ((value = input.read()) >= 0) {
-                byte current = (byte) value;
-                if (current == needle[matched]) {
-                    matched++;
-                    if (matched == needle.length) {
-                        return true;
-                    }
-                } else {
-                    matched = current == needle[0] ? 1 : 0;
+        /** 是否出现 SRG 成员名（{@code func_} / {@code field_} 前缀）：证明 MCP→SRG 重映射真的跑过。 */
+        private boolean hasSrgMemberNames() throws IOException {
+            for (String entry : entries) {
+                if (!entry.endsWith(".class")) {
+                    continue;
+                }
+                ClassFileConstantPool pool = constantPool(entry);
+                if (pool.hasUtf8Prefix("func_") || pool.hasUtf8Prefix("field_")) {
+                    return true;
                 }
             }
             return false;

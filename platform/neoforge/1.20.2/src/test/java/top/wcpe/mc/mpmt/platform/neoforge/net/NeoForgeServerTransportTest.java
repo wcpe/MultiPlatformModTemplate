@@ -18,8 +18,8 @@ import java.util.function.Consumer;
 import net.minecraft.server.level.ServerPlayer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.platform.neoforge.NeoForgeTestSupport;
 import top.wcpe.mc.mpmt.platform.neoforge.version.NeoForgeServerNetwork;
 

@@ -1,6 +1,9 @@
 import buildconventions.FORGE_ARCHIVE_EXCLUDES
 import buildconventions.ForgeLaneExtension
 import buildconventions.ForgeModules
+import buildconventions.LaneBundle
+import buildconventions.declareLaneBundles
+import buildconventions.mpmtDomains
 import buildconventions.registerForgeAcceptanceJar
 import dev.architectury.pack200.java.Pack200Adapter
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
@@ -82,11 +85,12 @@ forgeLane {
 // 插件公开 API 需要扩展实例（块外传参用），故在块后取回一次
 val forge = extensions.getByType(buildconventions.ForgeLaneExtension::class.java)
 // 共享模块（L0-L2）项目路径；acceptance 仅进验收伴侣，不进产品
-val productSharedProjects = listOf(":core:domain", ":core:runtime", ":core:client", ":core:protocol")
+val productSharedProjects = listOf(":core:kernel", ":core:runtime", ":core:client", ":core:protocol")
 val acceptanceSharedProjects = productSharedProjects + listOf(":modules:acceptance")
+// 功能域（L0 玩法逻辑）：动态发现，新增域无需改上面的字面量清单（ADR-0028）
+val domainProjects = mpmtDomains().map { it.path }
 
-val productBundle: Configuration = configurations.create("productBundle")
-val acceptanceBundle: Configuration = configurations.create("acceptanceBundle")
+declareLaneBundles(LaneBundle.PRODUCT, LaneBundle.ACCEPTANCE)
 
 sourceSets {
     named("main") {
@@ -130,8 +134,18 @@ dependencies {
     add("mappings", "de.oceanlabs.mcp:mcp_snapshot:$mappingsVersion@zip")
     add("forge", "net.minecraftforge:forge:$forgeVersion")
 
-    add("implementation", files(productSharedProjects.map { ForgeModules.moduleJar(project, it) }))
-    add("productBundle", files(productSharedProjects.map { ForgeModules.moduleJar(project, it) }))
+    // vecmath：Forge 1.12.2 userdev config.json 的 libraries 清单要求 java3d:vecmath:1.5.2，
+    // 但 loom 未把它带进运行期类路径。Minecraft.<init> 用 javax.vecmath.Tuple4f 时缺类即崩，
+    // 故在此显式补齐；该制品仅存在于 Forge 官方 maven（见下方 repositories 段）。
+    add("minecraftLibraries", "java3d:vecmath:1.5.2")
+    add("implementation", "java3d:vecmath:1.5.2")
+
+    // 域与共享核心同一批非传递项目依赖：既有条目顺序不变，域追加在末尾（ADR-0028）。
+    val allProductProjects = productSharedProjects + domainProjects
+    allProductProjects.forEach {
+        add("implementation", ForgeModules.moduleJar(project, it))
+        add("productBundle", ForgeModules.moduleJar(project, it))
+    }
 
     // 纯 JVM 单元测试：JUnit 5（BOM 统一版本，与其它车道同源）。
     // 被测类为 Java 8 字节码，测试同样以 Java 8 语法编译 / 运行（toolchain 已固定 8）。
@@ -139,8 +153,45 @@ dependencies {
     add("testImplementation", "org.junit.jupiter:junit-jupiter")
     add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
 
-    add("acceptanceImplementation", files(acceptanceSharedProjects.map { ForgeModules.moduleJar(project, it) }))
-    add("acceptanceBundle", files(ForgeModules.moduleJar(project, ":modules:acceptance")))
+    acceptanceSharedProjects.forEach {
+        add("acceptanceImplementation", ForgeModules.moduleJar(project, it))
+    }
+    add("acceptanceBundle", ForgeModules.moduleJar(project, ":modules:acceptance"))
+}
+
+// 运行期注入的 srg→named 映射表：取 loom 的 generateSrgNamedMappings 产物。
+// 它同时满足「类名 unmap 恒等」与「成员名 srg→MCP 可翻译」两个约束，缺一即分别导致
+// tweaker 阶段 defineClass(null) NPE 或 ForgeHooks.initTools 的 NoSuchFieldException。
+// 该任务由 loom 延迟注册、类型也不在本次编译类路径内，故只在执行期按名解析并注入。
+tasks.matching { it.name == "runClient" }.configureEach {
+    dependsOn("generateSrgNamedMappings")
+    // 显式给堆上限。不设时 Java 8 按物理内存自动推算：本机 251 GB 内存下实测拿到 27 GB
+    // （崩溃报告里 JVM Flags 只有 -XX:StackShadowPages=32，没有 -Xmx，上限 27305 MB）。而一个
+    // 1.12.2 客户端实际只用约 1 GB——允许它长到 27 GB 只会在系统内存吃紧时让它成为 OOM killer
+    // 的首选目标。实测症状就是进程输出停止后被 SIGKILL（runClient 报退出码 137），Gradle 空等到
+    // 超时才报 BUILD FAILED。设成固定值后，内存占用与机器规格无关。
+    //
+    // 注意：不能用 loom 的 RunConfigSettings.vmArgs(...)。本仓库所用的 loom 分支里
+    // RunConfigSettings.getVmArgs() 没有任何消费方（全局 grep 零命中），写了也不会进真实命令行。
+    // 这里按 JavaExec 判断后设置：configureEach 的接收者是 Task，不加判断就取不到 jvmArgs。
+    if (this is JavaExec) {
+        jvmArgs("-Xmx2G", "-Xms512M")
+    }
+    doFirst {
+        val srgFile =
+            tasks
+                .named("generateSrgNamedMappings")
+                .get()
+                .property("srgFile")
+                .let { p ->
+                    @Suppress("UNCHECKED_CAST")
+                    (p as Provider<RegularFile>).get().asFile
+                }
+        (this as JavaExec).systemProperty(
+            "net.minecraftforge.gradle.GradleStart.srg.srg-mcp",
+            srgFile.absolutePath,
+        )
+    }
 }
 
 loom {
@@ -154,6 +205,24 @@ loom {
         maybeCreate("client").apply {
             runDirectory.set(project.file("run-client"))
             systemProperties.put("forge.logging.console.level", "info")
+            // 让 FMLDeobfuscatingRemapper 的 srg 映射表为空，使 unmap/remap 退化为恒等。
+            // 前提已由 loom 侧满足：forge.jar 现在被重映射成 named 名（见 MinecraftLegacyPatchedProvider
+            // 的 remapForgeToNamed），与 MC jar 的命名体系一致，因此运行期不需要任何名变换。
+            // 若保留完整 notch→MCP 表，DeobfuscationTransformer.unmapClassName 会把 MCP 名反查成
+            // notch 名（如 ICrashReportDetail -> "d"），jar 里没有该条目 → getClassBytes 返回
+            // null → defineClass(null) 在 LaunchClassLoader:182 抛 NPE，该类随即被钉进
+            // invalidClasses 永久不可加载（这是 tweaker 阶段崩溃的直接原因）。
+            //
+            // 但「空表」会走到另一个极端：Forge 的 ObfuscationReflectionHelper.remapFieldName 靠
+            // FMLDeobfuscatingRemapper 的 unmap + mapFieldName 把 srg 名翻成 MCP 名，空表令其退化为
+            // 恒等，于是 ForgeHooks.initTools 按 field_150915_c 找不到 EFFECTIVE_ON，抛
+            // NoSuchFieldException。
+            //
+            // 正解是 srg→named 表（GenerateSrgNamedMappingsTask 的产物），它同时满足两侧：
+            //   · CL 行源名与目标名逐一相同（实测 3321 条全恒等）→ unmapClassName 恒等，类加载不受影响；
+            //   · FD/MD 行有真实的 srg→MCP 映射 → 反射路径能翻成 EFFECTIVE_ON。
+            // 该属性的注入见本文件末尾的 tasks.matching { runClient } 块（执行期求值），
+            // 因为产物任务由 loom 延迟注册，配置期按名取会失败。
             // HYBRID CatServer 自连地址；可 -Dmpmt.acceptance.server=host:port 覆盖
             systemProperties.put("mpmt.acceptance.server", (project.findProperty("mpmt.acceptance.server") ?: "127.0.0.1:25568").toString())
             // 验收伴侣上报 ClientReady 用的 Java 可执行文件（runClient 执行期覆盖为 Java 8 launcher）
@@ -175,25 +244,26 @@ val generatedBuildInfo =
         .file("generated/sources/buildInfo/top/wcpe/mc/mpmt/platform/forge/ForgeBuildInfo.java")
         .get()
         .asFile
-val generateBuildInfo by tasks.registering {
-    // 版本与目标文件在配置期取成局部值：动作只捕获这些值，不捕获 project / 脚本对象（配置缓存要求），
-    // 生成内容与产物路径逐字不变。
-    val buildInfoVersion = project.version.toString()
-    val buildInfoFile = generatedBuildInfo
-    inputs.property("version", buildInfoVersion)
-    outputs.file(buildInfoFile)
-    doLast {
-        buildInfoFile.parentFile.mkdirs()
-        buildInfoFile.writeText(
-            "package top.wcpe.mc.mpmt.platform.forge;\n\n" +
-                "public final class ForgeBuildInfo {\n" +
-                "    public static final String VERSION = \"$buildInfoVersion\";\n" +
-                "    private ForgeBuildInfo() { }\n" +
-                "}\n",
-            Charsets.UTF_8,
-        )
+val generateBuildInfo =
+    tasks.register("generateBuildInfo") {
+        // 版本与目标文件在配置期取成局部值：动作只捕获这些值，不捕获 project / 脚本对象（配置缓存要求），
+        // 生成内容与产物路径逐字不变。
+        val buildInfoVersion = project.version.toString()
+        val buildInfoFile = generatedBuildInfo
+        inputs.property("version", buildInfoVersion)
+        outputs.file(buildInfoFile)
+        doLast {
+            buildInfoFile.parentFile.mkdirs()
+            buildInfoFile.writeText(
+                "package top.wcpe.mc.mpmt.platform.forge;\n\n" +
+                    "public final class ForgeBuildInfo {\n" +
+                    "    public static final String VERSION = \"$buildInfoVersion\";\n" +
+                    "    private ForgeBuildInfo() { }\n" +
+                    "}\n",
+                Charsets.UTF_8,
+            )
+        }
     }
-}
 sourceSets["main"].java.srcDir(file("${layout.buildDirectory.get().asFile}/generated/sources/buildInfo"))
 tasks.named("compileJava") { dependsOn(generateBuildInfo) }
 
@@ -203,6 +273,8 @@ tasks.named<Jar>("jar") {
     // 解包形态与 build-conventions 的 ForgePackaging 一致：provider 内按名取配置再 zipTree，
     // 使 from() 不捕获脚本对象（配置缓存要求）；打入内容不变。
     from(project.provider { project.configurations.getByName("productBundle").map { project.zipTree(it) } })
+    // provider 内解包会让 Gradle 看不到产物来源，须显式声明配置级任务依赖。
+    dependsOn(project.configurations.named("productBundle"))
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     FORGE_ARCHIVE_EXCLUDES.forEach { exclude(it) }
     exclude("top/wcpe/mc/mpmt/acceptance/**")
@@ -227,52 +299,53 @@ val acceptanceJar = registerForgeAcceptanceJar(project, forge)
  * 将 client-only 产品 + 验收伴侣拷到 build/client-companion/，供 CatServer（HYBRID 矩阵）手工/编排消费。
  * 禁止作为服务端 mods 装入 CatServer。
  */
-val prepareClientCompanionArtifacts by tasks.registering {
-    group = "build"
-    description = "拷贝 Forge 1.12.2 client-only 产品/验收 jar 到 build/client-companion/（供 CatServer（HYBRID 矩阵））"
-    dependsOn("reobfJar", "reobfAcceptanceJar")
-    doLast {
-        val outDir =
-            layout.buildDirectory
-                .dir("client-companion")
-                .get()
-                .asFile
-        outDir.mkdirs()
-        val product = file("${layout.buildDirectory.get().asFile}/reobfJar/output.jar")
-        val acceptanceReobf = file("${layout.buildDirectory.get().asFile}/reobfAcceptanceJar/output.jar")
-        if (!product.isFile) {
-            throw GradleException("缺少 reobf 产品 jar：$product")
-        }
-        // 优先 reobfAcceptanceJar 兼容路径，否则 libs 中的验收 remap 产物
-        // （remapAcceptanceJar 由 build-conventions.forge 注册，按名取归档任务，不直引 loom 类型）
-        val acceptance =
-            if (acceptanceReobf.isFile) {
-                acceptanceReobf
-            } else {
-                tasks
-                    .named("remapAcceptanceJar", AbstractArchiveTask::class.java)
-                    .get()
-                    .archiveFile
+val prepareClientCompanionArtifacts =
+    tasks.register("prepareClientCompanionArtifacts") {
+        group = "build"
+        description = "拷贝 Forge 1.12.2 client-only 产品/验收 jar 到 build/client-companion/（供 CatServer（HYBRID 矩阵））"
+        dependsOn("reobfJar", "reobfAcceptanceJar")
+        doLast {
+            val outDir =
+                layout.buildDirectory
+                    .dir("client-companion")
                     .get()
                     .asFile
+            outDir.mkdirs()
+            val product = file("${layout.buildDirectory.get().asFile}/reobfJar/output.jar")
+            val acceptanceReobf = file("${layout.buildDirectory.get().asFile}/reobfAcceptanceJar/output.jar")
+            if (!product.isFile) {
+                throw GradleException("缺少 reobf 产品 jar：$product")
             }
-        if (!acceptance.isFile) {
-            throw GradleException("缺少验收伴侣 jar：$acceptance")
+            // 优先 reobfAcceptanceJar 兼容路径，否则 libs 中的验收 remap 产物
+            // （remapAcceptanceJar 由 build-conventions.forge 注册，按名取归档任务，不直引 loom 类型）
+            val acceptance =
+                if (acceptanceReobf.isFile) {
+                    acceptanceReobf
+                } else {
+                    tasks
+                        .named("remapAcceptanceJar", AbstractArchiveTask::class.java)
+                        .get()
+                        .archiveFile
+                        .get()
+                        .asFile
+                }
+            if (!acceptance.isFile) {
+                throw GradleException("缺少验收伴侣 jar：$acceptance")
+            }
+            copy {
+                from(product)
+                into(outDir)
+                rename { "mpmt-forge-1.12.2-${project.version}.jar" }
+            }
+            copy {
+                from(acceptance)
+                into(outDir)
+                rename { "mpmt-forge-acceptance-1.12.2-${project.version}.jar" }
+            }
+            logger.lifecycle("[client-companion] ${outDir.absolutePath}")
+            logger.lifecycle("[client-companion] 注意：client-only，禁止装入 CatServer mods/；HYBRID 客户端伴侣用")
         }
-        copy {
-            from(product)
-            into(outDir)
-            rename { "mpmt-forge-1.12.2-${project.version}.jar" }
-        }
-        copy {
-            from(acceptance)
-            into(outDir)
-            rename { "mpmt-forge-acceptance-1.12.2-${project.version}.jar" }
-        }
-        logger.lifecycle("[client-companion] ${outDir.absolutePath}")
-        logger.lifecycle("[client-companion] 注意：client-only，禁止装入 CatServer mods/；HYBRID 客户端伴侣用")
     }
-}
 
 tasks.named("compileAcceptanceJava") { dependsOn(tasks.named("classes")) }
 tasks.named("compileContractTestJava") { dependsOn(tasks.named("acceptanceClasses")) }

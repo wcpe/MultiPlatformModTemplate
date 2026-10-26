@@ -12,8 +12,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 import lombok.NonNull;
 import lombok.Value;
-import top.wcpe.mc.mpmt.core.domain.ban.MachineCode;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.ban.MachineCode;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 
 /** 会话注册表：以不可变会话快照承载连接代际、重同步状态、RTT 与修订号。 */
 public final class SessionRegistry {

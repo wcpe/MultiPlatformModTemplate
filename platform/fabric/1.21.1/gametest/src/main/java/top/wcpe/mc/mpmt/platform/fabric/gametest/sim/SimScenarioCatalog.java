@@ -10,13 +10,13 @@ import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTest;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.acceptance.report.DefaultScenarioMatrix;
 import top.wcpe.mc.mpmt.core.client.ClientNetworkFeature;
-import top.wcpe.mc.mpmt.core.domain.ban.MachineCode;
-import top.wcpe.mc.mpmt.core.domain.event.SimpleEventBus;
-import top.wcpe.mc.mpmt.core.domain.net.HandshakeStateMachine;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.ban.MachineCode;
+import top.wcpe.mc.mpmt.kernel.event.SimpleEventBus;
+import top.wcpe.mc.mpmt.kernel.net.HandshakeStateMachine;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.core.server.HandshakeServerService;
 import top.wcpe.mc.mpmt.core.server.HeartbeatService;
@@ -104,7 +104,7 @@ public final class SimScenarioCatalog {
         PacketDispatcher serverDispatcher = new PacketDispatcher(loop.server(), codec);
         PacketDispatcher clientDispatcher = new PacketDispatcher(loop.client(), codec);
         HandshakeServerService server = new HandshakeServerService(
-                serverDispatcher, () -> "unused", new top.wcpe.mc.mpmt.core.domain.ban.BanRegistry());
+                serverDispatcher, () -> "unused", new top.wcpe.mc.mpmt.kernel.ban.BanRegistry());
         List<ServerHelloPacket> replies = new ArrayList<>();
         clientDispatcher.on(PacketIds.SERVER_HELLO, (connection, packet) -> replies.add((ServerHelloPacket) packet));
         server.onConnected(loop.clientConnection());
@@ -285,7 +285,7 @@ public final class SimScenarioCatalog {
         SimTestSupport.RecordingConnections connections = new SimTestSupport.RecordingConnections();
         SessionRegistry sessions = new SessionRegistry();
         ServerNetworkFeature serverFeature = new ServerNetworkFeature(
-                new top.wcpe.mc.mpmt.core.domain.ban.BanRegistry(), () -> "integrated-session", sessions);
+                new top.wcpe.mc.mpmt.kernel.ban.BanRegistry(), () -> "integrated-session", sessions);
         ClientNetworkFeature clientFeature = new ClientNetworkFeature("sim-1.0", () -> SimTestSupport.MACHINE_CODE);
         MpmtRuntime serverRuntime = runtime(loop.server(), scheduler, connections);
         MpmtRuntime clientRuntime = new MpmtRuntime();
