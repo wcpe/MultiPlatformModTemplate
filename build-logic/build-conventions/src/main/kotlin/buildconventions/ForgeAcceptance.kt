@@ -102,13 +102,18 @@ fun configureForgeReportProperties(
 @Suppress("ThrowsCount")
 internal fun registerForgeAcceptanceReportGate(project: Project, lane: ForgeLaneExtension) {
     val laneLabel = lane.laneLabel.get()
+    // 配置缓存约束：报告路径、提示文案与候选清单在**配置期**固化成普通值，
+    // doLast 只捕获这些值，不捕获 project 与 lane 扩展对象——否则配置缓存在存储阶段
+    // 报 "cannot serialize Gradle script object references" 并令构建失败。
+    val report = project.acceptanceReportFrom(lane.acceptanceReportCandidates.get())
+    val reportHint = lane.acceptanceReportHint.get()
+    val gateClientHint = lane.acceptanceGateClientHint.get()
     project.tasks.register("verifyAcceptanceReport") {
         group = "verification"
         description = "校验 $laneLabel 真服/验收报告末行 RESULT PASS"
         doLast {
-            val report = project.acceptanceReportFrom(lane.acceptanceReportCandidates.get())
             if (!report.isFile) {
-                throw GradleException("未找到 $laneLabel 验收报告：${report.absolutePath}\n" + lane.acceptanceReportHint.get())
+                throw GradleException("未找到 $laneLabel 验收报告：${report.absolutePath}\n$reportHint")
             }
             val lines =
                 report
@@ -133,8 +138,7 @@ internal fun registerForgeAcceptanceReportGate(project: Project, lane: ForgeLane
     }
     project.tasks.register("runRealServerAcceptance") {
         group = "verification"
-        description =
-            "$laneLabel realserver 门禁：校验权威报告 RESULT PASS（须先起服 + ${lane.acceptanceGateClientHint.get()}）"
+        description = "$laneLabel realserver 门禁：校验权威报告 RESULT PASS（须先起服 + $gateClientHint）"
         dependsOn("verifyAcceptanceReport")
     }
 }

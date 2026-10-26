@@ -1,7 +1,7 @@
 package buildconventions
 
 import org.gradle.api.GradleException
-import org.gradle.api.Project
+import org.gradle.api.logging.Logger
 import java.io.File
 
 /** acceptance v2 报告头（与 realserver harness 的报告格式契约一致）。 */
@@ -19,19 +19,26 @@ private val DEFAULT_TRACK_REQUIRED_METADATA =
  * 报告存在性 → v2 报告头 → 元数据齐全 → platform 标识 → 产品 jar SHA → 场景声明 → 唯一末行 RESULT PASS
  * → 场景集合与清单一致 → 逐项 PASS。
  *
+ * 配置缓存约束：本函数**接收 `Logger` 而不是 `Project`**。任务动作里若捕获 `Project`，
+ * 配置缓存会在存储阶段报 "cannot serialize Gradle script object references" 并令构建失败
+ *（本仓默认开启 configuration-cache）。调用方在 `doLast` 里传任务自身的 `logger`——
+ * 它是 `Task` 的成员，随任务一同被序列化，不产生额外捕获。
+ *
+ * @param logger 任务自身的 logger（`doLast` 里直接写 `logger`）。
  * @param report 报告文件（各车道自行解析路径：默认轨取车道声明值，矩阵轨用 `acceptanceReportFile`）。
- * @param matrixId 非空时改走矩阵校验（`verifyAcceptanceRoundReport`），本函数只做前置的头部与路径检查。
+ * @param matrixId 非空时改走矩阵校验：此时 [matrixRunId] 必须给出，本函数只做前置的头部检查后交给矩阵校验。
+ * @param matrixRunId 矩阵轨的本轮 runId（配置期从 `-Pmpmt.acceptance.runId` 解析并固化）。
  * @param platformId 报告的 `platform` 元数据取值（如 `fabric` / `forge` / `neoforge`）。
  * @param requiredScenarios 本车道的默认轨场景清单（顺序敏感，用于比对报告声明）。
  */
 fun verifyDefaultTrackReport(
-    project: Project,
+    logger: Logger,
     report: File,
     matrixId: String,
+    matrixRunId: String?,
     platformId: String,
     requiredScenarios: List<String>,
 ) {
-    val logger = project.logger
     if (!report.exists()) {
         throw GradleException(
             "未找到验收报告（先跑 runAcceptanceServer + runAcceptanceClient）：${report.absolutePath}",
@@ -49,7 +56,10 @@ fun verifyDefaultTrackReport(
         throw GradleException("[realserver] 报告不是 acceptance v2")
     }
     if (matrixId.isNotEmpty()) {
-        project.verifyAcceptanceRoundReport(report, matrixId)
+        val runId =
+            matrixRunId
+                ?: throw GradleException("矩阵 $matrixId 缺少 -P${AcceptanceRound.RUN_ID_PROPERTY}")
+        verifyAcceptanceRoundReport(report = report, matrixId = matrixId, runId = runId, lines = lines)
         logger.lifecycle("[realserver] 矩阵 $matrixId 报告 PASS：${report.absolutePath}")
         return
     }

@@ -7,6 +7,8 @@ import buildconventions.mpmtDomains
 import buildconventions.packagingVerification
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import net.fabricmc.loom.task.RemapJarTask
+import org.gradle.api.file.RegularFile
+import org.gradle.api.provider.Provider
 import java.security.MessageDigest
 
 // Forge 1.20.1 车道（根构建子模块）：common + server + client 分目录 → mpmt-forge-1.20.1-<version>.jar。
@@ -97,37 +99,37 @@ loom {
         // classpath 墙）；改把 remap 后的 shaded jar（core 在 jar 内）放进 run-client/mods/，
         // 让 FML 当真实 jar mod 加载，绕过 dev classpath 墙。
         getByName("client") {
-            configName = "Forge Client"
-            runDir("run-client")
-            property("forge.logging.console.level", "info")
+            displayName.set("Forge Client")
+            runDirectory.set(layout.projectDirectory.dir("run-client"))
+            systemProperties.put("forge.logging.console.level", "info")
             // 激活验收客户端伴侣（Dist.CLIENT）：伴侣到主菜单后程序化连入本机服务端
             // （Forge dev 客户端不可靠处理 --quickPlayMultiplayer，故由伴侣自连）。
             // 默认 host:port 对齐 run-server/server.properties 的 25566；异构可 -Pmpmt.acceptance.server=host:port 覆盖。
-            property("mpmt.acceptance", "true")
-            property(
+            systemProperties.put("mpmt.acceptance", "true")
+            systemProperties.put(
                 "mpmt.acceptance.server",
                 (project.findProperty("mpmt.acceptance.server") as String?) ?: "127.0.0.1:25566",
             )
             // dev↔dev 为 Mojmap 运行期，而 mods/ 内 jar 带的是生产 refmap（Mojmap→SRG）；jar 经 mods/ 加载、未走
             // dev 源集的 refmap 回映射注入，故 dev 关闭 refmap、直接按注解里的 Mojmap 名解析（ADR-0018）。
             // 生产（真实 Forge 服，SRG 运行期）不经本 run 配置、照常用 refmap，不受影响。
-            property("mixin.env.disableRefMap", "true")
+            systemProperties.put("mixin.env.disableRefMap", "true")
             // 单机/LAN 验收（-Pmpmt.acceptance.singleplayer=true）：单机时客户端内置服务端，
             // 验收驱动的 ServerStartedEvent 同样会触发，故把服务端侧所需的报告路径与矩阵元数据
             // 一并注入本 run；报告落 run-client/ 以区别于专用服的 run-server/ 报告。
             if (project.findProperty("mpmt.acceptance.singleplayer") == "true") {
                 // 伴侣据此走「创建单人世界」分支，而非连入外部服务端
-                property("mpmt.acceptance.singleplayer", "true")
-                property(
+                systemProperties.put("mpmt.acceptance.singleplayer", "true")
+                systemProperties.put(
                     "mpmt.acceptance.report",
                     project.file("run-client/singleplayer-acceptance-report.txt").absolutePath,
                 )
-                property("mpmt.acceptance.deadlineMs", "660000")
-                property("mpmt.acceptance.mcVersion", "1.20.1")
-                property("mpmt.acceptance.serverVersion", forgeVersion)
-                property("mpmt.acceptance.commit", project.gitHeadCommit())
-                property("mpmt.acceptance.version", project.version.toString())
-                property(
+                systemProperties.put("mpmt.acceptance.deadlineMs", "660000")
+                systemProperties.put("mpmt.acceptance.mcVersion", "1.20.1")
+                systemProperties.put("mpmt.acceptance.serverVersion", forgeVersion)
+                systemProperties.put("mpmt.acceptance.commit", project.gitHeadCommit())
+                systemProperties.put("mpmt.acceptance.version", project.version.toString())
+                systemProperties.put(
                     "mpmt.acceptance.productJar",
                     project.layout.buildDirectory
                         .file("libs/mpmt-forge-1.20.1-${project.version}.jar")
@@ -141,19 +143,19 @@ loom {
         // （dev 客户端连真实生产服会握手不通）。同样从 run-server/mods 加载 shaded jar，绕过 dev classpath 墙。
         // loom 默认附加 --nogui 程序参数（headless，验收不受影响）。
         getByName("server") {
-            configName = "Forge Server"
-            runDir("run-server")
-            property("forge.logging.console.level", "info")
-            property("mpmt.acceptance", "true")
-            property("mpmt.acceptance.report", project.file("run-server/acceptance-report.txt").absolutePath)
-            property("mpmt.acceptance.deadlineMs", "660000")
+            displayName.set("Forge Server")
+            runDirectory.set(layout.projectDirectory.dir("run-server"))
+            systemProperties.put("forge.logging.console.level", "info")
+            systemProperties.put("mpmt.acceptance", "true")
+            systemProperties.put("mpmt.acceptance.report", project.file("run-server/acceptance-report.txt").absolutePath)
+            systemProperties.put("mpmt.acceptance.deadlineMs", "660000")
             // v2 元数据：commit 配置期取 git；productJar 供驱动算 SHA（remapJar 无 classifier 产物，即最终产品 jar）
-            property("mpmt.acceptance.commit", project.gitHeadCommit())
-            property("mpmt.acceptance.version", project.version.toString())
-            property("mpmt.acceptance.platform", "forge")
-            property("mpmt.acceptance.mcVersion", "1.20.1")
-            property("mpmt.acceptance.serverVersion", forgeVersion)
-            property(
+            systemProperties.put("mpmt.acceptance.commit", project.gitHeadCommit())
+            systemProperties.put("mpmt.acceptance.version", project.version.toString())
+            systemProperties.put("mpmt.acceptance.platform", "forge")
+            systemProperties.put("mpmt.acceptance.mcVersion", "1.20.1")
+            systemProperties.put("mpmt.acceptance.serverVersion", forgeVersion)
+            systemProperties.put(
                 "mpmt.acceptance.productJar",
                 // 与 archivesName=mpmt-forge-1.20.1 对齐
                 layout.buildDirectory
@@ -163,7 +165,7 @@ loom {
                     .absolutePath,
             )
             // 同 client：dev↔dev Mojmap 运行期关闭 refmap，按 Mojmap 名解析（生产 SRG 不受影响，ADR-0018）
-            property("mixin.env.disableRefMap", "true")
+            systemProperties.put("mixin.env.disableRefMap", "true")
         }
     }
 }
@@ -376,11 +378,16 @@ val acceptanceContractTest =
     }
 
 val simAcceptanceReport = layout.buildDirectory.file("acceptance/sim-report-v2.txt")
-val realAcceptanceReport =
+// 配置缓存约束：兜底分支不能用 `provider { file(...) }`——`file(...)` 是脚本方法，
+// 闭包会捕获脚本实例（this$0），doFirst 里取用即报
+// "cannot serialize Gradle script object references"。先把 ProjectLayout 取到局部变量，
+// 闭包只捕获该对象（它是可序列化的 Gradle 模型），全程不碰脚本实例。
+val projectLayout = layout
+val realAcceptanceReport: Provider<RegularFile> =
     providers
         .gradleProperty("mpmt.acceptance.report")
-        .map { file(it) }
-        .orElse(provider { file("run-server/acceptance-report.txt") })
+        .map { relative -> projectLayout.projectDirectory.file(relative) }
+        .orElse(projectLayout.projectDirectory.file("run-server/acceptance-report.txt"))
 
 val runSimNetworkAcceptance =
     tasks.register<JavaExec>("runSimNetworkAcceptance") {
@@ -416,12 +423,15 @@ val verifyAcceptanceReport =
         classpath = acceptance.runtimeClasspath
         mainClass.set("top.wcpe.mc.mpmt.platform.forge.acceptance.sim.ForgeDefaultSimulation")
         dependsOn(tasks.named("acceptanceClasses"))
+        // 配置缓存约束：报告路径必须在**任务配置块内**取成局部值再交给 doFirst。
+        // 若 doFirst 直接引用脚本顶层 val（realAcceptanceReport），闭包会捕获脚本实例
+        // （this$0），配置缓存报 "cannot serialize Gradle script object references"。
+        val reportFile = realAcceptanceReport.get().asFile
         doFirst {
-            val report = realAcceptanceReport.get()
-            if (!report.isFile) {
-                throw GradleException("未找到 Forge 验收报告：${report.absolutePath}")
+            if (!reportFile.isFile) {
+                throw GradleException("未找到 Forge 验收报告：${reportFile.absolutePath}")
             }
-            args("verify", report.absolutePath)
+            args("verify", reportFile.absolutePath)
         }
     }
 

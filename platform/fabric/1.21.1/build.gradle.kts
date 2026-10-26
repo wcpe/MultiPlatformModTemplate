@@ -197,24 +197,28 @@ tasks.register("runRealServerAcceptance") {
     group = "verification"
     description =
         "严格校验 Fabric realserver acceptance v2 报告（默认轨；-Pmpmt.acceptance.matrix 声明矩阵值时校验 MATRIX + 公共三场景 + RESULT PASS）"
-    doLast {
-        val matrixId = (project.findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
-        val report =
-            if (matrixId.isNotEmpty()) {
-                val custom = (project.findProperty("mpmt.acceptance.report") as String?)?.trim().orEmpty()
-                if (custom.isNotEmpty()) {
-                    file(custom)
-                } else {
-                    layout.buildDirectory
-                        .file("acceptance/server-report-${matrixId.lowercase()}.txt")
-                        .get()
-                        .asFile
-                }
+    // 配置缓存约束：属性解析、报告路径与场景清单全部在**配置期**固化成普通值，
+    // doLast 只捕获这些值与任务自身的 logger，不捕获 project / 扩展对象。
+    val matrixId = (findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
+    val matrixRunId = (findProperty("mpmt.acceptance.runId") as String?)?.trim()?.takeIf { it.isNotEmpty() }
+    val reportFile =
+        if (matrixId.isNotEmpty()) {
+            val custom = (findProperty("mpmt.acceptance.report") as String?)?.trim().orEmpty()
+            if (custom.isNotEmpty()) {
+                file(custom)
             } else {
-                fabric.acceptanceReport.get().asFile
+                layout.buildDirectory
+                    .file("acceptance/server-report-${matrixId.lowercase()}.txt")
+                    .get()
+                    .asFile
             }
+        } else {
+            fabric.acceptanceReport.get().asFile
+        }
+    val realScenarios = fabric.realScenarios.get()
+    doLast {
         // 校验实现与其余车道共用 build-conventions 的单份实现（判定顺序与失败文案逐字保留）。
-        verifyDefaultTrackReport(project, report, matrixId, "fabric", fabric.realScenarios.get())
+        verifyDefaultTrackReport(logger, reportFile, matrixId, matrixRunId, "fabric", realScenarios)
     }
 }
 
