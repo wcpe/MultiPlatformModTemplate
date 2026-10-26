@@ -1,4 +1,5 @@
 import buildconventions.BukkitLaneExtension
+import buildconventions.consumeProductJar
 import buildconventions.frozenApiSnapshot
 import buildconventions.packagingVerification
 import buildconventions.verifyBukkitProducts
@@ -20,8 +21,8 @@ plugins {
     id("top.wcpe.mc.mpmt.realserver-acceptance")
 }
 
-group = "top.wcpe.mc.mpmt"
-version = rootProject.file("VERSION").readText().trim()
+// group / version 由 settings.gradle.kts 的 gradle.lifecycle.beforeProject 统一下发；
+// 此处不再回读根工程（rootProject.file 属于跨工程访问，Isolated Projects 会拒绝）。
 
 val minecraftVersion = "26.2"
 val paperRuntimeBuild = 71
@@ -168,10 +169,11 @@ val bukkitReportFile =
         val reportName = if (matrix.isBlank()) "server-report.txt" else "server-report-${matrix.lowercase()}.txt"
         layout.buildDirectory.file("acceptance/$reportName")
     }
-val fabric262Product =
-    rootProject.layout.projectDirectory.file(
-        "platform/fabric/26.2/build/libs/mpmt-fabric-26.2-${rootProject.version}.jar",
-    )
+
+// 跨车道客户端制品：:platform:fabric:fabric-26.2 把产品 jar 暴露为可消费产物（outgoing variant），
+// 本车道经产物依赖取单文件——产物名与「先构建上游打包产物」的任务顺序都由 Gradle 推导，
+// 不再写死 platform/fabric/26.2/build/libs/… 路径（车道改名 / 改产物命名会在解析期直接失败）。
+val fabric262ProductJar = consumeProductJar(":platform:fabric:fabric-26.2", "fabric262ProductJar")
 
 mpmtRealServerAcceptance {
     // 本车道偏离项：矩阵命名的报告路径、冻结 Paper 运行时与跨车道客户端制品；其余接线由约定插件承担
@@ -181,8 +183,14 @@ mpmtRealServerAcceptance {
     paperJarSizeBytes.set(paperRuntimeSizeBytes)
     paperJarSha256.set(paperRuntimeSha256)
     paperJavaVersion.set(compilerJavaVersion)
-    acceptanceClientProductJar.set(fabric262Product)
-    acceptanceClientAcceptanceJar.set(fabric262Product)
+    acceptanceClientProductJar.set(fabric262ProductJar.file)
+    acceptanceClientAcceptanceJar.set(fabric262ProductJar.file)
     acceptanceRunId.set(providers.gradleProperty("mpmt.acceptance.runId").orElse(""))
     acceptanceStartEpochMs.set(providers.gradleProperty("mpmt.acceptance.startEpochMs").orElse(""))
+}
+
+// 真服门禁以该客户端制品为输入：把产物依赖挂到门禁任务上，
+// 单独运行本车道时也会先构建上游 fabric 产物（此前顺序完全由根侧 26.2 门从外部兜住）。
+tasks.matching { it.name == "runRealServerAcceptance" }.configureEach {
+    dependsOn(fabric262ProductJar.files)
 }

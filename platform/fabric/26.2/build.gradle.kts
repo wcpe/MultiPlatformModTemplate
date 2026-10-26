@@ -3,6 +3,7 @@ import buildconventions.LaneBundle
 import buildconventions.acceptanceReportFile
 import buildconventions.awaitAcceptancePort
 import buildconventions.declareLaneBundles
+import buildconventions.exposeProductJarVariant
 import buildconventions.injectAcceptanceClientMetadata
 import buildconventions.injectAcceptanceServerMetadata
 import buildconventions.launchAcceptanceProcess
@@ -184,6 +185,10 @@ tasks.named<ShadowJar>("shadowJar") {
     outputs.cacheIf { false }
 }
 
+// 产品 jar 暴露为可消费产物（outgoing variant）：跨栈消费方（Paper 26.2 真服门禁的客户端制品）
+// 经产物依赖取用；产物名与「先构建 shadowJar」的任务顺序都由 Gradle 从本产物推导。
+exposeProductJarVariant(tasks.named<ShadowJar>("shadowJar"))
+
 // 打包校验：core shade、snakeyaml relocate、唯一 L4、fabric.mod.json
 val verifyPackaging =
     tasks.register("verifyPackaging") {
@@ -266,18 +271,21 @@ tasks.register("runRealServerAcceptance") {
     group = "verification"
     description =
         "严格校验 Fabric realserver acceptance v2 报告（本车道仅有 REALSERVER262 轨，未显式 -Pmpmt.acceptance.matrix 时按该轨校验）"
+    // 26.2 车道没有"默认轨"：其唯一有效矩阵即 REALSERVER262（见 PlatformLane.FABRIC_262.defaultMatrix）。
+    // 因此在本轮上下文（带 -Pmpmt.acceptance.runId）下若未显式声明矩阵，就按 REALSERVER262 校验——
+    // 这样跨 lane 聚合门（只有一个全局矩阵值，无法逐 lane 区分）也能正确定位本车道的报告。
+    // 不带 runId 时保持原有"默认轨"行为，不改变独立调用语义。
+    //
+    // 配置缓存约束：属性解析、报告路径与场景清单全部在**配置期**固化成普通值，
+    // doLast 只捕获这些值与任务自身的 logger，不捕获 project / 扩展对象。
+    val explicitMatrix = (findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
+    val roundRunId = (findProperty("mpmt.acceptance.runId") as String?)?.trim()?.takeIf { it.isNotEmpty() }
+    val matrixId = explicitMatrix.ifEmpty { if (roundRunId != null) "REALSERVER262" else "" }
+    val reportFile = if (matrixId.isEmpty()) fabric.acceptanceReport.get().asFile else acceptanceReportFile(matrixId)
+    val realScenarios = fabric.realScenarios.get()
     doLast {
-        // 26.2 车道没有"默认轨"：其唯一有效矩阵即 REALSERVER262（见 PlatformLane.FABRIC_262.defaultMatrix）。
-        // 因此在本轮上下文（带 -Pmpmt.acceptance.runId）下若未显式声明矩阵，就按 REALSERVER262 校验——
-        // 这样跨 lane 聚合门（只有一个全局矩阵值，无法逐 lane 区分）也能正确定位本车道的报告。
-        // 不带 runId 时保持原有"默认轨"行为，不改变独立调用语义。
-        val explicitMatrix = (project.findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
-        val haveRoundContext =
-            !(project.findProperty("mpmt.acceptance.runId") as String?)?.trim().isNullOrEmpty()
-        val matrixId = explicitMatrix.ifEmpty { if (haveRoundContext) "REALSERVER262" else "" }
-        val report = if (matrixId.isEmpty()) fabric.acceptanceReport.get().asFile else acceptanceReportFile(matrixId)
         // 校验实现与其余车道共用 build-conventions 的单份实现（判定顺序与失败文案逐字保留）。
-        verifyDefaultTrackReport(project, report, matrixId, "fabric", fabric.realScenarios.get())
+        verifyDefaultTrackReport(logger, reportFile, matrixId, roundRunId, "fabric", realScenarios)
     }
 }
 

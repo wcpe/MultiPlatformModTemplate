@@ -1,3 +1,5 @@
+import buildconventions.consumeProductJar
+
 // A 车道桩插件（mc-testkit E2E）：根构建子模块（ADR-0026——不自带 settings.gradle.kts / wrapper）。
 //
 // 形态说明：
@@ -68,24 +70,22 @@ tasks.processResources {
 // A 车道接线（DSL 形态见 mc-testkit docs/API.md §3.1）
 // 拓扑 = 版本矩阵：Paper 1.20.1 / 1.21.1 / 26.2 + Folia 1.20.1，四个后端各自独立场景，
 // CI 侧由 .github/workflows/ci.yml 的 e2e-matrix 逐格并行跑、再由聚合 job 收报告。
-// 被测插件 jar：CI 矩阵按格用 MC_TESTKIT_E2E_PLUGIN_UNDER_TEST_JAR 指向该版本的产品 jar；
-// 本机缺省取 :platform:bukkit:1.20.1 的 shadowJar 产物（绝对路径，避免依赖进程工作目录）。
+// 被测插件 jar：CI 矩阵按格用 MC_TESTKIT_E2E_PLUGIN_UNDER_TEST_JAR 指向该版本的产品 jar（覆盖机制保留）；
+// 本机缺省走 :platform:bukkit:1.20.1 暴露的产物依赖（outgoing variant "productJar"）——
+// 产物名与「先构建 shadowJar」的任务顺序都由 Gradle 从上游产物推导，不再写死 build/libs 路径。
 // 既有契约不可变：backend s1/folia1 与 scenario smoke/smoke-folia。
 // ============================================================================
-val productVersion: String = rootProject.file("VERSION").readText().trim()
 val pluginUnderTestEnv: String? = System.getenv("MC_TESTKIT_E2E_PLUGIN_UNDER_TEST_JAR")
-val pluginUnderTestJar: String =
-    pluginUnderTestEnv
-        ?: rootProject.layout.projectDirectory
-            .file("platform/bukkit/1.20.1/build/libs/mpmt-bukkit-1.20.1-$productVersion.jar")
-            .asFile.absolutePath
-val harnessJar: String =
-    tasks
-        .named<Jar>("jar")
-        .get()
-        .archiveFile
-        .get()
-        .asFile.absolutePath
+// 外部注入生效时完全不声明该产物依赖（CI 各格自行先构建对应版本产品 jar，不该被 1.20.1 的图牵连）
+val pluginUnderTestArtifact =
+    if (pluginUnderTestEnv == null) {
+        consumeProductJar(":platform:bukkit:1.20.1", "e2ePluginUnderTest")
+    } else {
+        null
+    }
+
+// 桩 jar 用惰性 provider 表达：不在此刻实现 jar 任务，取值时才随任务图一起确定
+val harnessJar = tasks.named<Jar>("jar").flatMap { it.archiveFile }
 
 mcTestkit {
     // 既有拓扑（名称不可变）
@@ -123,17 +123,16 @@ mcTestkit {
         backend = "paper262"
     }
     dependencies {
-        pluginUnderTest = pluginUnderTestJar
+        // 两种声明在 mc-testkit 里互斥（同一时刻只能有一种来源）：
+        // · 有外部注入 → 按运行期解析的「路径 / 环境变量名」声明；
+        // · 无外部注入 → 按「本构建产物来源」声明，mc-testkit 会沿产物依赖把上游打包任务一并
+        //   挂到 prepareE2e* / e2e* 上，故无需再手写 dependsOn。
+        val injected = pluginUnderTestEnv
+        if (injected != null) {
+            pluginUnderTest = injected
+        } else {
+            pluginUnderTest(pluginUnderTestArtifact!!.files)
+        }
         plugin(harnessJar)
-    }
-}
-
-// prepareE2e* / e2e* 启动前会预检并注入 jar：桩（本模块 jar）恒接；
-// 被测插件默认取 :platform:bukkit:1.20.1 的 shadowJar 产物——CI 矩阵各格自行先构建对应版本产品 jar，
-// 故在外部注入生效时不再接 1.20.1 的图。
-tasks.matching { it.name.startsWith("prepareE2e") || it.name.startsWith("e2e") }.configureEach {
-    dependsOn(tasks.jar)
-    if (pluginUnderTestEnv == null) {
-        dependsOn(":platform:bukkit:1.20.1:shadowJar")
     }
 }
