@@ -60,3 +60,9 @@ updates:
       # 升级需先评估新规则集并调整 config/spotbugs/exclude.xml。
       - dependency-name: "com.github.spotbugs"
         update-types: ["version-update:semver-major"]
+      # Gradle wrapper 是架构级约束，不是普通依赖：ADR-0025 决策 3 与 ADR-0026
+      # 把「Gradle 全车道统一」写为架构决策，OPERATIONS.md 记录当前统一 9.6.1。
+      # 升级牵动 loom 兼容性、配置缓存、Kotlin DSL 版本与全部产物验收基线，
+      # 须先立 ADR 并整体重跑，不自动跟进。
+      - dependency-name: "gradle-wrapper"
+        versions: [">=0"]
