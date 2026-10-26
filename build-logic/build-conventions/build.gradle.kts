@@ -73,7 +73,7 @@ dependencies {
     compileOnly("com.github.spotbugs.snom:spotbugs-gradle-plugin:6.0.26")
 
     // 版本区间匹配（McSharedRanges）是新逻辑，按 ADR-0029 需要有行为断言。
-    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.14.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
