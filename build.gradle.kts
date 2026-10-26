@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit
 // 外部分析插件以 apply false 声明：由 build-conventions.quality 在运行期按 id 应用，
 // 在根声明可保证全构建只有一份插件类路径（避免按子树分裂类加载器）。
 plugins {
-    id("com.github.spotbugs") version "6.0.26" apply false
+    id("com.github.spotbugs") version "6.5.13" apply false
     // Kotlin 工具链（现接、前瞻就绪；当前仅 .gradle.kts 为 Kotlin，第二期引入 Kotlin 源即生效）
     id("org.jlleitschuh.gradle.ktlint") version "14.2.0" apply false
     id("dev.detekt") version "2.0.0-alpha.6" apply false
