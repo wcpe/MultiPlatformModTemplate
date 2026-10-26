@@ -5,5 +5,5 @@ main: top.wcpe.mc.mpmt.platform.bukkit.acceptance.MpmtBukkitAcceptancePlugin
 ${apiVersionMetadata}
 ${foliaMetadata}
 load: POSTWORLD
-softdepend: [MultiPlatformModTemplate]
+depend: [MultiPlatformModTemplate]
 description: MPMT realserver 验收驱动 —— 服务端驱动场景、客户端验证、单一权威报告

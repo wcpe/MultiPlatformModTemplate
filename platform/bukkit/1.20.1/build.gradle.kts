@@ -99,37 +99,38 @@ frozenApiSnapshot(
     mcVersion = minecraftVersion,
 )
 
-val verifyPackaging by tasks.registering {
-    group = "verification"
-    description = "校验 Bukkit $minecraftVersion 产品/验收产物"
-    dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"))
-    // 断言用到的车道常量在配置期取成局部值：断言 lambda 只捕获这些值，
-    // 不捕获脚本对象（配置缓存要求）；断言内容、顺序与失败文案不变。
-    val laneMcVersion = minecraftVersion
-    val laneAdapterClassPath = adapterClassPath
-    val laneAdapterClass = adapterClass
-    val laneApiVersion = apiVersion
-    packagingVerification(
-        laneLabel = "Bukkit",
-        mcVersion = laneMcVersion,
-        product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
-        acceptance = tasks.named<ShadowJar>("acceptanceJar").flatMap { it.archiveFile },
-    ) { product, acceptance ->
-        verifyBukkitProducts(
-            product = product,
-            acceptance = acceptance,
+val verifyPackaging =
+    tasks.register("verifyPackaging") {
+        group = "verification"
+        description = "校验 Bukkit $minecraftVersion 产品/验收产物"
+        dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"))
+        // 断言用到的车道常量在配置期取成局部值：断言 lambda 只捕获这些值，
+        // 不捕获脚本对象（配置缓存要求）；断言内容、顺序与失败文案不变。
+        val laneMcVersion = minecraftVersion
+        val laneAdapterClassPath = adapterClassPath
+        val laneAdapterClass = adapterClass
+        val laneApiVersion = apiVersion
+        packagingVerification(
+            laneLabel = "Bukkit",
             mcVersion = laneMcVersion,
-            adapterClassPath = laneAdapterClassPath,
-            adapterClass = laneAdapterClass,
-            l4Prefix = "top/wcpe/mc/mpmt/platform/bukkit/version/v1_",
-            expectFoliaSchedulerClass = true,
-            rejectProductMainInAcceptance = true,
-            rejectAcceptanceInProductYml = false,
-            rejectModernYmlFields = false,
-            apiVersion = laneApiVersion,
-        )
+            product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
+            acceptance = tasks.named<ShadowJar>("acceptanceJar").flatMap { it.archiveFile },
+        ) { product, acceptance ->
+            verifyBukkitProducts(
+                product = product,
+                acceptance = acceptance,
+                mcVersion = laneMcVersion,
+                adapterClassPath = laneAdapterClassPath,
+                adapterClass = laneAdapterClass,
+                l4Prefix = "top/wcpe/mc/mpmt/platform/bukkit/version/v1_",
+                expectFoliaSchedulerClass = true,
+                rejectProductMainInAcceptance = true,
+                rejectAcceptanceInProductYml = false,
+                rejectModernYmlFields = false,
+                apiVersion = laneApiVersion,
+            )
+        }
     }
-}
 
 val bukkitReportFile = layout.buildDirectory.file("acceptance/server-report.txt")
 // SCHEDULER 矩阵报告默认旁路文件；-Pmpmt.acceptance.matrix=SCHEDULER 时门禁读此路径

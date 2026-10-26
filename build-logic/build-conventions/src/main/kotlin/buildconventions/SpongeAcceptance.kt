@@ -47,7 +47,8 @@ internal fun registerSpongeAcceptancePlumbing(project: Project, lane: SpongeLane
         acceptance.compileClasspath += main.compileClasspath + main.output
         acceptance.runtimeClasspath += main.runtimeClasspath + main.output
         val configurations = project.configurations
-        configurations.getByName("${SPONGE_ACCEPTANCE_SOURCE_SET}Implementation")
+        configurations
+            .getByName("${SPONGE_ACCEPTANCE_SOURCE_SET}Implementation")
             .extendsFrom(configurations.getByName("implementation"))
 
         // 纯 JVM 验收契约源集：验证默认轨清单与 acceptance v2 严格报告
@@ -55,9 +56,11 @@ internal fun registerSpongeAcceptancePlumbing(project: Project, lane: SpongeLane
         acceptanceTest.compileClasspath += acceptance.output + acceptance.compileClasspath + main.output
         acceptanceTest.runtimeClasspath +=
             acceptanceTest.output + acceptance.runtimeClasspath + acceptanceTest.compileClasspath
-        configurations.getByName("${SPONGE_ACCEPTANCE_TEST_SOURCE_SET}Implementation")
+        configurations
+            .getByName("${SPONGE_ACCEPTANCE_TEST_SOURCE_SET}Implementation")
             .extendsFrom(configurations.getByName("testImplementation"))
-        configurations.getByName("${SPONGE_ACCEPTANCE_TEST_SOURCE_SET}RuntimeOnly")
+        configurations
+            .getByName("${SPONGE_ACCEPTANCE_TEST_SOURCE_SET}RuntimeOnly")
             .extendsFrom(configurations.getByName("testRuntimeOnly"))
 
         // 验收插件 sponge_plugins.json 的 ${version} 占位由构建注入。
@@ -94,7 +97,7 @@ private fun registerSpongeAcceptanceContractTest(
     }
 
 /**
- * 验收驱动插件 jar：shade acceptance 核心 + protocol + core-domain
+ * 验收驱动插件 jar：shade acceptance 核心 + protocol + core-kernel
  * （均第一方、无第三方运行期依赖，无需 relocate）。
  */
 private fun registerSpongeAcceptanceJar(project: Project, lane: SpongeLaneExtension, acceptance: SourceSet) {
@@ -138,7 +141,12 @@ internal fun registerSpongeRealserverGate(project: Project, lane: SpongeLaneExte
                 )
             }
             val lines =
-                report.readText().lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+                report
+                    .readText()
+                    .lineSequence()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .toList()
             if (lines.lastOrNull() != "RESULT PASS") {
                 throw GradleException(
                     "Sponge realserver 未通过：${report.absolutePath}\n${report.readText()}",

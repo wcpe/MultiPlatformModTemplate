@@ -1,7 +1,7 @@
 package top.wcpe.mc.mpmt.platform.bukkit.version;
 
 import org.bukkit.plugin.Plugin;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
 
 /**
  * Bukkit L4 版本适配接口：收敛通道与调度 API 差异。

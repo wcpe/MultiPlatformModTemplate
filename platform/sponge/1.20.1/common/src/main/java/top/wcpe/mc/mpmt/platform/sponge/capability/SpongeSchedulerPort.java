@@ -6,9 +6,9 @@ import org.spongepowered.api.scheduler.ScheduledTask;
 import org.spongepowered.api.scheduler.Task;
 import org.spongepowered.api.util.Ticks;
 import org.spongepowered.plugin.PluginContainer;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
-import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.ref.EntityRef;
+import top.wcpe.mc.mpmt.kernel.ref.WorldRef;
 
 /**
  * Sponge 调度端口（L3，FR-26 / ADR-0013）：Sponge 为单一服务端主线程模型，所有按归属调度统一落到

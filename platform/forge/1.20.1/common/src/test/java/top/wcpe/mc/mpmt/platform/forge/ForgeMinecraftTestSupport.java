@@ -497,7 +497,7 @@ public final class ForgeMinecraftTestSupport {
         }
 
         @Override
-        public top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle connectionOf(ServerPlayer player) {
+        public top.wcpe.mc.mpmt.kernel.port.ConnectionHandle connectionOf(ServerPlayer player) {
             return new ForgeConnectionHandle(player);
         }
 

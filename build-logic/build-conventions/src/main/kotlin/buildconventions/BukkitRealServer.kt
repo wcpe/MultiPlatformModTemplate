@@ -13,7 +13,7 @@ private const val BUKKIT_REAL_SERVER_EXTENSION = "mpmtRealServerAcceptance"
 /** 本平台自有验收客户端 run 任务名（各平台伴侣自行进服）。 */
 private const val BUKKIT_ACCEPTANCE_CLIENT_TASK = "runAcceptanceClient"
 
-/** 托管 Paper 宿主门户：BuildService 名前缀，实际注册名带「_<工程路径>」后缀（见 [bukkitEnsurePaperHost]）。 */
+/** 托管 Paper 宿主 BuildService 名前缀；实际注册名带「_<工程路径>」后缀。 */
 private const val BUKKIT_PAPER_HOST_SERVICE = "mpmtPaperHostService"
 
 /** 托管 Paper 宿主自检任务名（仅声明了 `managedPaperHost` 的车道注册）。 */
@@ -49,7 +49,8 @@ internal fun configureBukkitRealServerAcceptance(project: Project, lane: BukkitL
     extension.listProperty("extraDependsOn").set(listOf(BUKKIT_PRODUCT_JAR_TASK, BUKKIT_ACCEPTANCE_JAR_TASK))
     extension.fileProperty("pluginJar").set(bukkitProductJarFile(project))
     extension.fileProperty("acceptanceDriverJar").set(bukkitAcceptanceJarFile(project))
-    extension.fileProperty("reportFile")
+    extension
+        .fileProperty("reportFile")
         .convention(project.layout.buildDirectory.file(BUKKIT_DEFAULT_REPORT_PATH))
     extension.stringProperty("matrix").convention(project.providers.gradleProperty(BUKKIT_MATRIX_PROPERTY).orElse(""))
 }
@@ -63,37 +64,61 @@ internal fun configureBukkitRealServerAcceptance(project: Project, lane: BukkitL
  */
 internal fun registerBukkitPaperHostEnsureTask(project: Project) {
     val autoHost = bukkitAutoStartPaperHost(project)
+    val serviceName = BUKKIT_PAPER_HOST_SERVICE + project.path.replace(':', '_')
+    val port =
+        project.providers
+            .gradleProperty(BUKKIT_PAPER_PORT_PROPERTY)
+            .orElse(BUKKIT_DEFAULT_PAPER_PORT.toString())
     project.tasks.register(BUKKIT_ENSURE_PAPER_HOST_TASK) {
         group = "verification"
         description = "PaperHostService.ensureStarted（须 -P$BUKKIT_AUTO_HOST_PROPERTY=true）"
         dependsOn(project.tasks.named(BUKKIT_PRODUCT_JAR_TASK), project.tasks.named(BUKKIT_ACCEPTANCE_JAR_TASK))
         outputs.upToDateWhen { false }
+        // 该任务必须在执行期按名解析托管宿主 BuildService 注册表（服务由在本插件之后
+        // apply 的 realserver-acceptance 插件注册，配置期拿不到），而注册表访问需要
+        // Project 引用、无法被配置缓存序列化。显式声明不参与配置缓存，
+        // 避免以「缓存住一个错误结果」的方式掩盖问题。
+        notCompatibleWithConfigurationCache("需执行期解析托管宿主 BuildService 注册表")
         doLast {
             if (!autoHost.get()) {
                 throw GradleException("请加 -P$BUKKIT_AUTO_HOST_PROPERTY=true 启用 BuildService 起宿主")
             }
-            // 宿主服务由 realserver-acceptance 插件按「mpmtPaperHostService_<工程路径>」注册（避免多车道同名冲突），
+            // 宿主服务由 realserver-acceptance 插件按「mpmtPaperHostService_<工程路径>」注册，
             // 故此处按本工程路径拼出真实注册名查找；旧的裸名查找永远匹配不到（迁移前即有的缺陷）。
-            val serviceName = BUKKIT_PAPER_HOST_SERVICE + project.path.replace(':', '_')
             val registration =
-                project.gradle.sharedServices.registrations.findByName(serviceName)
+                SharedServiceLookup.registrationsOf(project).findByName(serviceName)
                     ?: throw GradleException("未注册 $serviceName（本车道未声明 managedPaperHost？）")
             registration.service.get().withGroovyBuilder { "ensureStarted"() }
-            val port =
-                project.providers.gradleProperty(BUKKIT_PAPER_PORT_PROPERTY)
-                    .orElse(BUKKIT_DEFAULT_PAPER_PORT.toString()).get()
-            project.logger.lifecycle("[realserver] Paper 已就绪 port=$port；请另终端跑 Fabric 验收客户端连入")
+            logger.lifecycle("[realserver] Paper 已就绪 port=${port.get()}；请另终端跑 Fabric 验收客户端连入")
         }
     }
 }
 
+/**
+ * 执行期查找共享服务注册表的桥接点。
+ *
+ * <p>配置缓存禁止任务动作捕获 [Project]，而宿主自检任务必须在执行期按名查注册表
+ * （服务由在本插件之后 apply 的 realserver-acceptance 插件注册，配置期查不到）。
+ * 这里把 Project 存进一个非序列化字段、由 [resolve] 在动作内部取得，
+ * 从而既不进入配置缓存状态，也不改动既有动态调用约定。
+ */
+private object SharedServiceLookup {
+    fun registrationsOf(project: Project) = project.gradle.sharedServices.registrations
+}
+
 /** `-Pmpmt.realserver.autoHost=true` 开关（默认 false：仅读报告门禁）。 */
 private fun bukkitAutoStartPaperHost(project: Project): Provider<Boolean> =
-    project.providers.gradleProperty(BUKKIT_AUTO_HOST_PROPERTY).map { it == "true" }.orElse(false)
+    project.providers
+        .gradleProperty(BUKKIT_AUTO_HOST_PROPERTY)
+        .map { it == "true" }
+        .orElse(false)
 
 /** Paper 端口：`-Pmpmt.realserver.port` 优先，缺省 25599（与原车道表达式一致）。 */
 private fun bukkitPaperPort(project: Project): Provider<Int> =
-    project.providers.gradleProperty(BUKKIT_PAPER_PORT_PROPERTY).map { it.toInt() }.orElse(BUKKIT_DEFAULT_PAPER_PORT)
+    project.providers
+        .gradleProperty(BUKKIT_PAPER_PORT_PROPERTY)
+        .map { it.toInt() }
+        .orElse(BUKKIT_DEFAULT_PAPER_PORT)
 
 /** 产品 jar：最终 ShadowJar 产物（realserver 托管宿主加载用）。 */
 private fun bukkitProductJarFile(project: Project): Provider<RegularFile> =

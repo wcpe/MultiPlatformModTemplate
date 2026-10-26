@@ -56,15 +56,21 @@ internal fun registerNeoForgeAcceptanceSourceSets(project: Project) {
         acceptance.compileClasspath += main.compileClasspath + main.output
         acceptance.runtimeClasspath += main.runtimeClasspath + main.output
         val configurations = project.configurations
-        configurations.getByName(acceptance.implementationConfigurationName)
+        configurations
+            .getByName(acceptance.implementationConfigurationName)
             .extendsFrom(configurations.getByName("implementation"))
 
         val acceptanceTest = sourceSets.create(NEOFORGE_ACCEPTANCE_TEST_SOURCE_SET)
         acceptanceTest.compileClasspath += acceptance.output + main.output
         acceptanceTest.runtimeClasspath += acceptanceTest.output + acceptanceTest.compileClasspath
-        configurations.getByName(acceptanceTest.implementationConfigurationName)
-            .extendsFrom(configurations.getByName("testImplementation"))
-        configurations.getByName(acceptanceTest.runtimeOnlyConfigurationName)
+        // 契约测试要直接构造验收源集里用到的域内组件（如 PlatformCapabilityExample），
+        // 故除 testImplementation 外还须继承验收源集的实现依赖——域模块登记在那里。
+        configurations.getByName(acceptanceTest.implementationConfigurationName).apply {
+            extendsFrom(configurations.getByName("testImplementation"))
+            extendsFrom(configurations.getByName(acceptance.implementationConfigurationName))
+        }
+        configurations
+            .getByName(acceptanceTest.runtimeOnlyConfigurationName)
             .extendsFrom(configurations.getByName("testRuntimeOnly"))
     }
 }
@@ -139,14 +145,19 @@ private fun registerNeoForgeSimulationAcceptance(
         classpath = acceptance.runtimeClasspath
         mainClass.set(lane.acceptanceMainClass.get())
         dependsOn(project.tasks.named(acceptance.classesTaskName), project.tasks.named(NEOFORGE_REMAP_JAR_TASK))
-        systemProperty(MPMT_ACCEPTANCE_REPORT_PROPERTY, lane.simulatorReport.get().asFile.absolutePath)
+        systemProperty(
+            MPMT_ACCEPTANCE_REPORT_PROPERTY,
+            lane.simulatorReport
+                .get()
+                .asFile.absolutePath,
+        )
         systemProperty(MPMT_ACCEPTANCE_VERSION_PROPERTY, project.version.toString())
         systemProperty(MPMT_ACCEPTANCE_PLATFORM_PROPERTY, NEOFORGE_PLATFORM_ID)
         systemProperty(MPMT_ACCEPTANCE_MC_VERSION_PROPERTY, lane.mcVersion.get())
         systemProperty(MPMT_ACCEPTANCE_SERVER_VERSION_PROPERTY, lane.neoForgeVersion.get())
         doFirst {
             systemProperty(MPMT_ACCEPTANCE_PRODUCT_SHA_PROPERTY, Hashes.sha256(neoforgeProductJarFile(project)))
-            systemProperty(MPMT_ACCEPTANCE_COMMIT_PROPERTY, gitHeadCommit(project))
+            systemProperty(MPMT_ACCEPTANCE_COMMIT_PROPERTY, project.gitHeadCommit())
         }
     }
 }

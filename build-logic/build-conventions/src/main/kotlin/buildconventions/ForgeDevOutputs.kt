@@ -28,6 +28,7 @@ internal fun registerForgeDevModOutputs(project: Project, lane: ForgeLaneExtensi
             group = "build"
             description = "将产品共享 JAR 嵌入 main classes，供 dev SecureJar 发现 @Mod 与依赖类"
             dependsOn(project.tasks.named("classes"), project.tasks.named("processResources"))
+            dependsOn(project.configurations.named(FORGE_PRODUCT_BUNDLE))
             from(
                 project.provider {
                     project.configurations.getByName(FORGE_PRODUCT_BUNDLE).map { project.zipTree(it) }
@@ -43,6 +44,7 @@ internal fun registerForgeDevModOutputs(project: Project, lane: ForgeLaneExtensi
             group = "build"
             description = "将验收共享 JAR 嵌入 acceptance classes，供 dev SecureJar 加载验收伴侣"
             dependsOn(project.tasks.named("acceptanceClasses"), project.tasks.named("processAcceptanceResources"))
+            dependsOn(project.configurations.named(FORGE_ACCEPTANCE_BUNDLE))
             from(
                 project.provider {
                     project.configurations.getByName(FORGE_ACCEPTANCE_BUNDLE).map { project.zipTree(it) }
@@ -83,8 +85,18 @@ private fun wireForgeDevModOutputDependencies(
 /** 校验 dev SecureJar 目录内容完整（run 任务启动前兜底，缺 @Mod 入口或元数据即失败）。 */
 fun verifyForgeDevSecureJarOutputs(project: Project, lane: ForgeLaneExtension) {
     val sourceSets = project.extensions.getByType(SourceSetContainer::class.java)
-    val mainDir = sourceSets.getByName("main").java.destinationDirectory.get().asFile
-    val acceptanceDir = sourceSets.getByName("acceptance").java.destinationDirectory.get().asFile
+    val mainDir =
+        sourceSets
+            .getByName("main")
+            .java.destinationDirectory
+            .get()
+            .asFile
+    val acceptanceDir =
+        sourceSets
+            .getByName("acceptance")
+            .java.destinationDirectory
+            .get()
+            .asFile
     val mainToml = File(mainDir, "META-INF/mods.toml")
     val acceptanceToml = File(acceptanceDir, "META-INF/mods.toml")
     val mainModClass = File(mainDir, lane.productModClass.get())

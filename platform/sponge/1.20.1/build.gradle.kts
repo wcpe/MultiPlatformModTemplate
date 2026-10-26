@@ -1,4 +1,7 @@
+import buildconventions.LaneBundle
 import buildconventions.SpongeLaneExtension
+import buildconventions.declareLaneBundles
+import buildconventions.mpmtDomains
 
 // Sponge 1.20.1 车道（根构建子模块）：common + server 分目录 → mpmt-sponge-1.20.1-<version>.jar。
 // 不可变契约：产物名与路径、sponge{} 生成的插件元数据（不手写 sponge_plugins.json）、core shade +
@@ -24,7 +27,7 @@ val snakeyamlVersion = "2.2"
 val spongeMetadataVersion = "11.0.0-SNAPSHOT"
 val spongeCompileVersion = "11.0.0-20230826.165715-4"
 // 官方旧 API SHA-256：1278386c819b2009d69241e3b9356b44c3be247e7da7ea21be42aceb444459e3
-// 依赖 platform-spi（经 api 传递 core-runtime + core-domain），经项目依赖消费
+// 依赖 platform-spi（经 api 传递 core-runtime + core-kernel），经项目依赖消费
 val platformApiCoordinate = project(":platform:sponge:sponge-api")
 val spiCoordinate = project(":core:spi")
 // 服务端公共网络特性（经 api 传递 protocol + core-runtime）
@@ -71,13 +74,14 @@ repositories {
 // 质量工具链：装配由 build-conventions.quality 插件承担（本工程无偏离项）
 
 // 专用配置：需 shade 进产品 jar 并 relocate 的内容（core/spi + 第三方运行期依赖）
-val shadowBundle: Configuration by configurations.creating
-// 专用配置：需 shade 进验收插件 jar 的内容——acceptance 核心 + protocol（+ core-domain 传递）。
+val shadowBundle: Configuration = declareLaneBundles(LaneBundle.SHADOW).getValue(LaneBundle.SHADOW)
+// 专用配置：需 shade 进验收插件 jar 的内容——acceptance 核心 + protocol（+ core-kernel 传递）。
 // Sponge 插件类加载器隔离，故验收 jar 自包含（同 Bukkit），不依赖产品 jar 提供这些类。
-val acceptanceShadowBundle: Configuration by configurations.creating
+val acceptanceShadowBundle: Configuration =
+    declareLaneBundles(LaneBundle.ACCEPTANCE_SHADOW).getValue(LaneBundle.ACCEPTANCE_SHADOW)
 
 dependencies {
-    // 共享核心（platform-spi + 传递 core-runtime/core-domain）：纯 Java、shade 进插件 jar
+    // 共享核心（platform-spi + 传递 core-runtime/core-kernel）：纯 Java、shade 进插件 jar
     implementation(platformApiCoordinate)
     implementation(spiCoordinate)
     shadowBundle(platformApiCoordinate)
@@ -85,6 +89,12 @@ dependencies {
     // 服务端公共网络特性（FR-19）：纯 Java、shade 进插件 jar（传递 protocol）
     implementation(serverCoordinate)
     shadowBundle(serverCoordinate)
+    // 功能域（L0 玩法逻辑）：mpmtDomains() 动态覆盖——新增域无需改本脚本（ADR-0028）。
+    // 域经 META-INF/services 声明 Feature，由 core-runtime 启动期自动发现；与其它核心产物同样 shade。
+    mpmtDomains().forEach { domain ->
+        implementation(domain)
+        shadowBundle(domain)
+    }
     // 第三方运行期依赖：shade 并 relocate（ADR-0012）
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
     shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")

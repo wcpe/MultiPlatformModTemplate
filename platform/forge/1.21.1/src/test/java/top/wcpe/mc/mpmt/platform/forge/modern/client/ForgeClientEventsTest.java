@@ -64,10 +64,10 @@ class ForgeClientEventsTest {
         java.lang.reflect.Constructor<ForgeClientSession> constructor =
                 ForgeClientSession.class.getDeclaredConstructor(
                         ForgeClientHud.class, String.class,
-                        top.wcpe.mc.mpmt.core.domain.port.MachineCodeProvider.class);
+                        top.wcpe.mc.mpmt.kernel.port.MachineCodeProvider.class);
         constructor.setAccessible(true);
         ForgeClientSession session = constructor.newInstance(
-                new ForgeClientHud(), "v", (top.wcpe.mc.mpmt.core.domain.port.MachineCodeProvider) () -> "c");
+                new ForgeClientHud(), "v", (top.wcpe.mc.mpmt.kernel.port.MachineCodeProvider) () -> "c");
 
         assertThrows(IllegalStateException.class,
                 () -> session.join(Forge121MinecraftTestSupport.newClientConnection()));

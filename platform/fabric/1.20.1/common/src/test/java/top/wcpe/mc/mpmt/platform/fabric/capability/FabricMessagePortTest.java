@@ -12,7 +12,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
+import top.wcpe.mc.mpmt.mcshared.common.capability.FabricMessagePort;
 import top.wcpe.mc.mpmt.platform.fabric.MinecraftTestSupport;
 
 /**

@@ -121,14 +121,21 @@ class MpmtRealServerAcceptancePlugin : Plugin<Project> {
         val paperVersion = ext.paperVersion
         val productJarProvider = ext.pluginJar
         val serviceName = "mpmtPaperHostService" + target.path.replace(':', '_')
+        // 按退出码判断：git rev-parse 失败时仍会向 stdout 回显参数 "HEAD"，
+        // 只按输出是否为空降级会把 "HEAD" 误当成有效提交号。
         val commitProvider =
-            target.providers
-                .exec {
-                    commandLine("git", "rev-parse", "HEAD")
-                    isIgnoreExitValue = true
-                }.standardOutput.asText
-                .map { it.trim() }
-                .orElse("unknown")
+            target.providers.provider {
+                val result =
+                    target.providers.exec {
+                        commandLine("git", "rev-parse", "HEAD")
+                        isIgnoreExitValue = true
+                    }
+                if (result.result.get().exitValue == 0) {
+                    result.standardOutput.asText.get().trim().ifEmpty { "unknown" }
+                } else {
+                    "unknown"
+                }
+            }
         val productShaProvider =
             productJarProvider.map { regular ->
                 val f = regular.asFile

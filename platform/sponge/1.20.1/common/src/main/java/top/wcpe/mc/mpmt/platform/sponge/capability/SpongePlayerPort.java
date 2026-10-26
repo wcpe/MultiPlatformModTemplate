@@ -7,8 +7,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
-import top.wcpe.mc.mpmt.core.domain.port.PlayerPort;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.port.PlayerPort;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
 
 /** Sponge 玩家查询端口：把在线玩家转换为平台无关引用。 */
 public final class SpongePlayerPort implements PlayerPort {

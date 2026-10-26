@@ -12,8 +12,8 @@ import java.util.List;
 import java.util.function.BiConsumer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.platform.forge.modern.Forge121MinecraftTestSupport;
 import top.wcpe.mc.mpmt.protocol.PacketDispatcher;
 import top.wcpe.mc.mpmt.protocol.packet.HudKind;
@@ -123,10 +123,10 @@ class ForgeClientHudBehaviourTest {
     void 测试会话拒绝真实连接() throws Exception {
         Constructor<ForgeClientSession> constructor = ForgeClientSession.class.getDeclaredConstructor(
                 ForgeClientHud.class, String.class,
-                top.wcpe.mc.mpmt.core.domain.port.MachineCodeProvider.class);
+                top.wcpe.mc.mpmt.kernel.port.MachineCodeProvider.class);
         constructor.setAccessible(true);
         ForgeClientSession session = constructor.newInstance(
-                new ForgeClientHud(), "v", (top.wcpe.mc.mpmt.core.domain.port.MachineCodeProvider) () -> "c");
+                new ForgeClientHud(), "v", (top.wcpe.mc.mpmt.kernel.port.MachineCodeProvider) () -> "c");
 
         assertThrows(IllegalStateException.class,
                 () -> session.join(Forge121MinecraftTestSupport.newClientConnection()));

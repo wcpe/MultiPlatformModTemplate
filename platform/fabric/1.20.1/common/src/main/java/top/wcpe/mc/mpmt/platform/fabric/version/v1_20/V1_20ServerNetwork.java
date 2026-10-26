@@ -7,8 +7,8 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.platform.fabric.net.FabricConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.mcshared.server.net.FabricConnectionHandle;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricChannel;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricServerNetwork;
 

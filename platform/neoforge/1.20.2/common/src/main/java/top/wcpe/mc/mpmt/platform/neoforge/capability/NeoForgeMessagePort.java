@@ -4,8 +4,8 @@ import java.util.Objects;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import top.wcpe.mc.mpmt.core.domain.port.MessagePort;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.port.MessagePort;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
 
 /**
  * NeoForge 消息端口（L3，FR-26）：按 {@link PlayerRef} 的 UUID 找在线 {@link ServerPlayer}，发系统聊天消息。

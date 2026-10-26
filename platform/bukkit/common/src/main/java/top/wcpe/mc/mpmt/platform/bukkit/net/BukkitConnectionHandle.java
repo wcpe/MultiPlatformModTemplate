@@ -3,7 +3,7 @@ package top.wcpe.mc.mpmt.platform.bukkit.net;
 import java.util.Objects;
 import java.util.UUID;
 import org.bukkit.entity.Player;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 
 /** Bukkit 服务端物理连接句柄：仅保存 UUID，平台对象由执行时重新查询。 */
 public final class BukkitConnectionHandle implements ConnectionHandle {

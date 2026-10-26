@@ -31,7 +31,7 @@ internal fun registerLoomRuns(project: Project, lane: FabricLaneExtension, gamet
     val runs = loomRuns(project)
     configureSimulatorRun(runs, lane, gametest)
     configureAcceptanceServerRun(project, runs, lane, gametest)
-    configureAcceptanceClientRun(runs, lane, gametest)
+    configureAcceptanceClientRun(project, runs, lane, gametest)
 }
 
 /**
@@ -53,6 +53,9 @@ internal fun configureAcceptanceRunTasks(project: Project, lane: FabricLaneExten
         doFirst { injectAcceptanceServerMetadata(lane) }
     }
     project.tasks.named(loomRunTaskName(ACCEPTANCE_CLIENT_RUN_NAME), JavaExec::class.java).configure {
+        // 单机轨的验收元数据要在配置期读取产品 jar 算摘要，故必须保证产物先构建；
+        // 真服轨同样从 mods/ 加载产品 jar，加此依赖对两条轨都必要且无害。
+        dependsOn(project.tasks.named(productTaskName))
         if (hasMatrixRuns(lane)) {
             doFirst { injectAcceptanceClientMetadata(lane) }
         }
@@ -79,7 +82,12 @@ private fun configureSimulatorRun(
         "configName"("Sim Network GameTest")
         "source"(gametest)
         "property"("mpmt.simtest", "true")
-        "property"("mpmt.simtest.report", lane.simulatorReport.get().asFile.absolutePath)
+        "property"(
+            "mpmt.simtest.report",
+            lane.simulatorReport
+                .get()
+                .asFile.absolutePath,
+        )
     }
 }
 
@@ -106,6 +114,7 @@ private fun configureAcceptanceServerRun(
 
 /** 验收客户端：需显示，由用户本机经 quickPlay 自连；默认对齐 `run/server.properties` 的 server-port=25571。 */
 private fun configureAcceptanceClientRun(
+    project: Project,
     runs: NamedDomainObjectContainer<*>,
     lane: FabricLaneExtension,
     gametest: SourceSet,
@@ -116,17 +125,51 @@ private fun configureAcceptanceClientRun(
         "configName"("Acceptance Client")
         "source"(gametest)
         "runDir"(ACCEPTANCE_CLIENT_RUN_DIR)
-        "programArgs"("--quickPlayMultiplayer", address)
+        // 单机/LAN 验收不传 --quickPlayMultiplayer：该参数会让客户端在到主菜单后
+        // 自动连接外部地址，与伴侣创建单人世界的流程冲突，导致世界建好后客户端不进世界。
+        val singleplayer = project.findProperty("mpmt.acceptance.singleplayer") == "true"
+        if (!singleplayer) {
+            "programArgs"("--quickPlayMultiplayer", address)
+        }
         if (lane.acceptanceClientExposesServerProperty.get()) {
             // 伴侣自连读系统属性；与 programArgs 同源，避免只改 -P 时伴侣仍连默认口
             "property"("mpmt.acceptance.server", address)
+        }
+        // 单机/LAN 验收（-Pmpmt.acceptance.singleplayer=true）：伴侣据此创建单人世界，
+        // 由客户端内置服务端承载验收场景，无需另起专用服。
+        if (singleplayer) {
+            "property"("mpmt.acceptance", "true")
+            "property"("mpmt.acceptance.singleplayer", "true")
+            "property"(
+                "mpmt.acceptance.report",
+                project.file("$ACCEPTANCE_CLIENT_RUN_DIR/singleplayer-acceptance-report.txt").absolutePath,
+            )
+            "property"("mpmt.acceptance.deadlineMs", "600000")
+            "property"("mpmt.acceptance.platform", "fabric")
+            "property"("mpmt.acceptance.mcVersion", lane.mcVersion.get())
+            "property"("mpmt.acceptance.serverVersion", "Fabric ${lane.mcVersion.get()}")
+            "property"("mpmt.acceptance.version", project.version.toString())
+            "property"("mpmt.acceptance.commit", project.gitHeadCommit())
+            "property"(
+                "mpmt.acceptance.productJar",
+                // 与产物命名同源：手工拼 "$项目名-$版本.jar" 会忽略 archivesName 的 mpmt- 前缀
+                project.productJarFile(lane).absolutePath,
+            )
+            // 摘要与真服轨同源；client run 已 dependsOn 产品构建任务，配置期读取时产物必然就绪
+            "property"(
+                "mpmt.acceptance.productJarSha256",
+                Hashes.sha256(project.productJarFile(lane)),
+            )
         }
     }
 }
 
 /** acceptanceServer 的默认报告路径：按车道声明决定是否采用 `-Pmpmt.acceptance.report` 覆盖值。 */
 private fun acceptanceServerReport(project: Project, lane: FabricLaneExtension): String {
-    val configured = lane.acceptanceReport.get().asFile.absolutePath
+    val configured =
+        lane.acceptanceReport
+            .get()
+            .asFile.absolutePath
     if (!lane.acceptanceServerUsesOverriddenReport.get()) {
         return configured
     }

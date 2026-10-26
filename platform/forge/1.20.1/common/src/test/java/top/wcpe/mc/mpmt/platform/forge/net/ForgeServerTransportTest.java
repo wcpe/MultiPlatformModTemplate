@@ -13,7 +13,7 @@ import java.util.UUID;
 import net.minecraft.server.level.ServerPlayer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 import top.wcpe.mc.mpmt.platform.forge.ForgeMinecraftTestSupport;
 import top.wcpe.mc.mpmt.platform.forge.ForgeMinecraftTestSupport.FakeServerNetwork;
 

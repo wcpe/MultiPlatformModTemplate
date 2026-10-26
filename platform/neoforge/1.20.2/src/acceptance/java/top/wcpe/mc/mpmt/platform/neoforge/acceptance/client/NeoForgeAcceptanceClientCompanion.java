@@ -101,6 +101,34 @@ public final class NeoForgeAcceptanceClientCompanion {
         if (!connectAttempted.compareAndSet(false, true)) {
             return; // 只发起一次
         }
+        // 单机轨（-Dmpmt.acceptance.singleplayer=true）：不连外部服，改为创建单人世界，
+        // 由客户端内置服务端承载验收场景；此时服务端与客户端同进程，控制通道直接可用。
+        if (Boolean.getBoolean("mpmt.acceptance.singleplayer")) {
+            String world = System.getProperty("mpmt.acceptance.singleplayer.world", "mpmt-acceptance");
+            LOGGER.info("realserver NeoForge 验收伴侣：单机轨，创建单人世界 {}", world);
+            client.execute(
+                    () ->
+                            client.createWorldOpenFlows()
+                                    .createFreshLevel(
+                                            world,
+                                            new net.minecraft.world.level.LevelSettings(
+                                                    world,
+                                                    net.minecraft.world.level.GameType.SURVIVAL,
+                                                    false,
+                                                    net.minecraft.world.Difficulty.NORMAL,
+                                                    true,
+                                                    new net.minecraft.world.level.GameRules(),
+                                                    net.minecraft.world.level.WorldDataConfiguration
+                                                            .DEFAULT),
+                                            new net.minecraft.world.level.levelgen.WorldOptions(
+                                                    net.minecraft.world.level.levelgen.WorldOptions
+                                                            .randomSeed(),
+                                                    true,
+                                                    false),
+                                            net.minecraft.world.level.levelgen.presets.WorldPresets
+                                                    ::createNormalWorldDimensions));
+            return;
+        }
         String address = System.getProperty("mpmt.acceptance.server", "127.0.0.1");
         LOGGER.info("realserver NeoForge 验收伴侣：程序化连入 {}", address);
         // 1.20.2 该构造为 (name, ip, Type)；OTHER=直连普通服

@@ -5,8 +5,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.BiConsumer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 
 /** 模拟服专用双向回环传输；支持暂停、乱序、丢弃和篡改单帧，故障状态不会进入产品产物。 */
 public final class LoopbackTransport {

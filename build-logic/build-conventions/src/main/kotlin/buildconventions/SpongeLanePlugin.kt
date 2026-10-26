@@ -58,7 +58,8 @@ class SpongeLanePlugin : Plugin<Project> {
      * spongeapi 由 `sponge {}` apiVersion 以 compileOnly 接入，测试运行期需显式补同版本制品。
      */
     private fun configureToolchainAndTest(project: Project, lane: SpongeLaneExtension) {
-        project.extensions.getByType(JavaPluginExtension::class.java)
+        project.extensions
+            .getByType(JavaPluginExtension::class.java)
             .toolchain.languageVersion
             .set(JavaLanguageVersion.of(lane.targetJavaVersion.get()))
         project.tasks.named("test", Test::class.java).configure { useJUnitPlatform() }

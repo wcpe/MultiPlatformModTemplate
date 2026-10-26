@@ -10,7 +10,7 @@
 - **代码异味 / 源码规则（Java）**：`pmd` 7.0.0，裁剪规则集 `config/pmd/ruleset.xml`（未用 / 空块 / 吞异常 / 多线程缺陷等高信号项；不取 `UnusedFormalParameter`——与回调密集设计冲突）。
 - **缺陷检测（字节码）+ 安全审查（Java）**：`spotbugs` 6.0.26（effort MAX、置信度 MEDIUM）+ `findsecbugs` 1.13.0 挂其上；排除过滤器 `config/spotbugs/exclude.xml`（集中登记 Lombok 生成代码 / 框架契约 / 工具误报，逐条注明）。**仅生产码（spotbugsMain）严格门禁**，test / acceptance / gametest 等非 main 源集宽松。
 - **测试覆盖率（Java）**：`jacoco`——**全部模块**（L0–L2 + 共享 + bukkit + 各平台车道）设 LINE 覆盖率底线 0.70 门禁并入 `check`；平台车道原"仅出报告、不设底线"的豁免已废止（ADR-0026）。
-- **分离度 / 分层回归断言**：`ArchUnit` 1.3.0（core-domain 测试）——校验 L0 零平台依赖、功能域互不依赖且无环（ADR-0001/0011）。
+- **分离度 / 分层回归断言**：`ArchUnit` 1.3.0（`core-kernel` 的 `LayeringArchTest`）——校验 L0 零平台依赖、功能域互不依赖且无环（ADR-0001/0011）。
 - **Lombok**：仓库根 `lombok.config`（`addLombokGeneratedAnnotation`）使生成代码带 `@lombok.Generated`、避免静态分析误报；并登记为 `JavaCompile` 输入。
 - **L0–L2 Java 8 API 强制**：用 **JDK 8 工具链**编译（API 面即 JDK 8，强于 `--release 8`）——见 ADR-0004。
 - **Kotlin / Gradle Kotlin DSL**：`ktlint` 14.2.0（检 `*.gradle.kts`，规则经 `.editorconfig` 裁剪）；`detekt` 1.23.7 + `kover` 0.8.3——业务模块无 Kotlin 源（仅近空扫），Kotlin 源只存在于两个插件工程，其 `ktlintCheck` / `detekt` 门禁实际生效。注：detekt 1.23 的内嵌 Kotlin 编译器无法在 JDK 25 上运行，故插件工程独立调用时守护 JVM 固定 JDK 21（`gradle/gradle-daemon-jvm.properties`）+ 工具链 21（ADR-0027）。

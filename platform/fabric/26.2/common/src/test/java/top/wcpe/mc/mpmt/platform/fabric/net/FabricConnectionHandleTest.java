@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import sun.misc.Unsafe;
+import top.wcpe.mc.mpmt.mcshared.server.net.FabricConnectionHandle;
 
 /**
  * Fabric 连接句柄相等性契约（tip：按玩家 UUID）。

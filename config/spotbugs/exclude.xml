@@ -24,6 +24,16 @@
         <Bug pattern="PATH_TRAVERSAL_IN"/>
     </Match>
 
+    <!-- 验收产物路径由构建脚本经 -Dmpmt.acceptance.artifact.* 注入（remapJar / acceptanceJar 的
+         绝对路径），属构建系统受控输入而非外部用户输入。此处不可加"工作区 startsWith 边界校验"：
+         验收进程的当前工作目录是 run-realserver，而产物位于 build/libs，合法地落在其之外，加边界
+         反而会让真实验收失败。仅精确放行该方法的 PATH_TRAVERSAL_IN。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.modern.acceptance.AcceptanceDriver"/>
+        <Method name="artifactPath"/>
+        <Bug pattern="PATH_TRAVERSAL_IN"/>
+    </Match>
+
     <!-- 连接句柄按设计在 L3 内部暴露平台原生对象（Bukkit Player / ServerPlayer 等），供 L3 传输解封后
          发送；平台对象不泄漏进 L0/L1（ADR-0001）。此处 EI 为预期行为。 -->
     <Match>
@@ -52,6 +62,23 @@
     <Match>
         <Class name="top.wcpe.mc.mpmt.platform.forge.client.ForgeClientSession"/>
         <Method name="networkFeature"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
+    <!-- 验收 mod 须把 CONTROL 单例交给客户端伴侣注册同一接收器；返回防御性副本会让伴侣注册到
+         另一个实例上，事件收不到，验收流程直接失效。静态字段经公开访问器返回，按设计取舍放行。
+         模式名取自验收报告实测检出（MS_EXPOSE_REP）。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.modern.acceptance.MpmtForge262AcceptanceMod"/>
+        <Method name="control"/>
+        <Bug pattern="MS_EXPOSE_REP"/>
+    </Match>
+
+    <!-- 验收上下文本身是「服务端的视图」：构造时注入宿主进程唯一的 MinecraftServer，getter 原样交回。
+         服务端对象不可复制，复制也无意义。模式名取自验收报告实测检出（EI_EXPOSE_REP，位于 getter）。 -->
+    <Match>
+        <Class name="top.wcpe.mc.mpmt.platform.forge.modern.acceptance.ForgeServerGameTestContext"/>
+        <Method name="server"/>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
 

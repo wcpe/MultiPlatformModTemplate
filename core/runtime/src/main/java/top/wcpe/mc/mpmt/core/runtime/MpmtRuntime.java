@@ -3,8 +3,10 @@ package top.wcpe.mc.mpmt.core.runtime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import top.wcpe.mc.mpmt.core.domain.event.EventBusPort;
-import top.wcpe.mc.mpmt.core.domain.event.SimpleEventBus;
+import top.wcpe.mc.mpmt.kernel.event.EventBusPort;
+import top.wcpe.mc.mpmt.kernel.event.SimpleEventBus;
+import top.wcpe.mc.mpmt.kernel.feature.Feature;
+import top.wcpe.mc.mpmt.kernel.feature.RuntimeContext;
 
 /**
  * 框架运行时编排：持有自有 EventBus、端口注册表、特性注册表，并驱动生命周期。

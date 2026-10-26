@@ -177,7 +177,10 @@ public final class MpmtBukkitAcceptancePlugin extends JavaPlugin implements List
                                     ScenarioStatus.ERROR,
                                     0L,
                                     String.valueOf(throwable.getMessage())));
-            finishOnce(AcceptanceReport.render(fallback));
+            // 兜底也走 v2：否则严格门禁会以「报告不是 acceptance v2」拒绝，掩盖掉真实异常
+            finishOnce(
+                    AcceptanceReport.render(
+                            BukkitDefaultSimulation.failureMetadata(platformName()), fallback));
         }
     }
 
@@ -222,8 +225,15 @@ public final class MpmtBukkitAcceptancePlugin extends JavaPlugin implements List
                                 ScenarioStatus.ERROR,
                                 deadlineMs,
                                 "验收绝对截止超时未收尾"));
-        // 看门狗 fallback 仍走 v1，避免缺元数据再抛；正常路径必须是 v2
-        finishOnce(AcceptanceReport.render(fallback));
+        // 看门狗兜底同样走 v2：属性缺失由 failureMetadata 占位，不会再抛也不再产出 v1
+        finishOnce(
+                AcceptanceReport.render(
+                        BukkitDefaultSimulation.failureMetadata(platformName()), fallback));
+    }
+
+    /** 本车道平台名；驱动正常路径与兜底路径共用同一取值口径。 */
+    private static String platformName() {
+        return System.getProperty(PLATFORM_PROPERTY, "bukkit");
     }
 
     private void watchdogMatrix(long deadlineMs) {

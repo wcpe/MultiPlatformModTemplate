@@ -2,9 +2,9 @@ package buildconventions
 
 import org.gradle.api.GradleException
 import org.gradle.api.Project
+import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DuplicatesStrategy
-import org.gradle.api.file.FileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.SourceSetContainer
@@ -53,13 +53,17 @@ val FORGE_ARCHIVE_EXCLUDES =
 private const val FORGE_CLASS_MAJOR_OFFSET = 44
 
 /**
- * 共享模块 jar 访问器：车道依赖块按 `ForgeModules.moduleJar(...)` 消费同根构建项目产物
- * （FileCollection，自带任务依赖），不再按 build/libs 路径硬编码。
+ * 共享模块 jar 访问器：车道依赖块按 `ForgeModules.moduleJar(...)` 消费同根构建项目产物。
+ *
+ * 必须用非传递项目依赖而非 `files(任务集合)`：文件集合会在消费方配置期就快照求值，
+ * 在按需配置（`--configure-on-demand`）下生产者项目尚未配置，结果为空且不报错，
+ * 整条内部类路径随之静默消失；项目依赖惰性求值，且由 Gradle 保证各 jar 任务顺序。
  */
 object ForgeModules {
-    /** 按工程路径取该模块 jar 任务产物。 */
-    fun moduleJar(project: Project, projectPath: String): FileCollection =
-        project.files(project.project(projectPath).tasks.withType(Jar::class.java).matching { it.name == "jar" })
+    /** 按工程路径取该模块产物（非传递：只取 jar 本体，不引入其 POM 依赖）。 */
+    fun moduleJar(project: Project, projectPath: String): ProjectDependency =
+        (project.dependencies.project(mapOf("path" to projectPath)) as ProjectDependency)
+            .apply { isTransitive = false }
 }
 
 /**
@@ -94,14 +98,21 @@ fun registerForgeModernSourceSets(project: Project) {
         runtimeClasspath += output + compileClasspath
     }
     listOf(main, acceptance).forEach { sourceSet ->
-        sourceSet.output.setResourcesDir(sourceSet.java.destinationDirectory.get().asFile)
+        sourceSet.output.setResourcesDir(
+            sourceSet.java.destinationDirectory
+                .get()
+                .asFile,
+        )
     }
     // acceptance 编译需要 main 的 compileOnly 共享类；不 extends implementation（已无 runtime 共享 jar）
-    project.configurations.getByName("acceptanceCompileOnly")
+    project.configurations
+        .getByName("acceptanceCompileOnly")
         .extendsFrom(project.configurations.getByName("compileOnly"))
-    project.configurations.getByName("contractTestImplementation")
+    project.configurations
+        .getByName("contractTestImplementation")
         .extendsFrom(project.configurations.getByName("testImplementation"))
-    project.configurations.getByName("contractTestRuntimeOnly")
+    project.configurations
+        .getByName("contractTestRuntimeOnly")
         .extendsFrom(project.configurations.getByName("testRuntimeOnly"))
 }
 
@@ -113,6 +124,9 @@ fun registerForgeModernSourceSets(project: Project) {
 fun configureForgeModernProductJar(project: Project, lane: ForgeLaneExtension) {
     project.tasks.named("jar", Jar::class.java).configure {
         from(project.provider { project.configurations.getByName(FORGE_PRODUCT_BUNDLE).map { project.zipTree(it) } })
+        // provider 内解包会让 Gradle 看不到产物来源，须显式声明配置级任务依赖，
+        // 否则下游 jar 可能先于各 core 模块的 jar 执行并读到陈旧产物。
+        dependsOn(project.configurations.named(FORGE_PRODUCT_BUNDLE))
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         lane.archiveExcludes.get().forEach { exclude(it) }
         exclude("$FORGE_ACCEPTANCE_PACKAGE_PREFIX**")
@@ -150,8 +164,15 @@ fun registerForgeAcceptanceJar(
         archiveVersion.set(project.version.toString())
         destinationDirectory.set(project.layout.buildDirectory.dir("devlibs"))
     }
-    from(project.extensions.getByType(SourceSetContainer::class.java).getByName("acceptance").output)
+    from(
+        project.extensions
+            .getByType(SourceSetContainer::class.java)
+            .getByName("acceptance")
+            .output,
+    )
     from(project.provider { project.configurations.getByName(FORGE_ACCEPTANCE_BUNDLE).map { project.zipTree(it) } })
+    // 同产品薄包：provider 内解包不携带任务依赖，显式补配置级依赖。
+    dependsOn(project.configurations.named(FORGE_ACCEPTANCE_BUNDLE))
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     lane.archiveExcludes.get().forEach { exclude(it) }
     lane.acceptanceExcludes.get().forEach { exclude(it) }
@@ -316,4 +337,9 @@ internal fun registerForgePackageArtifacts(project: Project, lane: ForgeLaneExte
         dependsOn(FORGE_VERIFY_PACKAGING_TASK)
         lane.packageArtifactsDependsOn.get().forEach { dependsOn(it) }
     }
+
+    // `build` 收口：产品打包校验是构建出口的一部分，车道脚本不再各自写这条接线。
+    // 与调用点同源——本函数仅在 modernPackagingVerification 为真时被调用，
+    // 因此对未开启该开关的车道不产生任何影响（它们本就没有 packageArtifacts 任务）。
+    project.tasks.named("build") { dependsOn(FORGE_PACKAGE_ARTIFACTS_TASK) }
 }

@@ -2,7 +2,7 @@ package top.wcpe.mc.mpmt.platform.bukkit.capability;
 
 import java.util.Objects;
 import org.bukkit.plugin.Plugin;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
 import top.wcpe.mc.mpmt.platform.bukkit.version.BukkitVersionAdapter;
 import top.wcpe.mc.mpmt.platform.spi.Capability;
 import top.wcpe.mc.mpmt.platform.spi.FeatureGate;

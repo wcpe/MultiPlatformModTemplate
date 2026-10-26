@@ -9,7 +9,7 @@ import org.spongepowered.api.network.channel.ChannelBuf;
 import org.spongepowered.api.network.channel.raw.RawDataChannel;
 import org.spongepowered.api.scheduler.Task;
 import org.spongepowered.plugin.PluginContainer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 import top.wcpe.mc.mpmt.platform.sponge.net.SpongeConnectionHandle;
 import top.wcpe.mc.mpmt.platform.sponge.net.SpongeConnectionRegistry;
 import top.wcpe.mc.mpmt.platform.sponge.version.SpongeServerNetwork;

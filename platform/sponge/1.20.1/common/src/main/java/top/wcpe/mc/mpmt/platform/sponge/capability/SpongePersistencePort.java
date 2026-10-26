@@ -12,8 +12,8 @@ import java.util.Optional;
 import java.util.Properties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import top.wcpe.mc.mpmt.core.domain.port.DataDirectoryPort;
-import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
+import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
+import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
 
 /**
  * Sponge 文件持久化端口（L3，FR-26）：每个命名空间一份 properties 文件，存于

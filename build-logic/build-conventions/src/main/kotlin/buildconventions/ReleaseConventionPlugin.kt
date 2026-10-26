@@ -20,7 +20,11 @@ import org.gradle.api.Project
 class ReleaseConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
         // 版本号唯一来源 = 根目录 VERSION 文件（testing-and-quality §3），与根脚本 group/version 同源。
-        val releaseVersion = target.rootProject.file("VERSION").readText().trim()
+        val releaseVersion =
+            target.rootProject
+                .file("VERSION")
+                .readText()
+                .trim()
 
         val collectReleaseArtifacts = registerReleaseArtifactAggregation(target, releaseVersion)
         val buildFabric262 = registerReleasePackagingGates(target, collectReleaseArtifacts)

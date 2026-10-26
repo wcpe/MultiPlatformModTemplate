@@ -1,6 +1,9 @@
 package top.wcpe.mc.mpmt.platform.fabric.capability;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
@@ -23,6 +26,10 @@ public final class FabricHudRenderer {
 
     private static volatile ServerHudMessagePacket lastRendered;
 
+    /** 本次连接内收到过的全部 HUD（按到达顺序）；产品握手演示 HUD 会覆盖 lastRendered，见 receivedHuds(). */
+    private static List<ServerHudMessagePacket> receivedList =
+            Collections.synchronizedList(new ArrayList<>());
+
     private FabricHudRenderer() {
         // 工具类不实例化
     }
@@ -32,9 +39,17 @@ public final class FabricHudRenderer {
         return lastRendered;
     }
 
+    /** {@return 本次连接内收到过的全部 HUD 快照} 用于「是否收到过某条 HUD」类的断言. */
+    public static List<ServerHudMessagePacket> receivedHuds() {
+        synchronized (receivedList) {
+            return new ArrayList<>(receivedList);
+        }
+    }
+
     /** 断线时清空 HUD 快照，避免旧会话状态泄漏到下一 play 连接。 */
     public static void clear() {
         lastRendered = null;
+        receivedList.clear();
     }
 
     /** 在客户端收发管线上注册 HUD 收包处理器。 */
@@ -44,6 +59,7 @@ public final class FabricHudRenderer {
                 (connection, packet) -> {
                     ServerHudMessagePacket hud = (ServerHudMessagePacket) packet;
                     lastRendered = hud;
+                    receivedList.add(hud);
                     Minecraft.getInstance().execute(() -> render(hud));
                 });
     }

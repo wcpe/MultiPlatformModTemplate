@@ -9,8 +9,8 @@ import java.util.Base64;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.ban.BanEntry;
-import top.wcpe.mc.mpmt.core.domain.ban.MachineCode;
+import top.wcpe.mc.mpmt.kernel.ban.BanEntry;
+import top.wcpe.mc.mpmt.kernel.ban.MachineCode;
 
 /** 封禁快照格式的确定性、版本与异常输入测试。 */
 class BanSnapshotCodecTest {

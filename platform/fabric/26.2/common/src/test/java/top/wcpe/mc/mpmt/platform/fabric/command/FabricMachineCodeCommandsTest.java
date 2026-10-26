@@ -18,14 +18,14 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.ban.BanEntry;
-import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
-import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
+import top.wcpe.mc.mpmt.kernel.ban.BanEntry;
+import top.wcpe.mc.mpmt.kernel.ban.BanRegistry;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.ref.EntityRef;
+import top.wcpe.mc.mpmt.kernel.ref.WorldRef;
 import top.wcpe.mc.mpmt.core.server.BanService;
 import top.wcpe.mc.mpmt.core.server.SessionRegistry;
 import top.wcpe.mc.mpmt.platform.fabric.MinecraftTestSupport;
@@ -81,7 +81,7 @@ class FabricMachineCodeCommandsTest {
 
         assertEquals(1, execute(dispatcher, fixture.source(), "mpmt machinecode ban code-A"));
         assertEquals(
-                List.of(new BanEntry(new top.wcpe.mc.mpmt.core.domain.ban.MachineCode("code-A"), "由管理员封禁")),
+                List.of(new BanEntry(new top.wcpe.mc.mpmt.kernel.ban.MachineCode("code-A"), "由管理员封禁")),
                 fixture.banService().list());
 
         assertEquals(1, execute(dispatcher, fixture.source(), "mpmt machinecode ban code-B 自定义理由"));

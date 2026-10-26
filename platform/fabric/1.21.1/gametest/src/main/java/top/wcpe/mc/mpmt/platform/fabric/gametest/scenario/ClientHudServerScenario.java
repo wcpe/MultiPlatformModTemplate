@@ -6,7 +6,7 @@ import top.wcpe.mc.mpmt.acceptance.gametest.ServerGameTestContext;
 import top.wcpe.mc.mpmt.acceptance.gametest.ServerScenario;
 import top.wcpe.mc.mpmt.platform.fabric.MpmtFabricBootstrap;
 import top.wcpe.mc.mpmt.platform.fabric.gametest.FabricServerGameTestContext;
-import top.wcpe.mc.mpmt.platform.fabric.net.FabricConnectionHandle;
+import top.wcpe.mc.mpmt.mcshared.server.net.FabricConnectionHandle;
 import top.wcpe.mc.mpmt.protocol.packet.HudKind;
 
 /** 经真实产品 HudMessageService 下发 HUD，控制通道只排程客户端断言。 */
