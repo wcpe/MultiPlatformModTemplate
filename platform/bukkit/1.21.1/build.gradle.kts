@@ -13,7 +13,7 @@ plugins {
     id("build-conventions.quality")
     id("build-conventions.platform")
     java
-    id("com.gradleup.shadow") version "8.3.11"
+    id("com.gradleup.shadow") version "9.6.1"
     // 车道约定插件须晚于 shadow（打包链路按名取 jar/shadowJar），早于 realserver 门禁（验收扩展取值先落地）
     id("build-conventions.bukkit")
     id("top.wcpe.mc.mpmt.realserver-acceptance")
