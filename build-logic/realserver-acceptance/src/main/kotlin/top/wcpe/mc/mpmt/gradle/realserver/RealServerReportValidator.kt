@@ -23,6 +23,29 @@ object RealServerReportValidator {
     private val REQUIRED_SCENARIOS: List<String> =
         listOf("product-handshake", "product-roundtrip", "client-hud")
 
+    /** 报告单行格式：键、值交替，故一组「键 值」占两个 token。 */
+    private const val KEY_VALUE_STRIDE = 2
+
+    /** `RUN_ID` / `MATRIX` / `START_EPOCH_MS` 行：一个键 + 一个值。 */
+    private const val SINGLE_VALUE_FIELD_COUNT = 2
+
+    /** `SERVER_JAVA` / `CLIENT_JAVA` / `ARTIFACT` / `SCENARIO` 行的字段个数。 */
+    private const val JAVA_INFO_FIELD_COUNT = 3
+    private const val ARTIFACT_FIELD_COUNT = 3
+    private const val SCENARIO_FIELD_COUNT = 5
+
+    /** `TOTAL` 行：`TOTAL`/`PASS`/`FAIL`/`ERROR`/`SKIP` 五组，共十个 token。 */
+    private const val TOTAL_FIELD_COUNT = 10
+
+    /** `SCENARIO` 行的位置语义：0=标签，1=场景名，2=状态，3=耗时毫秒，4=说明。 */
+    private const val SCENARIO_STATUS_INDEX = 2
+    private const val SCENARIO_DURATION_INDEX = 3
+
+    private val TOTAL_KEYS: List<String> = listOf("TOTAL", "PASS", "FAIL", "ERROR", "SKIP")
+
+    /** `SCENARIO` 行允许的状态取值。 */
+    private val SCENARIO_STATES: Set<String> = setOf("PASS", "FAIL", "ERROR", "SKIP")
+
     fun verify(report: File, expected: RealServerReportExpectation) {
         val parsed = parse(report, expected.lane)
         verifyIdentity(parsed, report, expected)
@@ -110,9 +133,17 @@ object RealServerReportValidator {
 
         fun accept(line: String) {
             when {
-                line.startsWith("RUN_ID\t") -> runId = unique("RUN_ID", runId, fields(line, 2)[1])
-                line.startsWith("MATRIX\t") -> matrix = unique("MATRIX", matrix, fields(line, 2)[1])
-                line.startsWith("START_EPOCH_MS\t") -> startEpochMs = unique("START_EPOCH_MS", startEpochMs, fields(line, 2)[1].toLong())
+                line.startsWith("RUN_ID\t") ->
+                    runId = unique("RUN_ID", runId, fields(line, SINGLE_VALUE_FIELD_COUNT)[1])
+                line.startsWith("MATRIX\t") ->
+                    matrix = unique("MATRIX", matrix, fields(line, SINGLE_VALUE_FIELD_COUNT)[1])
+                line.startsWith("START_EPOCH_MS\t") ->
+                    startEpochMs =
+                        unique(
+                            "START_EPOCH_MS",
+                            startEpochMs,
+                            fields(line, SINGLE_VALUE_FIELD_COUNT)[1].toLong(),
+                        )
                 line.startsWith("SERVER_JAVA\t") -> {
                     if (serverJavaSeen) fail(lane, "报告 SERVER_JAVA 重复")
                     javaInfo(line, "SERVER_JAVA")
@@ -132,7 +163,7 @@ object RealServerReportValidator {
         }
 
         private fun javaInfo(line: String, key: String) {
-            val fields = fields(line, 3)
+            val fields = fields(line, JAVA_INFO_FIELD_COUNT)
             if (fields[1].toIntOrNull()?.let { it > 0 } != true || fields[2].isBlank()) {
                 fail(lane, "$key 行非法")
             }
@@ -144,34 +175,42 @@ object RealServerReportValidator {
         }
 
         private fun artifact(line: String) {
-            val fields = fields(line, 3)
+            val fields = fields(line, ARTIFACT_FIELD_COUNT)
             if (artifacts.put(fields[1], fields[2]) != null) fail(lane, "报告制品 role 重复：${fields[1]}")
         }
 
         private fun scenario(line: String) {
-            val fields = fields(line, 5)
-            if (fields[2] !in setOf("PASS", "FAIL", "ERROR", "SKIP")) fail(lane, "场景状态非法")
-            if (fields[3].toLongOrNull()?.let { it >= 0 } != true) fail(lane, "场景耗时非法")
-            if (scenarios.put(fields[1], fields[2]) != null) fail(lane, "报告场景重复：${fields[1]}")
+            val fields = fields(line, SCENARIO_FIELD_COUNT)
+            if (fields[SCENARIO_STATUS_INDEX] !in SCENARIO_STATES) fail(lane, "场景状态非法")
+            if (fields[SCENARIO_DURATION_INDEX].toLongOrNull()?.let { it >= 0 } != true) {
+                fail(lane, "场景耗时非法")
+            }
+            if (scenarios.put(fields[1], fields[SCENARIO_STATUS_INDEX]) != null) {
+                fail(lane, "报告场景重复：${fields[1]}")
+            }
         }
 
         private fun totals(line: String): ReportTotals {
-            val fields = line.split(" ")
-            if (fields.size != 10 ||
-                fields.filterIndexed { index, value -> index % 2 == 0 }.let {
-                    it != listOf("TOTAL", "PASS", "FAIL", "ERROR", "SKIP")
-                }
-            ) {
-                fail(lane, "TOTAL 行格式非法")
-            }
+            val tokens = line.split(" ")
+            if (tokens.size != TOTAL_FIELD_COUNT) fail(lane, "TOTAL 行格式非法")
+            val keys = tokens.filterIndexed { index, _ -> index % KEY_VALUE_STRIDE == 0 }
+            if (keys != TOTAL_KEYS) fail(lane, "TOTAL 行格式非法")
+            // 「键 值」成对切片后再按名取值：避免把位置语义散落成一串下标字面量。
+            val counts =
+                tokens
+                    .chunked(KEY_VALUE_STRIDE)
+                    .associate { pair -> pair.first() to pair.last().toIntOrNull() }
             return ReportTotals(
-                fields[1].toIntOrNull() ?: fail(lane, "TOTAL 数值非法"),
-                fields[3].toIntOrNull() ?: fail(lane, "TOTAL 数值非法"),
-                fields[5].toIntOrNull() ?: fail(lane, "TOTAL 数值非法"),
-                fields[7].toIntOrNull() ?: fail(lane, "TOTAL 数值非法"),
-                fields[9].toIntOrNull() ?: fail(lane, "TOTAL 数值非法"),
+                total = counts.intValue("TOTAL"),
+                pass = counts.intValue("PASS"),
+                fail = counts.intValue("FAIL"),
+                error = counts.intValue("ERROR"),
+                skip = counts.intValue("SKIP"),
             )
         }
+
+        private fun Map<String, Int?>.intValue(key: String): Int =
+            this[key] ?: fail(lane, "TOTAL 数值非法")
 
         private fun fields(line: String, expectedCount: Int): List<String> =
             line.split("\t").also { fields ->
