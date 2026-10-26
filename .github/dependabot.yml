@@ -16,8 +16,20 @@ updates:
       # core-domain 用 JDK 8 工具链编译（L0 严格 Java 8，见 ADR-0004），
       # 而 JUnit 6 要求 JVM 17+，升级必然导致 :buildAll 失败。
       # 待 L0 的 Java 8 契约调整前，锁在 JUnit 5。
+      #
+      # 必须同时锁 junit-bom 与 junit-jupiter：先前只锁了 bom，junit-jupiter
+      # 仍被反复开成升级 PR（#21），而它引用的正是同一批 JUnit 6 制品。
       - dependency-name: "org.junit:junit-bom"
         versions: [">=6.0.0"]
+      - dependency-name: "org.junit.jupiter:*"
+        versions: [">=6.0.0"]
+      - dependency-name: "org.junit.platform:*"
+        versions: [">=6.0.0"]
+      # MockBukkit 3.93.2 在仓库中不存在（实测 acceptanceTestCompileClasspath
+      # 解析失败：Could not resolve com.github.seeseemelk:MockBukkit-v1.20:3.93.2）。
+      # 锁到已确认可用的 3.88.x 线，等上游发布可用版本后再放开。
+      - dependency-name: "com.github.seeseemelk:MockBukkit-v1.20"
+        versions: [">3.88.1"]
       # foojay-resolver-convention 是 Gradle toolchain 解析插件，1.0.0 为
       # 跨主版本升级，需连同工具链配置一并评估，不适合自动跟进。
       - dependency-name: "org.gradle.toolchains.foojay-resolver-convention"
