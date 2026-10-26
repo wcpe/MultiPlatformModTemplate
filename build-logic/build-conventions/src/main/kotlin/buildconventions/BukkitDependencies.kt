@@ -58,7 +58,7 @@ private fun registerBukkitApiDependency(project: Project, configuration: String,
     val bungeeChatJar = lane.bungeeChatFallbackJar.get()
     project.dependencies.add(configuration, bukkitApiDependency(project, lane.apiCoordinate.get(), bungeeChatJar))
     if (bungeeChatJar.isNotEmpty()) {
-        project.dependencies.add(configuration, project.rootProject.files(bungeeChatJar))
+        project.dependencies.add(configuration, project.files(project.layout.settingsDirectory.file(bungeeChatJar)))
     }
 }
 

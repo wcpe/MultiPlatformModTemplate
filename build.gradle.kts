@@ -1,5 +1,3 @@
-import java.util.concurrent.TimeUnit
-
 // 根构建脚本：只做配置——插件声明、根级坐标与版本、A 车道根侧入口别名。
 // 不可变契约：根目录 VERSION 是版本号唯一来源（testing-and-quality §3）、根侧入口任务名
 // （runMcTestkitSmoke / runMcTestkitFoliaSmoke）、发布聚合与真服/版本矩阵门禁的编排入口。
@@ -33,38 +31,10 @@ plugins {
     id("build-conventions.architecture")
 }
 
-val mpmtVersion: String = rootProject.file("VERSION").readText().trim()
-
-allprojects {
-    group = "top.wcpe.mc.mpmt"
-    version = mpmtVersion
-    // 域模块的末段名是短名（client / server / core 等，ADR-0030），会与 core:client / core:server
-    // 等分层模块重名。Gradle 的项目依赖以 group:name:version 标识模块，重名即被视为同一模块
-    // 而被替换（实测 :core:server 被 :core:domains:capability:server 顶掉，运行期
-    // ClassNotFoundException: core.server.HandshakeServerService）。故域模块给独立的 group 消除歧义。
-    // 域模块不对外发布，改 group 不影响 13 个发布产物。
-    val path = project.path
-    if (path.contains(":domains:") || (path.startsWith(":examples:") && path.count { it == ':' } >= 2)) {
-        val domain = path.split(":").filter { it.isNotEmpty() }.let {
-            // core:domains:<域>:<模块> 或 examples:<域>:<模块>
-            if (it.contains("domains")) it.getOrElse(it.indexOf("domains") + 1) { "unknown" } else it.getOrElse(1) { "unknown" }
-        }
-        group = "top.wcpe.mc.mpmt.domains.$domain"
-    }
-}
-
-// SNAPSHOT（changing module）默认仅缓存 24 小时，每次 CI 都要回源校验 metadata；
-// 上游（如 repo.papermc.io）抖动即让构建失败（实测见过 502 Bad Gateway）。
-// 本仓库依赖的旧版本线 SNAPSHOT 事实上已冻结——paper-api 1.20.1 停在 build 178（2023-09）、
-// 1.20.4 停在 build 176（2024-10），不再重发——故把 TTL 放宽，避免无谓回源。
-// 需要主动取上游新快照时，用 --refresh-dependencies 显式刷新即可。
-subprojects {
-    configurations.all {
-        resolutionStrategy {
-            cacheChangingModulesFor(365, TimeUnit.DAYS)
-        }
-    }
-}
+// 工程坐标（group / version）与 SNAPSHOT 缓存策略已上移到 settings.gradle.kts 的
+// `gradle.lifecycle.beforeProject { }`：Isolated Projects 禁止根工程在配置期改子工程的
+// 可变模型（原 allprojects / subprojects 会被记为跨工程访问）。每个工程只配置自己。
+// 版本号唯一来源仍是根目录 VERSION，settings 读取一次后统一下发。
 
 // ============================================================================
 // A 车道：mc-testkit（Bukkit/Folia smoke；非 B 主 lane 的 mod 客户端）

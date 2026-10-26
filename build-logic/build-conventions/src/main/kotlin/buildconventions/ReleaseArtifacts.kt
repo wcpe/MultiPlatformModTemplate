@@ -85,26 +85,35 @@ private fun copyReleaseArtifacts(
 
 /**
  * 13 个发布制品的来源与目标名；列表顺序即复制与 `[dist]` 日志顺序。
+ *
+ * 来源路径的算法：settings.gradle.kts 下发的 `laneDirectories`（工程路径 → 车道目录）
+ * + 各自 `build/` 下的相对产物路径。**不读其它工程的 `layout.buildDirectory`**——
+ * 那属于跨工程模型访问，Isolated Projects 会直接拒绝。
  */
 // 本表是逐行对照的契约清单（车道路径 / 构建相对路径 / 目标名 / loader），拆行后无法逐行比对；
 // 行长对此类数据表不是有效信号（.editorconfig 对 .kt/.kts 亦已禁用 ktlint 的 max-line-length）。
 @Suppress("MaxLineLength")
 private fun releaseArtifacts(project: Project, version: String): List<ReleaseArtifact> =
     listOf(
-        laneArtifact(project, ":platform:bukkit:1.12.2", "libs/mpmt-bukkit-1.12.2-$version.jar", "mpmt-bukkit-1.12.2-$version.jar", "bukkit"),
-        laneArtifact(project, ":platform:bukkit:1.20.1", "libs/mpmt-bukkit-1.20.1-$version.jar", "mpmt-bukkit-1.20.1-$version.jar", "bukkit"),
-        laneArtifact(project, ":platform:bukkit:1.21.1", "libs/mpmt-bukkit-1.21.1-$version.jar", "mpmt-bukkit-1.21.1-$version.jar", "bukkit"),
-        laneArtifact(project, ":platform:bukkit:26.2", "libs/mpmt-bukkit-26.2-$version.jar", "mpmt-bukkit-26.2-$version.jar", "bukkit"),
-        laneArtifact(project, ":platform:fabric:fabric-1.20.1", "libs/mpmt-fabric-1.20.1-$version.jar", "mpmt-fabric-1.20.1-$version.jar", "fabric"),
-        laneArtifact(project, ":platform:fabric:fabric-1.21.1", "libs/mpmt-fabric-1.21.1-$version.jar", "mpmt-fabric-1.21.1-$version.jar", "fabric"),
-        laneArtifact(project, ":platform:fabric:fabric-26.2", "libs/mpmt-fabric-26.2-$version.jar", "mpmt-fabric-26.2-$version.jar", "fabric"),
-        laneArtifact(project, ":platform:forge:forge-1.20.1", "reobfShadowJar/output.jar", "mpmt-forge-1.20.1-$version.jar", "forge"),
-        laneArtifact(project, ":platform:forge:forge-1.21.1", "libs/mpmt-forge-1.21.1-$version.jar", "mpmt-forge-1.21.1-$version.jar", "forge"),
-        laneArtifact(project, ":platform:forge:forge-1.12.2", "reobfJar/output.jar", "mpmt-forge-1.12.2-$version.jar", "forge"),
-        laneArtifact(project, ":platform:forge:forge-26.2", "libs/mpmt-forge-26.2-$version.jar", "mpmt-forge-26.2-$version.jar", "forge"),
-        laneArtifact(project, ":platform:neoforge:neoforge-1.20.2", "libs/mpmt-neoforge-1.20.2-$version.jar", "mpmt-neoforge-1.20.2-$version.jar", "neoforge"),
-        laneArtifact(project, ":platform:sponge:sponge-1.20.1", "libs/mpmt-sponge-1.20.1-$version.jar", "mpmt-sponge-1.20.1-$version.jar", "sponge"),
+        laneArtifact(project, "platform:bukkit:1.12.2", "libs/mpmt-bukkit-1.12.2-$version.jar", "mpmt-bukkit-1.12.2-$version.jar", "bukkit"),
+        laneArtifact(project, "platform:bukkit:1.20.1", "libs/mpmt-bukkit-1.20.1-$version.jar", "mpmt-bukkit-1.20.1-$version.jar", "bukkit"),
+        laneArtifact(project, "platform:bukkit:1.21.1", "libs/mpmt-bukkit-1.21.1-$version.jar", "mpmt-bukkit-1.21.1-$version.jar", "bukkit"),
+        laneArtifact(project, "platform:bukkit:26.2", "libs/mpmt-bukkit-26.2-$version.jar", "mpmt-bukkit-26.2-$version.jar", "bukkit"),
+        laneArtifact(project, "platform:fabric:fabric-1.20.1", "libs/mpmt-fabric-1.20.1-$version.jar", "mpmt-fabric-1.20.1-$version.jar", "fabric"),
+        laneArtifact(project, "platform:fabric:fabric-1.21.1", "libs/mpmt-fabric-1.21.1-$version.jar", "mpmt-fabric-1.21.1-$version.jar", "fabric"),
+        laneArtifact(project, "platform:fabric:fabric-26.2", "libs/mpmt-fabric-26.2-$version.jar", "mpmt-fabric-26.2-$version.jar", "fabric"),
+        laneArtifact(project, "platform:forge:forge-1.20.1", "reobfShadowJar/output.jar", "mpmt-forge-1.20.1-$version.jar", "forge"),
+        laneArtifact(project, "platform:forge:forge-1.21.1", "libs/mpmt-forge-1.21.1-$version.jar", "mpmt-forge-1.21.1-$version.jar", "forge"),
+        laneArtifact(project, "platform:forge:forge-1.12.2", "reobfJar/output.jar", "mpmt-forge-1.12.2-$version.jar", "forge"),
+        laneArtifact(project, "platform:forge:forge-26.2", "libs/mpmt-forge-26.2-$version.jar", "mpmt-forge-26.2-$version.jar", "forge"),
+        laneArtifact(project, "platform:neoforge:neoforge-1.20.2", "libs/mpmt-neoforge-1.20.2-$version.jar", "mpmt-neoforge-1.20.2-$version.jar", "neoforge"),
+        laneArtifact(project, "platform:sponge:sponge-1.20.1", "libs/mpmt-sponge-1.20.1-$version.jar", "mpmt-sponge-1.20.1-$version.jar", "sponge"),
     )
+
+/** 读取 settings 下发的车道目录映射；缺项直接失败，不做路径推导。 */
+private fun laneDirectories(project: Project): Map<*, *> =
+    (project.rootProject.gradle.extensions.extraProperties.get("laneDirectories") as? Map<*, *>)
+        ?: error("settings.gradle.kts 未下发 laneDirectories：无法确定车道产物目录")
 
 private fun laneArtifact(
     project: Project,
@@ -112,14 +121,14 @@ private fun laneArtifact(
     buildRelativePath: String,
     targetName: String,
     loader: String,
-): ReleaseArtifact =
-    ReleaseArtifact(
-        project
-            .project(projectPath)
-            .layout.buildDirectory
-            .file(buildRelativePath)
-            .get()
-            .asFile,
+): ReleaseArtifact {
+    val directories = laneDirectories(project)
+    val laneDir =
+        directories[projectPath] as? String
+            ?: error("laneDirectories 缺少车道 '$projectPath' 的目录映射（settings.gradle.kts）")
+    return ReleaseArtifact(
+        project.layout.settingsDirectory.dir(laneDir).dir("build").file(buildRelativePath).asFile,
         loader,
         targetName,
     )
+}

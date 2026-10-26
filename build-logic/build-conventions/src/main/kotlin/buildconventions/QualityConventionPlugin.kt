@@ -49,7 +49,7 @@ class QualityConventionPlugin : Plugin<Project> {
         project.afterEvaluate {
             configure<CheckstyleExtension> {
                 toolVersion = quality.checkstyleToolVersion.get()
-                configFile = project.rootProject.file("config/checkstyle/checkstyle.xml")
+                configFile = project.layout.settingsDirectory.file("config/checkstyle/checkstyle.xml").asFile
                 isIgnoreFailures = false
                 maxWarnings = 0
             }
@@ -57,7 +57,7 @@ class QualityConventionPlugin : Plugin<Project> {
             configure<PmdExtension> {
                 toolVersion = quality.pmdToolVersion.get()
                 isConsoleOutput = true
-                ruleSetConfig = project.resources.text.fromFile(project.rootProject.file("config/pmd/ruleset.xml"))
+                ruleSetConfig = project.resources.text.fromFile(project.layout.settingsDirectory.file("config/pmd/ruleset.xml"))
                 ruleSets = emptyList()
                 isIgnoreFailures = false
             }
@@ -69,7 +69,7 @@ class QualityConventionPlugin : Plugin<Project> {
                 effort.set(Effort.MAX)
                 // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
                 reportLevel.set(Confidence.MEDIUM)
-                excludeFilter.set(project.rootProject.file("config/spotbugs/exclude.xml"))
+                excludeFilter.set(project.layout.settingsDirectory.file("config/spotbugs/exclude.xml"))
             }
             dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
         }
@@ -166,7 +166,7 @@ class QualityConventionPlugin : Plugin<Project> {
     private fun wireCompileInputs(project: Project) {
         project.tasks.withType(JavaCompile::class.java).configureEach {
             inputs
-                .file(project.rootProject.file("lombok.config"))
+                .file(project.layout.settingsDirectory.file("lombok.config"))
                 .withPropertyName("lombokConfig")
                 .withPathSensitivity(PathSensitivity.RELATIVE)
         }
