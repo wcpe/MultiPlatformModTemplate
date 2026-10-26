@@ -168,12 +168,12 @@ loom {
         create("acceptanceServer") {
             server()
             source(acceptance)
-            runDir("run-acceptance-server")
-            property("forge.logging.console.level", "info")
-            property("mpmt.acceptance", "true")
-            property("mpmt.acceptance.report", project.file("run-acceptance-server/acceptance-report.txt").absolutePath)
+            runDirectory.set(layout.projectDirectory.dir("run-acceptance-server"))
+            systemProperties.put("forge.logging.console.level", "info")
+            systemProperties.put("mpmt.acceptance", "true")
+            systemProperties.put("mpmt.acceptance.report", project.file("run-acceptance-server/acceptance-report.txt").absolutePath)
             // 允许 -Pmpmt.acceptance.deadlineMs 覆盖；默认 600s 覆盖慢机冷启动
-            property("mpmt.acceptance.deadlineMs", (project.findProperty("mpmt.acceptance.deadlineMs") ?: "600000").toString())
+            systemProperties.put("mpmt.acceptance.deadlineMs", (project.findProperty("mpmt.acceptance.deadlineMs") ?: "600000").toString())
             // loom 的 forge server 模板已自带 nogui 程序参数，无需（不可）重复声明
             mods {
                 create("mpmt") {
@@ -187,8 +187,8 @@ loom {
         create("acceptanceClient") {
             client()
             source(acceptance)
-            runDir("run-acceptance-client")
-            property("forge.logging.console.level", "info")
+            runDirectory.set(layout.projectDirectory.dir("run-acceptance-client"))
+            systemProperties.put("forge.logging.console.level", "info")
             // quickPlay 作辅；主路径由伴侣 tryAutoConnect 读系统属性 mpmt.acceptance.server。
             // 单机/LAN 验收不传该参数：它会引导客户端去连外部地址，与伴侣创建单人世界的流程冲突。
             if (project.findProperty("mpmt.acceptance.singleplayer") != "true") {
@@ -197,27 +197,27 @@ loom {
             // 单机/LAN 验收（-Pmpmt.acceptance.singleplayer=true）：伴侣据此创建单人世界，
             // 由客户端内置服务端承载验收场景，无需另起专用服。
             if (project.findProperty("mpmt.acceptance.singleplayer") == "true") {
-                property("mpmt.acceptance", "true")
-                property("mpmt.acceptance.singleplayer", "true")
-                property(
+                systemProperties.put("mpmt.acceptance", "true")
+                systemProperties.put("mpmt.acceptance.singleplayer", "true")
+                systemProperties.put(
                     "mpmt.acceptance.report",
                     project.file("run-acceptance-client/singleplayer-acceptance-report.txt").absolutePath,
                 )
-                property(
+                systemProperties.put(
                     "mpmt.acceptance.deadlineMs",
                     (project.findProperty("mpmt.acceptance.deadlineMs") ?: "600000").toString(),
                 )
                 // 本车道验收驱动只有矩阵 v2 轨，须提供完整身份与五类制品路径才能出报告
-                property("mpmt.acceptance.matrix", "REALSERVER262")
-                property(
+                systemProperties.put("mpmt.acceptance.matrix", "REALSERVER262")
+                systemProperties.put(
                     "mpmt.acceptance.runId",
                     (project.findProperty("mpmt.acceptance.runId") ?: "singleplayer-${System.currentTimeMillis()}").toString(),
                 )
-                property(
+                systemProperties.put(
                     "mpmt.acceptance.startEpochMs",
                     (project.findProperty("mpmt.acceptance.startEpochMs") ?: System.currentTimeMillis().toString()).toString(),
                 )
-                property(
+                systemProperties.put(
                     "mpmt.acceptance.javaExecutable",
                     System.getProperty("java.home") + "/bin/java",
                 )
@@ -230,7 +230,7 @@ loom {
                     "client-product" to productJar,
                     "client-acceptance" to acceptanceJar,
                 ).forEach { (role, jar) ->
-                    property("mpmt.acceptance.artifact.$role", jar.absolutePath)
+                    systemProperties.put("mpmt.acceptance.artifact.$role", jar.absolutePath)
                 }
             }
             mods {
