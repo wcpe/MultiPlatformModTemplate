@@ -49,3 +49,14 @@ updates:
         versions: [">=0"]
       - dependency-name: "com.google.guava:guava"
         versions: [">=0"]
+      # shadow 9.x 需要人工迁移后才能升：包名从
+      # com.github.jengelman.gradle.plugins.shadow 改为 com.gradleup.shadow，
+      # 而多个车道仍 import 旧包名（#46 仅改版本号导致编译期失败）。
+      # 且 shadowJar 是发布产物核心任务，升级需复验全部发布 jar。
+      - dependency-name: "com.gradleup.shadow"
+        update-types: ["version-update:semver-major"]
+      # spotbugs 6.5.x 会引入新检查项，把现有 exclude 未覆盖的问题报成失败
+      # （#43 实测 :core:client:spotbugsMain 以 exit code 1 失败）。
+      # 升级需先评估新规则集并调整 config/spotbugs/exclude.xml。
+      - dependency-name: "com.github.spotbugs"
+        update-types: ["version-update:semver-major"]
