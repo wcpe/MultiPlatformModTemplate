@@ -34,3 +34,14 @@ updates:
       # 跨主版本升级，需连同工具链配置一并评估，不适合自动跟进。
       - dependency-name: "org.gradle.toolchains.foojay-resolver-convention"
         update-types: ["version-update:semver-major"]
+      # gson 与 snakeyaml 按维护者决定压死，不跟随自动升级。
+      #
+      # gson：bukkit 26.2 车道显式钉住编译期版本（platform/bukkit/26.2/build.gradle.kts），
+      # 该车道有冻结 API 快照 + SHA-256 校验，升级需连带复验编译面；且 #25 改的
+      # gsonVersion 变量在域模块化重构后已不存在，该 PR 本身已无落点。
+      # snakeyaml：Sponge 车道按 ADR-0012 把它 relocate 到 libs.* 后打进插件 jar，
+      # 升级会改变产物内容，属需人工复验的变更。
+      - dependency-name: "com.google.code.gson:gson"
+        versions: [">=0"]
+      - dependency-name: "org.yaml:snakeyaml"
+        versions: [">=0"]
