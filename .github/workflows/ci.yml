@@ -130,7 +130,7 @@ jobs:
       # 命中 Gradle 构建缓存（org.gradle.caching=true），而 CodeQL 的 manual build
       # 依赖真实 javac 调用提取源码，命中缓存会报 "didn't build any of it"（Exit 32）。
       - name: 缓存 Loom 制品
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           # 只缓存 ~/.gradle 下的共享制品；工作区内的 .gradle/loom-user-cache
           # 是构建的工作目录，缓存其中间产物会引入「文件在、内容不可用」的半成品。
