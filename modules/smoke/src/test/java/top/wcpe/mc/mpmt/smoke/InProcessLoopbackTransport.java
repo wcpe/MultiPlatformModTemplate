@@ -1,8 +1,8 @@
 package top.wcpe.mc.mpmt.smoke;
 
 import java.util.function.BiConsumer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 
 /**
  * 进程内回环传输（测试用，FR-20）：把一对客户端 / 服务端 {@link TransportPort} 同 JVM 互连，无需 Minecraft。

@@ -8,7 +8,7 @@ import org.bukkit.plugin.Plugin;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
 import top.wcpe.mc.mpmt.platform.bukkit.version.BukkitChannels;
 import top.wcpe.mc.mpmt.platform.bukkit.version.BukkitVersionAdapter;
 import top.wcpe.mc.mpmt.platform.bukkit.version.SupportedVersion;

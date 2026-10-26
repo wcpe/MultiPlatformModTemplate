@@ -10,7 +10,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
+import top.wcpe.mc.mpmt.kernel.ref.WorldRef;
 import top.wcpe.mc.mpmt.platform.fabric.MinecraftTestSupport;
 
 /** Fabric 世界端口：按维度资源标识暴露当前已加载世界，并在缺失时返回空。 */

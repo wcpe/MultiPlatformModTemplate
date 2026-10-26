@@ -1,5 +1,38 @@
 package buildconventions
 
+import org.gradle.api.Project
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
+import org.gradle.api.tasks.bundling.Jar
+
+/** fabric 产品链路里的任务名：shade 产物与 loom 的 remap 出口。 */
+internal const val FABRIC_SHADOW_JAR_TASK = "shadowJar"
+internal const val FABRIC_REMAP_JAR_TASK = "remapJar"
+
+/**
+ * `remapJar` 的输入接线：以其自身的 `shadowJar` 产物为输入，并去掉 classifier 作为最终产品。
+ *
+ * <p>三条 fabric 车道里 1.20.1 / 1.21.1 逐字相同；26.2 无混淆、产品直接由 `shadowJar` 产出
+ * （`lane.productTaskName` 设为 shadowJar），故不存在 `remapJar`，本函数对它是空操作。
+ *
+ * <p>与 Forge / NeoForge 同因同法：loom 的 `inputFile` 与 `ShadowJar` 类型不在本插件工程的
+ * 编译类路径内，故按任务名取 `AbstractArchiveTask` 并用 Groovy 动态调用设值，
+ * 效果等价于车道脚本里的 `inputFile.set(shadowJar.flatMap { it.archiveFile })`。
+ */
+internal fun registerFabricRemapJarWiring(project: Project) {
+    if (project.tasks.findByName(FABRIC_REMAP_JAR_TASK) == null) {
+        return
+    }
+
+    val remapJar = project.tasks.named(FABRIC_REMAP_JAR_TASK, AbstractArchiveTask::class.java)
+    val shadowJar = project.tasks.named(FABRIC_SHADOW_JAR_TASK, Jar::class.java)
+
+    remapJar.configure {
+        dependsOn(shadowJar)
+        invokeGroovy("setInputFile", shadowJar.flatMap { it.archiveFile })
+        archiveClassifier.set("")
+    }
+}
+
 /**
  * fabric 三条车道共用的产品 jar 打包断言清单（`verifyPackaging` 的检查体）。
  *
@@ -20,7 +53,7 @@ fun PackagingAssertions.verifyFabricProductJar(
     val selectedPrefix = "top/wcpe/mc/mpmt/platform/fabric/version/$selectedL4/"
     val unselectedPrefix = "top/wcpe/mc/mpmt/platform/fabric/version/$unselectedL4/"
     must(product.file.name.contains(mcVersion), "产物名未包含 MC 版本")
-    mustContain(product, "top/wcpe/mc/mpmt/core/domain/Mpmt.class", "core 类未 shade 进产物")
+    mustContain(product, "top/wcpe/mc/mpmt/kernel/Mpmt.class", "core 类未 shade 进产物")
     mustContain(product, "top/wcpe/mc/mpmt/platform/spi/PlatformProvider.class", "platform-spi 未 shade 进产物")
     mustContainPrefix(product, "top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/", "snakeyaml 未 relocate")
     mustNotBundle(product, listOf("org/yaml/snakeyaml/"), "snakeyaml 原包名残留")

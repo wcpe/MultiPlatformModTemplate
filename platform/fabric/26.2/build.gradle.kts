@@ -1,9 +1,12 @@
 import buildconventions.FabricLaneExtension
+import buildconventions.LaneBundle
 import buildconventions.acceptanceReportFile
 import buildconventions.awaitAcceptancePort
+import buildconventions.declareLaneBundles
 import buildconventions.injectAcceptanceClientMetadata
 import buildconventions.injectAcceptanceServerMetadata
 import buildconventions.launchAcceptanceProcess
+import buildconventions.mpmtDomains
 import buildconventions.packagingVerification
 import buildconventions.prepareAcceptanceServerProperties
 import buildconventions.requiredAcceptanceProperty
@@ -12,7 +15,7 @@ import buildconventions.verifyAcceptanceRoundReport
 import buildconventions.verifyDefaultTrackReport
 import buildconventions.verifyFabricProductJar
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import org.gradle.api.file.FileCollection
+import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.tasks.JavaExec
 import java.util.concurrent.TimeUnit
 
@@ -42,14 +45,15 @@ val selectedL4Name = "v26_2"
 val unselectedL4Name = "v1_21"
 val snakeyamlVersion = "2.2"
 
-// 受控内部 JAR 一律经各子模块 jar 任务产物消费（ADR-0026）：按任务依赖取产物（文件输入、不引入传递依赖），
-// 构建顺序由 Gradle 保证，无需文件存在性校验任务。
-// 用 withType<Jar>().matching 惰性取任务：named("jar") 会在本项目先于生产者配置时立即抛
-// UnknownTaskException（子模块按路径序配置），故不可用。
-fun moduleJar(projectPath: String): FileCollection =
-    files(project(projectPath).tasks.withType<Jar>().matching { it.name == "jar" })
+// 受控内部 JAR 一律只取各子模块产物、不引入其 POM 传递依赖（ADR-0026）。
+// 必须用「非传递项目依赖」而非 files(任务集合)：文件集合会在本项目配置期就快照求值，
+// 在那个时点生产者项目往往尚未配置，结果是空集合且不报错，整条内部类路径随之静默消失
+// （表现为 platform.spi 等包整体不存在）；项目依赖惰性求值，且由 Gradle 保证各 jar 任务顺序。
+fun moduleJar(projectPath: String): ProjectDependency =
+    (project.dependencies.project(mapOf("path" to projectPath)) as ProjectDependency)
+        .apply { isTransitive = false }
 
-val domainJar = moduleJar(":core:domain")
+val domainJar = moduleJar(":core:kernel")
 val runtimeJar = moduleJar(":core:runtime")
 val protocolJar = moduleJar(":core:protocol")
 val spiJar = moduleJar(":core:spi")
@@ -57,7 +61,7 @@ val serverJar = moduleJar(":core:server")
 val clientJar = moduleJar(":core:client")
 val fabricApiJar = moduleJar(":platform:fabric:fabric-api")
 val acceptanceJar = moduleJar(":modules:acceptance")
-val productInternalJars: List<FileCollection> =
+val productInternalJars: List<ProjectDependency> =
     listOf(domainJar, runtimeJar, protocolJar, spiJar, serverJar, clientJar, fabricApiJar)
 
 base {
@@ -108,24 +112,25 @@ fabricLane {
 val fabric = extensions.getByType(buildconventions.FabricLaneExtension::class.java)
 
 // 专用配置：需 shade 进产物并 relocate 的内容（core + 第三方运行期依赖）
-val shadowBundle: Configuration by configurations.creating
+val shadowBundle: Configuration = declareLaneBundles(LaneBundle.SHADOW).getValue(LaneBundle.SHADOW)
 
-val verifyVersionSelection by tasks.registering {
-    group = "verification"
-    description = "校验本版本构建仅含固定 L4 目录（" + selectedL4Name + "）"
-    // 源树与两个 L4 名在配置期取出：动作只捕获这些值，不捕获脚本对象（配置缓存要求），判定与文案不变。
-    val javaTree = fileTree("common/src/main/java")
-    val selectedPattern = "**/version/" + selectedL4Name + "/**"
-    val unselectedPattern = "**/version/" + unselectedL4Name + "/**"
-    val selectedL4 = selectedL4Name
-    val unselectedL4 = unselectedL4Name
-    doLast {
-        val hasSelected = javaTree.matching { include(selectedPattern) }.files.isNotEmpty()
-        val hasUnselected = javaTree.matching { include(unselectedPattern) }.files.isNotEmpty()
-        if (!hasSelected) throw GradleException("Fabric 版本校验失败：缺少 " + selectedL4)
-        if (hasUnselected) throw GradleException("Fabric 版本校验失败：混入 " + unselectedL4)
+val verifyVersionSelection =
+    tasks.register("verifyVersionSelection") {
+        group = "verification"
+        description = "校验本版本构建仅含固定 L4 目录（" + selectedL4Name + "）"
+        // 源树与两个 L4 名在配置期取出：动作只捕获这些值，不捕获脚本对象（配置缓存要求），判定与文案不变。
+        val javaTree = fileTree("common/src/main/java")
+        val selectedPattern = "**/version/" + selectedL4Name + "/**"
+        val unselectedPattern = "**/version/" + unselectedL4Name + "/**"
+        val selectedL4 = selectedL4Name
+        val unselectedL4 = unselectedL4Name
+        doLast {
+            val hasSelected = javaTree.matching { include(selectedPattern) }.files.isNotEmpty()
+            val hasUnselected = javaTree.matching { include(unselectedPattern) }.files.isNotEmpty()
+            if (!hasSelected) throw GradleException("Fabric 版本校验失败：缺少 " + selectedL4)
+            if (hasUnselected) throw GradleException("Fabric 版本校验失败：混入 " + unselectedL4)
+        }
     }
-}
 
 dependencies {
     minecraft("com.mojang:minecraft:$mcVersion")
@@ -133,10 +138,17 @@ dependencies {
     // Fabric 平台 API：提供网络收发（fabric-networking-api-v1）等；编译期依赖，运行期由宿主提供
     implementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
 
-    // 共享核心：文件输入没有 POM 传递关系，故显式列出完整闭包并一并 shade。
+    // 共享核心：非传递项目依赖，只取各模块 jar 本体，任务顺序由 Gradle 保证。
     productInternalJars.forEach {
         implementation(it)
-        shadowBundle(it)
+        shadowBundle(it.copy())
+    }
+
+    // 功能域（L0 玩法逻辑）：经 mpmtDomains() 动态覆盖——新增域无需改本脚本（ADR-0028）。
+    // 域经 META-INF/services 声明 Feature，由 core-runtime 启动期自动发现。
+    mpmtDomains().forEach {
+        implementation(it)
+        shadowBundle(it.copy())
     }
 
     // 第三方运行期依赖：shade 进产物并 relocate 到 top.wcpe.mc.mpmt.libs.*（ADR-0012，防类冲突的统一约定）
@@ -173,24 +185,25 @@ tasks.named<ShadowJar>("shadowJar") {
 }
 
 // 打包校验：core shade、snakeyaml relocate、唯一 L4、fabric.mod.json
-val verifyPackaging by tasks.registering {
-    group = "verification"
-    description = "校验 Fabric 产品 jar：core shade、snakeyaml relocate、唯一 L4、mod 元数据"
-    dependsOn(tasks.named("shadowJar"), verifyVersionSelection)
-    // 车道版本与选中 / 未选中 L4 名在配置期取成局部值：断言 lambda 只捕获这些值，
-    // 不捕获脚本对象（配置缓存要求）；断言内容、顺序与失败文案不变。
-    val laneMcVersion = mcVersion
-    val selectedL4 = selectedL4Name
-    val unselectedL4 = unselectedL4Name
-    packagingVerification(
-        laneLabel = "Fabric",
-        mcVersion = laneMcVersion,
-        product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
-        acceptance = null,
-    ) { product, _ ->
-        verifyFabricProductJar(product, laneMcVersion, selectedL4, unselectedL4)
+val verifyPackaging =
+    tasks.register("verifyPackaging") {
+        group = "verification"
+        description = "校验 Fabric 产品 jar：core shade、snakeyaml relocate、唯一 L4、mod 元数据"
+        dependsOn(tasks.named("shadowJar"), verifyVersionSelection)
+        // 车道版本与选中 / 未选中 L4 名在配置期取成局部值：断言 lambda 只捕获这些值，
+        // 不捕获脚本对象（配置缓存要求）；断言内容、顺序与失败文案不变。
+        val laneMcVersion = mcVersion
+        val selectedL4 = selectedL4Name
+        val unselectedL4 = unselectedL4Name
+        packagingVerification(
+            laneLabel = "Fabric",
+            mcVersion = laneMcVersion,
+            product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
+            acceptance = null,
+        ) { product, _ ->
+            verifyFabricProductJar(product, laneMcVersion, selectedL4, unselectedL4)
+        }
     }
-}
 
 tasks.named("build") {
     dependsOn(verifyPackaging, verifyVersionSelection)

@@ -10,7 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.wcpe.mc.mpmt.core.client.ClientNetworkFeature;
 import top.wcpe.mc.mpmt.core.client.DefaultMachineCodeProvider;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.platform.forge.net.ForgeClientHudReceiver;
 import top.wcpe.mc.mpmt.platform.forge.net.ForgeClientTransport;

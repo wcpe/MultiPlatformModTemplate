@@ -1,6 +1,9 @@
 package top.wcpe.mc.mpmt.platform.fabric.capability;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import net.fabricmc.api.EnvType;
@@ -25,6 +28,10 @@ import top.wcpe.mc.mpmt.protocol.packet.ServerHudMessagePacket;
 public final class FabricHudRenderer {
 
     private static volatile ServerHudMessagePacket lastRendered;
+
+    /** 本次连接内收到过的全部 HUD（按到达顺序）；产品握手演示 HUD 会覆盖 lastRendered，见 receivedHuds(). */
+    private static List<ServerHudMessagePacket> receivedList =
+            Collections.synchronizedList(new ArrayList<>());
     private static final ConcurrentMap<HudKind, ServerHudMessagePacket> LAST_RENDERED_BY_KIND =
             new ConcurrentHashMap<>();
 
@@ -35,6 +42,13 @@ public final class FabricHudRenderer {
     /** 最近一次收到并处理的 HUD（验收用，可能为空）。 */
     public static ServerHudMessagePacket lastRendered() {
         return lastRendered;
+    }
+
+    /** {@return 本次连接内收到过的全部 HUD 快照} 用于「是否收到过某条 HUD」类的断言. */
+    public static List<ServerHudMessagePacket> receivedHuds() {
+        synchronized (receivedList) {
+            return new ArrayList<>(receivedList);
+        }
     }
 
     /** 最近一次收到并处理的指定类型 HUD（验收用，可能为空）。 */
@@ -55,6 +69,7 @@ public final class FabricHudRenderer {
                 (connection, packet) -> {
                     ServerHudMessagePacket hud = (ServerHudMessagePacket) packet;
                     lastRendered = hud;
+                    receivedList.add(hud);
                     LAST_RENDERED_BY_KIND.put(hud.getKind(), hud);
                     Minecraft.getInstance().execute(() -> render(hud));
                 });

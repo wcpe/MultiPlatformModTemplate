@@ -36,6 +36,20 @@ private val BUKKIT_HOST_PROVIDED_API_COORDINATES =
 /** 产品 jar 任务名（同时是校验/门禁任务的依赖点）。 */
 internal const val BUKKIT_PRODUCT_JAR_TASK = "shadowJar"
 
+/**
+ * 验收 jar 不打入的产品侧项目依赖（ADR-0035）.
+ *
+ * <p>验收 jar 的 shade 配置取「验收运行期类路径」整体打包，而该配置经传递依赖带上了
+ * kernel / core / protocol 等产品模块，于是同一个类在产品插件与验收插件里各被加载一次。
+ * 两个类加载器各持一份同名类时，任何跨插件方法签名匹配都会抛
+ * {@code loader constraint violation}——实测 Bukkit 1.20.1 的默认轨验收即因此失败。
+ *
+ * <p>这些类在运行期由产品插件提供（验收场景下产品插件必然同时部署）。
+ * **不要**把 `modules:acceptance` 加进来：产品 jar 不含验收基础设施，排除后验收插件将缺类。
+ */
+private val BUKKIT_ACCEPTANCE_PRODUCT_PROVIDED_PROJECTS =
+    listOf(":core:kernel", ":core:protocol", ":core:runtime", ":core:server", ":core:client")
+
 /** 验收驱动 jar 任务名（发布与门禁任务名不可变）。 */
 internal const val BUKKIT_ACCEPTANCE_JAR_TASK = "acceptanceJar"
 
@@ -48,8 +62,10 @@ internal const val BUKKIT_ACCEPTANCE_JAR_TASK = "acceptanceJar"
  */
 internal fun configureBukkitArchiveTasks(project: Project, lane: BukkitLaneExtension, acceptance: SourceSet) {
     val mcVersion = lane.mcVersion.get()
-    project.extensions.getByType(BasePluginExtension::class.java)
-        .archivesName.set("$BUKKIT_PRODUCT_JAR_BASE_NAME_PREFIX-$mcVersion")
+    project.extensions
+        .getByType(BasePluginExtension::class.java)
+        .archivesName
+        .set("$BUKKIT_PRODUCT_JAR_BASE_NAME_PREFIX-$mcVersion")
     project.tasks.named("jar", Jar::class.java).configure { archiveClassifier.set("plain") }
     configureBukkitProductArchive(project)
     registerBukkitAcceptanceArchive(project, mcVersion, acceptance)
@@ -90,6 +106,9 @@ private fun registerBukkitAcceptanceArchive(project: Project, mcVersion: String,
         task = archive.get(),
         configurations = listOf(project.configurations.getByName(acceptance.runtimeClasspathConfigurationName)),
         relocateSnakeyaml = false,
+        // ADR-0035：产品侧类由产品插件在运行期提供，验收 jar 不再重复打包，
+        // 否则同名类会被两个类加载器各加载一次，跨插件调用抛 loader constraint violation
+        excludeProjectNames = BUKKIT_ACCEPTANCE_PRODUCT_PROVIDED_PROJECTS,
     )
 }
 
@@ -101,6 +120,7 @@ private fun configureBukkitShadowTask(
     task: Task,
     configurations: List<Configuration>,
     relocateSnakeyaml: Boolean,
+    excludeProjectNames: List<String> = emptyList(),
 ) {
     task.withGroovyBuilder {
         setProperty("configurations", configurations)
@@ -109,6 +129,7 @@ private fun configureBukkitShadowTask(
         }
         "dependencies" {
             BUKKIT_HOST_PROVIDED_API_COORDINATES.forEach { coordinate -> "exclude"("dependency"(coordinate)) }
+            excludeProjectNames.forEach { path -> "exclude"("project"(path)) }
         }
     }
 }
@@ -124,7 +145,11 @@ private fun Task.forceRerun() {
  * （装饰类的父类即原始 `ShadowJar`，注册时由 Gradle 实例化该类型）。
  */
 private fun bukkitShadowJarTaskClass(project: Project): Class<Jar> {
-    val decorated = project.tasks.named(BUKKIT_PRODUCT_JAR_TASK, Jar::class.java).get().javaClass
+    val decorated =
+        project.tasks
+            .named(BUKKIT_PRODUCT_JAR_TASK, Jar::class.java)
+            .get()
+            .javaClass
     @Suppress("UNCHECKED_CAST")
     return decorated.superclass as Class<Jar>
 }

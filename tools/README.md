@@ -40,7 +40,7 @@
 ### 换名后
 
 ```bash
-./gradlew --no-daemon :core:domain:compileJava :platform:bukkit:common:compileJava
+./gradlew --no-daemon :core:kernel:compileJava :platform:bukkit:common:compileJava
 ./gradlew --no-daemon :verifyVersionMatrixBuild   # 可选，较慢
 ```
 
@@ -54,3 +54,32 @@
 
 输出：`build/dist/{bukkit,fabric,forge,neoforge,sponge}/`。
 Forge 1.12.2 / 1.21.1 车道的产物已构建时一并捞入，否则仅打印命令。
+
+## `socks2http.py` — 本地 HTTP 代理转上游 SOCKS5（出站受限环境用）
+
+Gradle / JVM **无法**经系统属性给 SOCKS5 传用户名密码（`-Djava.net.socks.username`
+实测无效，报 `SOCKS : authentication failed`）。本脚本在本地起一个免认证 HTTP 代理，
+把 CONNECT 隧道转发到带认证的上游 SOCKS5，让 JVM 只认本地 HTTP 代理。
+
+典型用途：`maven.neoforged.net` 在部分网络下直连与经普通 HTTP 代理均被 reset，
+neoforge 车道的 neoform / neoforge 制品拉不下来；换成能出境的 SOCKS5 后经本脚本中转即可。
+
+```bash
+export MPMT_PROXY_SOCKS_HOST=<上游主机>
+export MPMT_PROXY_SOCKS_PORT=<上游端口>
+export MPMT_PROXY_USER=<用户名>
+export MPMT_PROXY_PASSWORD=<密码>
+setsid python3 tools/socks2http.py > .tmp/socks2http.log 2>&1 < /dev/null &
+```
+
+| 变量 | 必填 | 说明 |
+|---|---|---|
+| `MPMT_PROXY_SOCKS_HOST` | 是 | 上游 SOCKS5 主机 |
+| `MPMT_PROXY_SOCKS_PORT` | 是 | 上游 SOCKS5 端口 |
+| `MPMT_PROXY_USER` | 是 | SOCKS5 用户名 |
+| `MPMT_PROXY_PASSWORD` | 是 | SOCKS5 密码 |
+| `MPMT_PROXY_LISTEN_PORT` | 否 | 本地监听端口，默认 `24081` |
+
+**脚本不含任何凭据**，全部经环境变量传入。只监听 `127.0.0.1`，不暴露到局域网。
+随后把 Gradle 的 `http(s).proxyHost/Port` 指向 `127.0.0.1:$MPMT_PROXY_LISTEN_PORT`
+（通常写在 `~/.gradle/gradle.properties`，属本机配置，不入库）。

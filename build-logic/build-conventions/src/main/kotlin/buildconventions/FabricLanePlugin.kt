@@ -24,7 +24,9 @@ class FabricLanePlugin : Plugin<Project> {
         // 车道的 `fabricLane { … }` 块晚于插件 apply，故读取配置值的接线统一在 afterEvaluate 完成。
         project.afterEvaluate {
             val gametest = gametestSourceSet(project)
+            mountMcShared(project, lane)
             registerLoomRuns(project, lane, gametest)
+            registerFabricRemapJarWiring(project)
             configureAcceptanceRunTasks(project, lane)
             registerSimulatorAcceptanceGate(project, lane)
             expandModMetadata(project, lane)
@@ -55,6 +57,10 @@ class FabricLanePlugin : Plugin<Project> {
     /**
      * 源目录布局：三条 fabric 车道一致——单版本构建内 common / server / client 分目录（服客分离、
      * 平台只胶水），L4 已固定拷入 common。Loom remap 仍由各车道工程完成（多模块各挂 Loom 代价高且易冲突）。
+     *
+     * `mc-shared/` 不在此处挂载：它需要车道 MC 版本才能匹配 `gensrc/<range>`，而车道的
+     * `fabricLane { mcVersion.set(...) }` 块晚于插件 apply——故移到 afterEvaluate 的
+     * [mountMcShared]。
      */
     private fun configureSourceLayout(project: Project) {
         project.pluginManager.withPlugin("java") {
@@ -72,6 +78,28 @@ class FabricLanePlugin : Plugin<Project> {
             sourceSets.named("test") {
                 java.setSrcDirs(listOf("common/src/test/java"))
             }
+        }
+    }
+
+    /**
+     * 挂载 `mc-shared/`（ADR-0028 决策 2/3）：**纯加法**追加，不覆盖、不减。
+     *
+     * fabric 三条车道均为双端，故挂 COMMON + CLIENT + SERVER；目录不存在时自动跳过。
+     * 版本区间目录按车道 MC 版本匹配——同命名组共享、跨组独立靠目录区间保证，而非靠约定。
+     */
+    private fun mountMcShared(project: Project, lane: FabricLaneExtension) {
+        val sourceSets = project.extensions.getByType(SourceSetContainer::class.java)
+        sourceSets.named("main") {
+            McSharedSources.mount(
+                project,
+                java,
+                listOf(
+                    McSharedSources.Side.COMMON,
+                    McSharedSources.Side.CLIENT,
+                    McSharedSources.Side.SERVER,
+                ),
+                lane.mcVersion.get(),
+            )
         }
     }
 

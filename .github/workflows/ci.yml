@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: read
+  # actions/cache 保存 Loom 制品缓存需要写权限；缺它会静默无法保存（或直接报错）。
+  actions: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -120,6 +122,23 @@ jobs:
 
       - name: 配置 Gradle 缓存
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+
+      # Loom 的 MC 映射 / dev jar（约数 GB）不在 setup-gradle 默认缓存范围内，
+      # 每次冷启动都要重新派生，是矩阵各格的主要固定开销。单独按车道锁存。
+      #
+      # 只缓存 Loom 制品，不改 setup-gradle 的 cache-read-only：后者会让 PR 写入并
+      # 命中 Gradle 构建缓存（org.gradle.caching=true），而 CodeQL 的 manual build
+      # 依赖真实 javac 调用提取源码，命中缓存会报 "didn't build any of it"（Exit 32）。
+      - name: 缓存 Loom 制品
+        uses: actions/cache@v4
+        with:
+          # 只缓存 ~/.gradle 下的共享制品；工作区内的 .gradle/loom-user-cache
+          # 是构建的工作目录，缓存其中间产物会引入「文件在、内容不可用」的半成品。
+          path: ~/.gradle/caches/fabric-loom
+          key: loom-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
+          restore-keys: |
+            loom-${{ runner.os }}-${{ matrix.name }}-
+            loom-${{ runner.os }}-
 
       # 本格的产品 jar：只有它进被测插件注入；其余车道不构建（矩阵各格自足）。
       - name: 构建本格产品 jar

@@ -4,8 +4,8 @@ import java.util.Objects;
 import java.util.function.BiConsumer;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.level.ServerPlayer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.platform.fabric.net.FabricConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.mcshared.server.net.FabricConnectionHandle;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricServerNetwork;
 
 /** Fabric 1.21.1 服务端类型化载荷裸字节适配器。 */

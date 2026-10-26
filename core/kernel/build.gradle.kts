@@ -1,0 +1,37 @@
+// L0 core-kernel：领域内核（基类型 / 端口 / 事件总线 / 引用），零平台依赖（ADR-0001）。
+// 严格 Java 8：用 JDK 8 工具链编译——API 面即 JDK 8，从根上杜绝误用 Java 9+ API
+// （比仅锁 sourceCompatibility 更强；满足 ADR-0004 / static-analysis 对 Java 8 的强制要求）。
+
+plugins {
+    id("build-conventions.quality")
+    `java-library`
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // 领域值对象用 Lombok 减样板（ADR-0004：Lombok 仅用于 Java 模块；编译期注解，运行期无依赖）。
+    compileOnly("org.projectlombok:lombok:1.18.48")
+    annotationProcessor("org.projectlombok:lombok:1.18.48")
+    testCompileOnly("org.projectlombok:lombok:1.18.48")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.48")
+
+    // L0 不引入任何第三方运行期依赖（保持纯功能域）。
+    testImplementation(platform("org.junit:junit-bom:5.14.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    // 分离度回归断言：ArchUnit 自动校验 L0 无平台原生依赖、功能域互不依赖且无环（仅测试期）
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.0")
+}
+
+tasks.test {
+    useJUnitPlatform()
+}

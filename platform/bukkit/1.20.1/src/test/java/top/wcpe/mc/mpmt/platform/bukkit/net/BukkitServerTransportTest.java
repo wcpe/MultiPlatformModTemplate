@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.bukkit.plugin.messaging.Messenger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 import top.wcpe.mc.mpmt.platform.bukkit.version.v1_20.V1_20BukkitServerNetwork;
 
 /** Bukkit 1.20.1 网络适配器与版本无关 TransportPort 的协作测试。 */

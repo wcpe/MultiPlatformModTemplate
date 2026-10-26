@@ -9,13 +9,13 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.core.server.BanService;
 import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;
 import top.wcpe.mc.mpmt.platform.fabric.capability.FabricCapabilityBootstrap;
 import top.wcpe.mc.mpmt.platform.fabric.command.FabricMachineCodeCommands;
-import top.wcpe.mc.mpmt.platform.fabric.net.FabricConnectionHandle;
+import top.wcpe.mc.mpmt.mcshared.server.net.FabricConnectionHandle;
 import top.wcpe.mc.mpmt.platform.fabric.net.FabricServerTransport;
 import top.wcpe.mc.mpmt.platform.spi.PlatformAssemblyContext;
 import top.wcpe.mc.mpmt.platform.spi.PlatformProvider;
@@ -55,7 +55,7 @@ public final class MpmtFabricBootstrap implements ModInitializer {
         PlatformProvider.boot(getClass().getClassLoader(), assembledRuntime, context);
         FabricServerTransport assembledTransport =
                 (FabricServerTransport) assembledRuntime.ports()
-                        .get(top.wcpe.mc.mpmt.core.domain.port.TransportPort.class);
+                        .get(top.wcpe.mc.mpmt.kernel.port.TransportPort.class);
         FabricServerServices assembledServices = FabricServerServices.install(assembledRuntime);
         assembledRuntime.enable();
         runtime = assembledRuntime;

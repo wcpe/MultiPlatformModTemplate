@@ -10,8 +10,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import top.wcpe.mc.mpmt.core.domain.ban.BanEntry;
-import top.wcpe.mc.mpmt.core.domain.ban.MachineCode;
+import top.wcpe.mc.mpmt.kernel.ban.BanEntry;
+import top.wcpe.mc.mpmt.kernel.ban.MachineCode;
 
 /** 封禁快照编解码：版本行后逐行保存机器码与原因的 Base64。 */
 public final class BanSnapshotCodec {

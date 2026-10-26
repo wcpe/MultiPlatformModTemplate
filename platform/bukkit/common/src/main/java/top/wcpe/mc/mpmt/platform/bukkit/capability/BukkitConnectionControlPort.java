@@ -3,9 +3,9 @@ package top.wcpe.mc.mpmt.platform.bukkit.capability;
 import java.util.Objects;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.ref.EntityRef;
 import top.wcpe.mc.mpmt.platform.bukkit.net.BukkitConnectionHandle;
 import top.wcpe.mc.mpmt.platform.bukkit.net.BukkitConnectionRegistry;
 

@@ -5,7 +5,7 @@ import java.util.Objects;
 import java.util.function.Supplier;
 import org.spongepowered.api.event.lifecycle.RegisterChannelEvent;
 import org.spongepowered.plugin.PluginContainer;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.platform.sponge.capability.SpongeCapabilityBootstrap;
 import top.wcpe.mc.mpmt.platform.sponge.net.SpongeConnectionRegistry;

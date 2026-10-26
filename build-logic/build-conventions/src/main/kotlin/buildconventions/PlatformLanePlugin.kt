@@ -42,7 +42,11 @@ class PlatformLanePlugin : Plugin<Project> {
                 doLast {
                     val packageName = lane.channelPackage.get()
                     val className = lane.channelClass.get()
-                    val packageDir = lane.generatedSourcesDir.get().asFile.resolve(packageName.replace('.', '/'))
+                    val packageDir =
+                        lane.generatedSourcesDir
+                            .get()
+                            .asFile
+                            .resolve(packageName.replace('.', '/'))
                     packageDir.mkdirs()
                     packageDir.resolve("$className.java").writeText(
                         """

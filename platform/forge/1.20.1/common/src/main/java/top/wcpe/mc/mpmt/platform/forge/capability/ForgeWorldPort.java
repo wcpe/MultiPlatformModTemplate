@@ -7,8 +7,8 @@ import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import top.wcpe.mc.mpmt.core.domain.port.WorldPort;
-import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
+import top.wcpe.mc.mpmt.kernel.port.WorldPort;
+import top.wcpe.mc.mpmt.kernel.ref.WorldRef;
 
 /** Forge 世界查询端口：按维度资源标识暴露当前已加载世界。 */
 public final class ForgeWorldPort implements WorldPort {

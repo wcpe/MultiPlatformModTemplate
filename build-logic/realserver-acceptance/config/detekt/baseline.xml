@@ -1,46 +1,36 @@
 <?xml version="1.0" ?>
 <SmellBaseline>
-  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:PaperHostService.kt$PaperHostService$!copied || sizeAfter != sizeBefore || target.length() != sizeBefore || !isLoadablePluginJar(target)</ID>
-    <ID>CyclomaticComplexMethod:PaperHostService.kt$PaperHostService$private fun startPaper()</ID>
-    <ID>LongMethod:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$private fun configureHostWiring(target: Project, ext: MpmtRealServerAcceptanceExtension)</ID>
-    <ID>LongMethod:PaperHostService.kt$PaperHostService$private fun startPaper()</ID>
-    <ID>LongParameterList:PlatformLane.kt$PlatformLane$( val id: String, val displayName: String, val serverKind: ServerKind, val clientKind: ClientKind, /** 根工程内该车道的真服门任务全路径；例：`:platform:fabric:fabric-1.20.1:runRealServerAcceptance` */ val rootTaskPath: String, /** 平台/模块内门禁任务名 */ val verifyTaskName: String, val defaultReportHint: String, /** 可选：默认矩阵（HYBRID/SCHEDULER/REALSERVER262）；空=默认轨 */ val defaultMatrix: String = "", )</ID>
-    <ID>LoopWithTooManyJumpStatements:PaperHostService.kt$PaperHostService$while</ID>
-    <ID>MagicNumber:FillV3Downloads.kt$FillV3Downloads$200</ID>
-    <ID>MagicNumber:FillV3Downloads.kt$FillV3Downloads$299</ID>
-    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$17</ID>
-    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$24</ID>
-    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$250</ID>
-    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$25599</ID>
-    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$64</ID>
-    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt$MpmtRealServerAcceptancePlugin$8</ID>
-    <ID>MagicNumber:PaperHostService.kt$PaperHostService$1000</ID>
-    <ID>MagicNumber:PaperHostService.kt$PaperHostService$1024</ID>
-    <ID>MagicNumber:PaperHostService.kt$PaperHostService$1_000</ID>
-    <ID>MagicNumber:PaperHostService.kt$PaperHostService$30</ID>
-    <ID>MagicNumber:PaperHostService.kt$PaperHostService$60_000L</ID>
-    <ID>MagicNumber:PaperHostService.kt$PaperHostService$80</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$10</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$3</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$5</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$7</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$9</ID>
-    <ID>MaxLineLength:PaperHostService.kt$PaperHostService$val metadataUrl = "${FillV3Downloads.ENDPOINT}projects/paper/versions/${frozen.mcVersion}/builds/${frozen.build}"</ID>
-    <ID>MaxLineLength:RealServerGateContractTest.kt$RealServerGateContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/MpmtRealServerAcceptanceExtension.kt"</ID>
-    <ID>MaxLineLength:RealServerGateContractTest.kt$RealServerGateContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/MpmtRealServerAcceptancePlugin.kt"</ID>
-    <ID>MaxLineLength:RealServerGateContractTest.kt$RealServerGateContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/PaperHostService.kt"</ID>
-    <ID>MaxLineLength:RealServerGateContractTest.kt$RealServerGateContractTest$"build-logic/realserver-acceptance/src/main/kotlin/top/wcpe/mc/mpmt/gradle/realserver/RealServerReportGatePlugin.kt"</ID>
-    <ID>MaxLineLength:RealServerReportValidator.kt$RealServerReportValidator.ParsedReport$line.startsWith("START_EPOCH_MS\t") -&gt; startEpochMs = unique("START_EPOCH_MS", startEpochMs, fields(line, 2)[1].toLong())</ID>
-    <ID>ThrowsCount:AcceptanceReportGate.kt$AcceptanceReportGate$fun verify(reportFile: File)</ID>
-    <ID>ThrowsCount:PaperHostService.kt$PaperHostService$private fun resolveFrozenPaperJar(cacheDir: File, frozen: FrozenPaperArtifact): File</ID>
-    <ID>ThrowsCount:RealServerReportGatePlugin.kt$RealServerReportGatePlugin$private fun verify(project: Project)</ID>
-    <ID>TooGenericExceptionCaught:PaperHostService.kt$PaperHostService$failure: Throwable</ID>
-    <ID>TooGenericExceptionCaught:PaperHostService.kt$PaperHostService$t: Throwable</ID>
-    <ID>TooManyFunctions:PaperHostService.kt$PaperHostService : BuildServiceAutoCloseable</ID>
-    <ID>UseCheckOrError:FillV3Downloads.kt$FillV3Downloads$throw IllegalStateException("下载响应状态异常：${conn.responseCode}")</ID>
-    <ID>UseCheckOrError:FillV3Downloads.kt$FillV3Downloads$throw IllegalStateException("未从 Fill v3 构建响应解析到 id 字段。")</ID>
-    <ID>UseCheckOrError:FillV3Downloads.kt$FillV3Downloads$throw IllegalStateException("未从 Fill v3 构建响应解析到下载键 \"$key\" 的 url。")</ID>
+    <ID>ComplexCondition:PaperHostService.kt:PaperHostService$!copied || sizeAfter != sizeBefore || target.length() != sizeBefore || !isLoadablePluginJar(target)</ID>
+    <ID>CyclomaticComplexMethod:PaperHostService.kt:PaperHostService$private fun startPaper</ID>
+    <ID>LongMethod:MpmtRealServerAcceptancePlugin.kt:MpmtRealServerAcceptancePlugin$private fun configureHostWiring</ID>
+    <ID>LongMethod:PaperHostService.kt:PaperHostService$private fun startPaper</ID>
+    <ID>LoopWithTooManyJumpStatements:PaperHostService.kt:PaperHostService$while</ID>
+    <ID>MagicNumber:FillV3Downloads.kt:FillV3Downloads$200</ID>
+    <ID>MagicNumber:FillV3Downloads.kt:FillV3Downloads$299</ID>
+    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt:MpmtRealServerAcceptancePlugin$17</ID>
+    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt:MpmtRealServerAcceptancePlugin$24</ID>
+    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt:MpmtRealServerAcceptancePlugin$250</ID>
+    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt:MpmtRealServerAcceptancePlugin$25599</ID>
+    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt:MpmtRealServerAcceptancePlugin$8</ID>
+    <ID>MagicNumber:PaperHostService.kt:PaperHostService$1000</ID>
+    <ID>MagicNumber:PaperHostService.kt:PaperHostService$1024</ID>
+    <ID>MagicNumber:PaperHostService.kt:PaperHostService$1_000</ID>
+    <ID>MagicNumber:PaperHostService.kt:PaperHostService$30</ID>
+    <ID>MagicNumber:PaperHostService.kt:PaperHostService$80</ID>
+    <ID>MagicNumber:RealServerReportValidator.kt:RealServerReportValidator.ParsedReport$10</ID>
+    <ID>MagicNumber:RealServerReportValidator.kt:RealServerReportValidator.ParsedReport$3</ID>
+    <ID>MagicNumber:RealServerReportValidator.kt:RealServerReportValidator.ParsedReport$5</ID>
+    <ID>MagicNumber:RealServerReportValidator.kt:RealServerReportValidator.ParsedReport$7</ID>
+    <ID>MagicNumber:RealServerReportValidator.kt:RealServerReportValidator.ParsedReport$9</ID>
+    <ID>MaxLineLength:PaperHostService.kt:PaperHostService$val metadataUrl = "${FillV3Downloads.ENDPOINT}projects/paper/versions/${frozen.mcVersion}/builds/${frozen.build}"</ID>
+    <ID>MaxLineLength:RealServerReportValidator.kt:RealServerReportValidator.ParsedReport$line.startsWith("START_EPOCH_MS\t") -&gt; startEpochMs = unique("START_EPOCH_MS", startEpochMs, fields(line, 2)[1].toLong())</ID>
+    <ID>ThrowsCount:AcceptanceReportGate.kt:AcceptanceReportGate$fun verify</ID>
+    <ID>ThrowsCount:PaperHostService.kt:PaperHostService$private fun resolveFrozenPaperJar: File</ID>
+    <ID>ThrowsCount:RealServerReportGatePlugin.kt:RealServerReportGatePlugin$private fun verify</ID>
+    <ID>TooGenericExceptionCaught:PaperHostService.kt:PaperHostService$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:PaperHostService.kt:PaperHostService$t: Throwable</ID>
+    <ID>TooManyFunctions:PaperHostService.kt:PaperHostService : BuildServiceAutoCloseable</ID>
   </CurrentIssues>
 </SmellBaseline>

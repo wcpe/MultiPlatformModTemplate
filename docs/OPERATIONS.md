@@ -11,7 +11,7 @@
 
 ```bash
 # 根 L0–L2 + 平台 api
-./gradlew --no-daemon :core:domain:build :core:spi:build
+./gradlew --no-daemon :core:kernel:build :core:spi:build
 ./gradlew --no-daemon :platform:bukkit:bukkit-api:build :platform:fabric:fabric-api:build
 
 # Bukkit 版本产物

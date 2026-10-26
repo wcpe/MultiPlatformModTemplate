@@ -17,7 +17,7 @@ repositories {
 }
 
 dependencies {
-    // 集成测试同时驱动服务端与客户端公共逻辑（各自经 api 传递 protocol + core-domain）
+    // 集成测试同时驱动服务端与客户端公共逻辑（各自经 api 传递 protocol + core-kernel）
     testImplementation(project(":core:server"))
     testImplementation(project(":core:client"))
 

@@ -1,7 +1,7 @@
 package top.wcpe.mc.mpmt.platform.sponge.version;
 
 import java.util.function.BiConsumer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 
 /** Sponge 服务端网络版本适配接口。 */
 public interface SpongeServerNetwork {

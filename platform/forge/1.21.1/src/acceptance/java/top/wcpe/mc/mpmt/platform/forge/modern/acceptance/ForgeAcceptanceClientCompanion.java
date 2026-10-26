@@ -61,6 +61,8 @@ public final class ForgeAcceptanceClientCompanion {
     private static int ticksSinceMenu;
     private static boolean pingSent;
     private static volatile boolean pongReceived;
+    /** 就绪只上报一次；延到玩家就位后再发，避免与产品握手演示 HUD 抢时序。 */
+    private static volatile boolean clientReadySent;
 
     private ForgeAcceptanceClientCompanion() {
         // 事件订阅类不实例化
@@ -71,7 +73,9 @@ public final class ForgeAcceptanceClientCompanion {
         connection = event.getConnection();
         MpmtForge121AcceptanceMod.control().registerClientReceiver(
                 ForgeAcceptanceClientCompanion::receive);
-        sendClientReady();
+        // 不在此处立即上报就绪：LoggingIn 时产品握手尚未下发 TITLE/ACTIONBAR/TOAST/CHAT 演示包，
+        // 若此刻就绪，首个场景（按 suite/id 字母序为 client-hud）会先发验收 ACTIONBAR、
+        // 随后被演示 ACTIONBAR 覆盖，导致 400 tick 超时。改为 tick 内 player 就位后再上报（对齐 26.2）。
         LOGGER.info("验收客户端伴侣已连接控制通道：平台=Forge");
     }
 
@@ -86,6 +90,11 @@ public final class ForgeAcceptanceClientCompanion {
         tryAutoConnect(minecraft);
         if (minecraft.player == null || connection == null) {
             return;
+        }
+        // 玩家真正就位后才上报就绪，确保产品握手的演示 HUD 已先行下发（见 onLoggingIn 注释）
+        if (!clientReadySent) {
+            clientReadySent = true;
+            sendClientReady();
         }
         if (minecraft.mouseHandler.isMouseGrabbed()) {
             minecraft.mouseHandler.releaseMouse();
@@ -108,14 +117,14 @@ public final class ForgeAcceptanceClientCompanion {
             return;
         }
         if (outcome == null) {
-            // HUD 超时附带末次快照，便于区分「未收到」与「一直是演示包」
+            // HUD 超时附带最近动作栏快照，便于区分「未收到 ACTIONBAR」与「收到但文本不符」
             if (active != null && "client-hud".equals(active.getScenarioId())) {
-                ForgeHudSnapshot snap = ForgeClientEvents.session().hudSnapshot();
+                ForgeHudSnapshot snap = ForgeClientEvents.session().actionBarSnapshot();
                 outcome =
                         Outcome.fail(
                                 "客户端 HUD 步骤超时 "
                                         + timeoutTicks
-                                        + " tick 末次="
+                                        + " tick 最近动作栏="
                                         + (snap == null
                                                 ? "null"
                                                 : ("kind=" + snap.kind() + " text=" + snap.text())));
@@ -151,6 +160,35 @@ public final class ForgeAcceptanceClientCompanion {
             return;
         }
         if (!CONNECT_ATTEMPTED.compareAndSet(false, true)) {
+            return;
+        }
+        // 单机轨（-Dmpmt.acceptance.singleplayer=true）：不连外部服，改为创建单人世界，
+        // 由客户端内置服务端承载验收场景；此时服务端与客户端同进程，控制通道直接可用。
+        if (Boolean.getBoolean("mpmt.acceptance.singleplayer")) {
+            String world = System.getProperty("mpmt.acceptance.singleplayer.world", "mpmt-acceptance");
+            LOGGER.info("realserver Forge 验收伴侣：单机轨，创建单人世界 {}", world);
+            client.execute(
+                    () ->
+                            client.createWorldOpenFlows()
+                                    .createFreshLevel(
+                                            world,
+                                            new net.minecraft.world.level.LevelSettings(
+                                                    world,
+                                                    net.minecraft.world.level.GameType.SURVIVAL,
+                                                    false,
+                                                    net.minecraft.world.Difficulty.NORMAL,
+                                                    true,
+                                                    new net.minecraft.world.level.GameRules(),
+                                                    net.minecraft.world.level.WorldDataConfiguration
+                                                            .DEFAULT),
+                                            new net.minecraft.world.level.levelgen.WorldOptions(
+                                                    net.minecraft.world.level.levelgen.WorldOptions
+                                                            .randomSeed(),
+                                                    true,
+                                                    false),
+                                            net.minecraft.world.level.levelgen.presets.WorldPresets
+                                                    ::createNormalWorldDimensions,
+                                            client.screen));
             return;
         }
         String address = System.getProperty(SERVER_PROPERTY, "127.0.0.1");
@@ -282,9 +320,10 @@ public final class ForgeAcceptanceClientCompanion {
         if (!"verify-hud".equals(active.getStepId())) {
             return Outcome.error("未知 HUD 步骤：" + active.getStepId());
         }
-        // 握手成功后产品会先下发 TITLE/ACTIONBAR/TOAST/CHAT 演示包，快照可能暂非验收 ACTIONBAR。
-        // 未匹配时返回 null 继续轮询至步骤超时，避免被演示 CHAT 误判为永久失败。
-        ForgeHudSnapshot snapshot = ForgeClientEvents.session().hudSnapshot();
+        // 握手成功后产品会先下发 TITLE/ACTIONBAR/TOAST/CHAT 演示包，CHAT 是最后一包；
+        // 只看 hudSnapshot 会被演示 CHAT 覆盖而永远等不到验收 ACTIONBAR，
+        // 故改用按类型隔离的 actionBarSnapshot。
+        ForgeHudSnapshot snapshot = ForgeClientEvents.session().actionBarSnapshot();
         if (snapshot == null) {
             return null;
         }
