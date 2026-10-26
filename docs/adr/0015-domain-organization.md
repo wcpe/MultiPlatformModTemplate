@@ -1,7 +1,14 @@
 # ADR-0015：功能域组织与拆分约定——域模板 + 注册 + 包→模块成长，不预建空壳
 
 ## 状态
-已接受
+
+**部分被 [ADR-0028](0028-mc-shared-cross-lane-source-layer.md) 取代。**
+
+- **决策 1 被取代**：功能域不再是 `core-domain` 内的包，而是独立 Gradle 模块 `core/domains/<域>`；内核独立为 `core/kernel`（包 `top.wcpe.mc.mpmt.kernel.*`）。
+- **决策 4 被取代**：「先作包、够大再提升为模块」的成长路径不再适用，域一开始就是模块。
+- **备选方案中「重 per-domain 模块结构 —— 否决」被推翻**：已采纳 per-domain 模块，但**不含** AllinCore-New 式的 `api`/`impl`/聚合门面——每域仍只有一个模块。
+
+以下内容**继续有效**：决策 2（依赖规则）、决策 3（注册机制，且由 ADR-0028 D6 细化为 `META-INF/services` 自动发现）、决策 5（平台相关下沉）、以及「不预建空壳」纪律（模板只带 `capability` 一个真实示例域）。
 
 ## 背景
 随玩法增多，L0 会有多个**功能域**。需一套**组织与成长约定**，让每加一个域都一致、解耦、可单测，又**不预建空壳**（scope-discipline §3）、不上 AllinCore-New 那种大产品式的 per-domain `api`/`impl`/聚合门面重结构（脚手架 YAGNI）。域间**解耦机制**已由 [ADR-0011](0011-eventbus-domain-decoupling.md)（EventBus、互不依赖、全图无环）定；本 ADR 定**域的内部组织、注册、成长规则**。

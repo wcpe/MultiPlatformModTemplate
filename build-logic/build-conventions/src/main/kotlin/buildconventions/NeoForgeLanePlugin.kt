@@ -38,6 +38,7 @@ class NeoForgeLanePlugin : Plugin<Project> {
             val acceptance = neoforgeAcceptanceSourceSet(project)
             registerNeoForgeDependencies(project, lane, acceptance)
             configureNeoForgeRuns(project, lane)
+            registerNeoForgeDevModsStaging(project)
             expandNeoForgeModMetadata(project)
             configureNeoForgePackagingChain(project)
             registerNeoForgePackagingVerification(project)
@@ -55,7 +56,9 @@ class NeoForgeLanePlugin : Plugin<Project> {
     /** 编译工具链（车道目标 Java 版本）与单测平台：与其它车道同构。 */
     private fun configureNeoForgeJavaConventions(project: Project, lane: NeoForgeLaneExtension) {
         project.pluginManager.withPlugin("java") {
-            project.extensions.getByType(JavaPluginExtension::class.java).toolchain.languageVersion
+            project.extensions
+                .getByType(JavaPluginExtension::class.java)
+                .toolchain.languageVersion
                 .set(lane.targetJavaVersion.map { JavaLanguageVersion.of(it) })
             project.tasks.named("test", Test::class.java).configure { useJUnitPlatform() }
         }

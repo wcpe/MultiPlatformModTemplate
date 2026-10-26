@@ -7,9 +7,9 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
-import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.ref.EntityRef;
+import top.wcpe.mc.mpmt.kernel.ref.WorldRef;
 
 /**
  * Folia 区域调度端口（L3，FR-13 / ADR-0013）：Folia 区域化多线程、无单一主线程，改某实体 / 方块必须落到拥有它的

@@ -4,8 +4,8 @@ import java.util.Objects;
 import java.util.function.BiConsumer;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 
 /** NeoForge 客户端传输：复用产品 SimpleChannel，并接入统一 ClientNetworkFeature。 */
 @OnlyIn(Dist.CLIENT)

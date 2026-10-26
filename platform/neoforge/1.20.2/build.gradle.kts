@@ -1,4 +1,6 @@
+import buildconventions.LaneBundle
 import buildconventions.NeoForgeLaneExtension
+import buildconventions.declareLaneBundles
 
 // NeoForge 1.20.2 车道（根构建子模块）：common + server + client 分目录 → mpmt-neoforge-1.20.2-<version>.jar。
 // 不可变契约：产物名与路径、打包链路（shade 共享核心 + relocate snakeyaml，ADR-0012）、remapJar 恒等重映射
@@ -43,8 +45,9 @@ repositories {
 // 质量工具链：装配由 build-conventions.quality 插件承担（本工程无偏离项）
 
 // 专用配置：需 shade 的内容（产品：core/spi + 第三方；验收：acceptance 核心），由插件按名消费
-val shadowBundle: Configuration by configurations.creating
-val acceptanceShadowBundle: Configuration by configurations.creating
+val shadowBundle: Configuration = declareLaneBundles(LaneBundle.SHADOW).getValue(LaneBundle.SHADOW)
+val acceptanceShadowBundle: Configuration =
+    declareLaneBundles(LaneBundle.ACCEPTANCE_SHADOW).getValue(LaneBundle.ACCEPTANCE_SHADOW)
 
 // neoforge 车道参数：版本、目标 JDK、验收驱动取值在此声明；其余 loader 层接线由插件承担
 val neoforgeLane = extensions.getByType(NeoForgeLaneExtension::class.java)
@@ -64,4 +67,31 @@ dependencies {
     minecraft("com.mojang:minecraft:${neoforgeLane.mcVersion.get()}")
     mappings(loom.officialMojangMappings())
     "neoForge"("net.neoforged:neoforge:${neoforgeLane.neoForgeVersion.get()}")
+}
+
+// 单机/LAN 验收（-Pmpmt.acceptance.singleplayer=true）需要验收驱动 mod 与产品 mod 同处 mods/：
+// 产品 mod 只提供能力，验收场景由独立 mod 执行。此前 run 只经 source(main) 提供产品类，
+// 验收 jar 从不落位，故单机即使开了 -Dmpmt.acceptance 也没有任何场景在跑。
+if (project.findProperty("mpmt.acceptance.singleplayer") == "true") {
+    tasks.matching { it.name == "runClient" }.configureEach {
+        dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"))
+        // 产品 shade jar 必须先落位：验收驱动依赖 core:kernel 等类，而 FML 的模块层不向 dev 源集
+        // 暴露 core（NoClassDefFoundError: top/wcpe/mc/mpmt/kernel/port/ConnectionHandle）。
+        // 只有把含 core 的产品 jar 当真实 mod 放进 mods/，验收 jar 才能解析到这些类。
+        val productJar = tasks.named<Jar>("shadowJar").flatMap { it.archiveFile }
+        val acceptanceJar = tasks.named<Jar>("acceptanceJar").flatMap { it.archiveFile }
+        val modsDir = layout.projectDirectory.dir("run-client/mods")
+        inputs.file(productJar)
+        inputs.file(acceptanceJar)
+        doFirst {
+            val target = modsDir.asFile.apply { mkdirs() }
+            // 清掉旧副本，避免改名或旧版本残留被 NeoForge 重复加载
+            target.listFiles { f -> f.name.endsWith(".jar") }?.forEach { it.delete() }
+            copy {
+                from(productJar)
+                from(acceptanceJar)
+                into(target)
+            }
+        }
+    }
 }

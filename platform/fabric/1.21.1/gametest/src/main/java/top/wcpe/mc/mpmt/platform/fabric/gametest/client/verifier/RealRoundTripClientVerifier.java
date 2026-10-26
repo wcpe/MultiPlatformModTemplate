@@ -32,13 +32,20 @@ public final class RealRoundTripClientVerifier implements ClientVerifier {
         if (context.client().player == null) {
             return null;
         }
-        ServerHudMessagePacket hud = FabricHudRenderer.lastRendered();
-        if (hud == null) {
-            return null;
+        // 断言「本次连接内收到过场景自己发的那条 ACTIONBAR」，而不是「最后一条是不是它」。
+        // 产品握手流程会在进世界后连续下发 ACTIONBAR / TOAST / CHAT 三条演示 HUD，
+        // 后到的演示 HUD 会把场景发的那条覆盖掉（lastRendered 是单值），只看最后一条必然误判。
+        for (ServerHudMessagePacket hud : FabricHudRenderer.receivedHuds()) {
+            if (hud.getKind() == HudKind.ACTIONBAR
+                    && RealRoundTripServerScenario.HUD_TEXT.equals(hud.getText())) {
+                return VerifyOutcome.ok(
+                        "{\"hud\":\"" + hud.getText() + "\"}", "真实网络往返 HUD 已渲染");
+            }
         }
-        if (hud.getKind() != HudKind.ACTIONBAR || !RealRoundTripServerScenario.HUD_TEXT.equals(hud.getText())) {
-            return VerifyOutcome.fail("HUD 不符：kind=" + hud.getKind() + " text=" + hud.getText());
-        }
-        return VerifyOutcome.ok("{\"hud\":\"" + hud.getText() + "\"}", "真实网络往返 HUD 已渲染");
+        ServerHudMessagePacket last = FabricHudRenderer.lastRendered();
+        String seen = last == null ? "(无)" : "kind=" + last.getKind() + " text=" + last.getText();
+        return VerifyOutcome.fail(
+                "未收到期望的 ACTIONBAR HUD（期望 text=" + RealRoundTripServerScenario.HUD_TEXT
+                        + "，最后一条=" + seen + "）");
     }
 }

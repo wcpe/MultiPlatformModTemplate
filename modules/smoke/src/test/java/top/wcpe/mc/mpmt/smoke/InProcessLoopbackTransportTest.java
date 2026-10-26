@@ -10,8 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 
 /**
  * 单人世界（集成服内存回环）传输契约固化（FR-20）：在纯 JVM 下穷举进程内回环 {@link TransportPort} 的裸字节往返语义。

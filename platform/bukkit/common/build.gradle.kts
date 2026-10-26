@@ -1,3 +1,5 @@
+import buildconventions.mpmtDomains
+
 // L3 platform-bukkit-common：全版本共用胶水 + version-api（JDK8 + Spigot 1.12 API 编译边界）
 // 不单独发布产品 jar；由各 server-* 工程 shadow 进版本产物。
 
@@ -43,6 +45,9 @@ dependencies {
     api(project(":platform:bukkit:bukkit-api"))
     api(project(":core:spi"))
     api(project(":core:server"))
+    // 功能域（L0 玩法逻辑）：本模块是 bukkit 各版本车道的公共依赖源，
+    // 故域在此统一接入；新增域无需改本行——mpmtDomains() 自动覆盖（ADR-0028）。
+    mpmtDomains().forEach { api(it) }
     api("org.yaml:snakeyaml:$snakeyamlVersion")
 }
 

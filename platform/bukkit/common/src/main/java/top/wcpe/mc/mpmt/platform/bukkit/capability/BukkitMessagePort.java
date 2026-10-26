@@ -2,8 +2,8 @@ package top.wcpe.mc.mpmt.platform.bukkit.capability;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import top.wcpe.mc.mpmt.core.domain.port.MessagePort;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.port.MessagePort;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
 
 /**
  * Bukkit 消息端口（L3，FR-26）：按 {@link PlayerRef} 的 UUID 找在线玩家，发聊天栏消息。

@@ -18,7 +18,7 @@ import net.minecraft.util.thread.BlockableEventLoop;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import sun.misc.Unsafe;
-import top.wcpe.mc.mpmt.platform.fabric.net.FabricConnectionHandle;
+import top.wcpe.mc.mpmt.mcshared.server.net.FabricConnectionHandle;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricResourceLocations;
 
 /**

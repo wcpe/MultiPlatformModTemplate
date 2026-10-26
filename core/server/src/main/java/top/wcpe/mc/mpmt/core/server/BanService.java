@@ -9,13 +9,13 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import top.wcpe.mc.mpmt.core.domain.ban.BanEntry;
-import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
-import top.wcpe.mc.mpmt.core.domain.ban.MachineCode;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
+import top.wcpe.mc.mpmt.kernel.ban.BanEntry;
+import top.wcpe.mc.mpmt.kernel.ban.BanRegistry;
+import top.wcpe.mc.mpmt.kernel.ban.MachineCode;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.ref.EntityRef;
 
 /** 服务端封禁编排：异步加载、串行持久化变更与在线会话断开。 */
 public final class BanService {

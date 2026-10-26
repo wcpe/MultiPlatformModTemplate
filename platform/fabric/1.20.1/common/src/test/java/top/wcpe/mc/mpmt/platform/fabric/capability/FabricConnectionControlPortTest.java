@@ -13,9 +13,10 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
+import top.wcpe.mc.mpmt.kernel.ref.EntityRef;
+import top.wcpe.mc.mpmt.mcshared.common.capability.FabricConnectionControlPort;
+import top.wcpe.mc.mpmt.mcshared.server.net.FabricConnectionHandle;
 import top.wcpe.mc.mpmt.platform.fabric.MinecraftTestSupport;
-import top.wcpe.mc.mpmt.platform.fabric.net.FabricConnectionHandle;
 
 /**
  * Fabric 连接控制端口：连接标识解析、按 UUID 重新查询当前玩家并断开。

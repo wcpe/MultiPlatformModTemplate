@@ -3,7 +3,7 @@ package top.wcpe.mc.mpmt.platform.bukkit;
 import java.util.Objects;
 import java.util.function.Function;
 import org.bukkit.plugin.Plugin;
-import top.wcpe.mc.mpmt.core.domain.port.TransportPort;
+import top.wcpe.mc.mpmt.kernel.port.TransportPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.platform.bukkit.capability.BukkitCapabilityBootstrap;
 import top.wcpe.mc.mpmt.platform.bukkit.net.BukkitConnectionRegistry;

@@ -15,15 +15,15 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.ban.BanEntry;
-import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
-import top.wcpe.mc.mpmt.core.domain.ban.MachineCode;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
-import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
+import top.wcpe.mc.mpmt.kernel.ban.BanEntry;
+import top.wcpe.mc.mpmt.kernel.ban.BanRegistry;
+import top.wcpe.mc.mpmt.kernel.ban.MachineCode;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.ref.EntityRef;
+import top.wcpe.mc.mpmt.kernel.ref.WorldRef;
 
 /** 封禁服务异步初始化、持久化顺序、串行变更与真实断开测试。 */
 class BanServiceTest {

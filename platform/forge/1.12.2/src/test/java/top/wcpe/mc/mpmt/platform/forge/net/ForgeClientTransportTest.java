@@ -15,7 +15,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 import top.wcpe.mc.mpmt.platform.forge.ForgeClientHarness;
 import top.wcpe.mc.mpmt.platform.forge.ForgeClientHarness.SidedHandlerRecorder;
 

@@ -78,5 +78,7 @@ private fun registerBuildAllGate(
         )
         dependsOn(verifyReleasePackaging)
         dependsOn(collectReleaseArtifacts)
+        // 架构守卫（ADR-0028 决策 7）：全量构建必须过守卫，否则规则会因无人调用而形同虚设。
+        dependsOn("verifyArchitecture")
     }
 }

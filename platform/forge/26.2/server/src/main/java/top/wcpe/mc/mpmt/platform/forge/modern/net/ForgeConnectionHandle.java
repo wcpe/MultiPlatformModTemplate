@@ -2,7 +2,7 @@ package top.wcpe.mc.mpmt.platform.forge.modern.net;
 
 import java.util.Objects;
 import net.minecraft.server.level.ServerPlayer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 
 /** 按底层 ServerPlayer 对象身份判等的 Forge 服务端连接句柄。 */
 public final class ForgeConnectionHandle implements ConnectionHandle {

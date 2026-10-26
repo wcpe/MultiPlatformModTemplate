@@ -8,7 +8,11 @@ import org.gradle.api.tasks.TaskProvider
 import java.io.File
 
 /** 一条发布制品：来源 jar、归属 loader 目录与 dist 内的目标名。 */
-private data class ReleaseArtifact(val source: File, val loader: String, val targetName: String)
+private data class ReleaseArtifact(
+    val source: File,
+    val loader: String,
+    val targetName: String,
+)
 
 /**
  * 聚合各平台权威可发布 jar 到 `build/dist/{bukkit,fabric,forge,neoforge,sponge}/`（注册在根工程）。
@@ -110,7 +114,12 @@ private fun laneArtifact(
     loader: String,
 ): ReleaseArtifact =
     ReleaseArtifact(
-        project.project(projectPath).layout.buildDirectory.file(buildRelativePath).get().asFile,
+        project
+            .project(projectPath)
+            .layout.buildDirectory
+            .file(buildRelativePath)
+            .get()
+            .asFile,
         loader,
         targetName,
     )

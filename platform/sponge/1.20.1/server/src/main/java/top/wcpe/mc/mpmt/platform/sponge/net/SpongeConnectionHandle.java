@@ -2,7 +2,7 @@ package top.wcpe.mc.mpmt.platform.sponge.net;
 
 import java.util.Objects;
 import java.util.UUID;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 
 /**
  * Sponge 服务端连接句柄（L3）：以玩家 UUID 把连接封装为 L0/L1 只见的不透明 {@link ConnectionHandle}。

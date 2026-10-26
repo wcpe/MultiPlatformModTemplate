@@ -13,6 +13,13 @@ import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.Difficulty;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.common.MinecraftForge;
@@ -107,6 +114,29 @@ public final class ForgeAcceptanceClientCompanion {
         }
         if (!connectAttempted.compareAndSet(false, true)) {
             return; // 只发起一次
+        }
+        // 单机轨（-Dmpmt.acceptance.singleplayer=true）：不连外部服，改为创建单人世界，
+        // 由客户端内置服务端承载验收场景；此时服务端与客户端同进程，控制通道直接可用。
+        if (Boolean.getBoolean("mpmt.acceptance.singleplayer")) {
+            String world = System.getProperty("mpmt.acceptance.singleplayer.world", "mpmt-acceptance");
+            LOGGER.info("realserver Forge 验收伴侣：单机轨，创建单人世界 {}", world);
+            client.execute(
+                    () ->
+                            client.createWorldOpenFlows()
+                                    .createFreshLevel(
+                                            world,
+                                            new LevelSettings(
+                                                    world,
+                                                    GameType.SURVIVAL,
+                                                    false,
+                                                    Difficulty.NORMAL,
+                                                    true,
+                                                    new GameRules(),
+                                                    WorldDataConfiguration.DEFAULT),
+                                            new WorldOptions(
+                                                    WorldOptions.randomSeed(), true, false),
+                                            WorldPresets::createNormalWorldDimensions));
+            return;
         }
         // 默认对齐 run-server/server.properties 的 server-port=25566（仅 host 会落到 25565 导致 Connection refused）
         String address = System.getProperty("mpmt.acceptance.server", "127.0.0.1:25566");

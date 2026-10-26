@@ -1,5 +1,5 @@
 // L1 protocol：跨端协议单一真源（包定义 / 字节布局 / 版本协商 / 编解码 / 收发管线），平台无关，严格 Java 8。
-// 依架构 protocol → core-domain（ADR-0001）：收发管线 PacketDispatcher 经 L0 TransportPort 收发。
+// 依架构 protocol → core-kernel（ADR-0001）：收发管线 PacketDispatcher 经 L0 TransportPort 收发。
 
 plugins {
     id("build-conventions.quality")
@@ -18,8 +18,8 @@ repositories {
 }
 
 dependencies {
-    // 收发管线依赖 L0 端口（TransportPort/ConnectionHandle），公共 API 暴露故用 api（protocol → core-domain，ADR-0001）
-    api(project(":core:domain"))
+    // 收发管线依赖 L0 端口（TransportPort/ConnectionHandle），公共 API 暴露故用 api（protocol → core-kernel，ADR-0001）
+    api(project(":core:kernel"))
 
     // 值对象（协议包 DTO）用 Lombok 减样板（ADR-0004：Lombok 仅用于 Java 模块）
     compileOnly("org.projectlombok:lombok:1.18.48")

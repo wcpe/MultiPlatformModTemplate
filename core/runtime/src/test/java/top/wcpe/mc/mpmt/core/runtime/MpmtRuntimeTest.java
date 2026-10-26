@@ -10,6 +10,8 @@ import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import top.wcpe.mc.mpmt.kernel.feature.Feature;
+import top.wcpe.mc.mpmt.kernel.feature.RuntimeContext;
 
 /** 运行时生命周期、特性时序与上下文装配（FR-02 / FR-03 验收）。 */
 class MpmtRuntimeTest {

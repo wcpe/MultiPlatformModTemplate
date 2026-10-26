@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.Optional;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.world.server.ServerWorld;
-import top.wcpe.mc.mpmt.core.domain.port.WorldPort;
-import top.wcpe.mc.mpmt.core.domain.ref.WorldRef;
+import top.wcpe.mc.mpmt.kernel.port.WorldPort;
+import top.wcpe.mc.mpmt.kernel.ref.WorldRef;
 
 /** Sponge 世界查询端口：按资源键字符串暴露当前已加载世界。 */
 public final class SpongeWorldPort implements WorldPort {

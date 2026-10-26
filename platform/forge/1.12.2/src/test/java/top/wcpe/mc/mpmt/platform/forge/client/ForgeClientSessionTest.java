@@ -81,7 +81,7 @@ class ForgeClientSessionTest {
 
         assertNotSame(first, session.networkFeature(), "每次 join 应重建网络特性");
         assertEquals(2, hud.registerCount, "每次 join 都应重新注册 HUD 派发器");
-        assertTrue(transport.clearCount >= 1, "join 应先拆旧会话（清空收包器）");
+        assertEquals(2, transport.clearCount, "每次 join 都应先拆旧会话（两次 join 共清空两次）");
     }
 
     @Test

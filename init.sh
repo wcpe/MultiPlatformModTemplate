@@ -528,8 +528,23 @@ if [[ "$DRY_RUN" == "true" ]]; then
   echo "预览命令："
   echo "  ./init.sh --id $NEW_ID --group $NEW_GROUP --name \"$NEW_NAME\" $( [[ "$REWRITE_CHANNELS" == "true" ]] && echo "--rewrite-channels" )"
 else
+  # 保证新仓库有 HEAD：构建链会读取 git 提交号写入验收报告元数据，
+  # 无提交时 git rev-parse HEAD 失败会让首次编译报 exit 128。
+  # ——构建侧已降级为 unknown，这里再做一次初始提交，让报告能追溯到真实提交。
+  if [[ -d .git ]] && ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+    echo ""
+    info "检测到仓库尚无提交，为首次构建建立初始提交 …"
+    if git add -A && git commit -q -m "chore: 由 init.sh 初始化 $NEW_NAME 项目" >/dev/null 2>&1; then
+      ok "已建立初始提交：$(git rev-parse --short HEAD)"
+    else
+      warn "自动提交失败（可能未配置 git user.name/user.email）。"
+      warn "构建仍可进行（提交号会记为 unknown），但建议手动提交一次："
+      warn "  git add -A && git commit -m \"chore: 初始化 $NEW_NAME\""
+    fi
+  fi
+
   ok "已完成。建议执行冒烟："
-  echo "  ./gradlew --no-daemon :core:domain:compileJava :platform:bukkit:common:compileJava"
+  echo "  ./gradlew --no-daemon :core:kernel:compileJava :examples:counter:core:compileJava"
   echo ""
   echo "或全量（较慢）："
   echo "  ./gradlew :buildAll"

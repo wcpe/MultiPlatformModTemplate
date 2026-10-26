@@ -206,8 +206,10 @@ public final class AcceptanceDriver {
         }
         try {
             Path file = Paths.get(path);
-            if (file.getParent() != null) {
-                Files.createDirectories(file.getParent());
+            // 只取一次 getParent()：连写两次会让静态分析无法确定判空与使用是同一对象。
+            Path parent = file.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
             }
             Files.write(file, report.getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {

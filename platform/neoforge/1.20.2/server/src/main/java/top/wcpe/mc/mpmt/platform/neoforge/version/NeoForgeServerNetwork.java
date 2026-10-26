@@ -3,7 +3,7 @@ package top.wcpe.mc.mpmt.platform.neoforge.version;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import net.minecraft.server.level.ServerPlayer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 
 /** NeoForge 服务端网络版本适配接口：只承载版本敏感的通道注册与收发。 */
 public interface NeoForgeServerNetwork {

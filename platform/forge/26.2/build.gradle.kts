@@ -1,12 +1,15 @@
 import buildconventions.ForgeLaneExtension
 import buildconventions.ForgeModules
+import buildconventions.LaneBundle
 import buildconventions.awaitAcceptancePort
 import buildconventions.awaitAcceptanceRoundReport
 import buildconventions.configureForgeModernProductJar
 import buildconventions.configureForgeReportProperties
+import buildconventions.declareLaneBundles
 import buildconventions.forgeJavaLauncher
 import buildconventions.installDevAcceptanceMod
 import buildconventions.launchAcceptanceProcess
+import buildconventions.mpmtDomains
 import buildconventions.prepareAcceptanceServerProperties
 import buildconventions.registerForgeAcceptanceJar
 import buildconventions.registerForgeModernSourceSets
@@ -43,12 +46,13 @@ if (JavaVersion.current().majorVersion.toInt() < 25) {
 
 val minecraftVersion = "26.2"
 val forgeVersion = "26.2-65.0.9"
-val loomVersion = "1.17.2"
+// 取自全仓单一真源（gradle.properties 的 mpmt.loomVersion），车道不再写版本字面量
+val loomVersion = providers.gradleProperty("mpmt.loomVersion").get()
 
 // 共享模块（L0-L2）项目路径；platform-spi 项目名为 core:spi；acceptance 仅进验收伴侣，不进产品
 val productSharedProjects =
     listOf(
-        ":core:domain",
+        ":core:kernel",
         ":core:runtime",
         ":core:client",
         ":core:server",
@@ -56,6 +60,8 @@ val productSharedProjects =
         ":core:spi",
     )
 val acceptanceSharedProjects = productSharedProjects + listOf(":modules:acceptance")
+// 功能域（L0 玩法逻辑）：动态发现，新增域无需改上面的字面量清单（ADR-0028）
+val domainProjects = mpmtDomains().map { it.path }
 
 base {
     archivesName.set("mpmt-forge-26.2")
@@ -69,8 +75,7 @@ java {
 }
 
 // 打包配置：产品 / 验收各自打入的共享模块（依赖接线在下方 dependencies 中按配置名完成）
-configurations.create("productBundle")
-configurations.create("acceptanceBundle")
+declareLaneBundles(LaneBundle.PRODUCT, LaneBundle.ACCEPTANCE)
 
 // forge 车道参数：版本、产物名与本车道接线差异在此声明；
 // 源集、dev SecureJar 嵌入、验收 jar 与报告门、打包校验、契约测试由插件承担。
@@ -148,13 +153,18 @@ dependencies {
     // 共享 JAR 仅 compileOnly：FML 模块层会把 runtime 上的 jar 当自动模块，
     // 与 SecureJar 内嵌同名包冲突（split package，如 acceptance vs mpmt_acceptance）。
     // 运行期由 embed* / jar shade 把类放进 mod 目录，不进 module path。
-    add("compileOnly", files(productSharedProjects.map { ForgeModules.moduleJar(project, it) }))
-    add("productBundle", files(productSharedProjects.map { ForgeModules.moduleJar(project, it) }))
+    // 域与共享核心同一批非传递项目依赖：既有条目顺序不变，域追加在末尾（ADR-0028）。
+    val allProductProjects = productSharedProjects + domainProjects
+    allProductProjects.forEach {
+        add("compileOnly", ForgeModules.moduleJar(project, it))
+        add("productBundle", ForgeModules.moduleJar(project, it))
+    }
 
-    add("acceptanceCompileOnly", files(acceptanceSharedProjects.map { ForgeModules.moduleJar(project, it) }))
-    add("acceptanceBundle", files(ForgeModules.moduleJar(project, ":modules:acceptance")))
-
-    add("testImplementation", files(acceptanceSharedProjects.map { ForgeModules.moduleJar(project, it) }))
+    acceptanceSharedProjects.forEach {
+        add("acceptanceCompileOnly", ForgeModules.moduleJar(project, it))
+        add("testImplementation", ForgeModules.moduleJar(project, it))
+    }
+    add("acceptanceBundle", ForgeModules.moduleJar(project, ":modules:acceptance"))
     add("testImplementation", platform("org.junit:junit-bom:5.14.4"))
     add("testImplementation", "org.junit.jupiter:junit-jupiter")
     add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
@@ -213,6 +223,46 @@ loom {
             property("forge.logging.console.level", "info")
             // quickPlay 作辅；主路径由伴侣 tryAutoConnect 读系统属性 mpmt.acceptance.server
             programArgs("--quickPlayMultiplayer", (project.findProperty("mpmt.acceptance.server") ?: "127.0.0.1").toString())
+            // 单机/LAN 验收（-Pmpmt.acceptance.singleplayer=true）：伴侣据此创建单人世界，
+            // 由客户端内置服务端承载验收场景，无需另起专用服；报告落本 run 目录以区别于服务端轨。
+            if (project.findProperty("mpmt.acceptance.singleplayer") == "true") {
+                property("mpmt.acceptance", "true")
+                property("mpmt.acceptance.singleplayer", "true")
+                property(
+                    "mpmt.acceptance.report",
+                    project.file("run-acceptance-client/singleplayer-acceptance-report.txt").absolutePath,
+                )
+                property(
+                    "mpmt.acceptance.deadlineMs",
+                    (project.findProperty("mpmt.acceptance.deadlineMs") ?: "600000").toString(),
+                )
+                // 26.2 的验收驱动只有矩阵 v2 轨，必须提供完整身份与五类制品路径才能出报告
+                property("mpmt.acceptance.matrix", "REALSERVER262")
+                property(
+                    "mpmt.acceptance.runId",
+                    (project.findProperty("mpmt.acceptance.runId") ?: "singleplayer-${System.currentTimeMillis()}").toString(),
+                )
+                property(
+                    "mpmt.acceptance.startEpochMs",
+                    (project.findProperty("mpmt.acceptance.startEpochMs") ?: System.currentTimeMillis().toString()).toString(),
+                )
+                property(
+                    "mpmt.acceptance.javaExecutable",
+                    System.getProperty("java.home") + "/bin/java",
+                )
+                // 单机形态下服务端与客户端同进程，五类制品均取本轮构建产物
+                val productJar = project.file("build/libs/mpmt-forge-26.2-${project.version}.jar")
+                val acceptanceJar = project.file("build/libs/mpmt-forge-acceptance-26.2-${project.version}.jar")
+                listOf(
+                    "server-runtime" to productJar,
+                    "server-product" to productJar,
+                    "server-acceptance" to acceptanceJar,
+                    "client-product" to productJar,
+                    "client-acceptance" to acceptanceJar,
+                ).forEach { (role, jar) ->
+                    property("mpmt.acceptance.artifact.$role", jar.absolutePath)
+                }
+            }
             mods {
                 create("mpmt") {
                     sourceSet(sourceSets["main"])
@@ -366,6 +416,4 @@ tasks.register("runRealServerAcceptanceHost") {
 tasks.named("check") {
     dependsOn("test", "contractTest", "verifyPackaging", staticQualityTasks, "koverXmlReport")
 }
-tasks.named("build") {
-    dependsOn("packageArtifacts")
-}
+// `build` 依赖 packageArtifacts 的收口已内置到 build-conventions（registerForgePackageArtifacts）

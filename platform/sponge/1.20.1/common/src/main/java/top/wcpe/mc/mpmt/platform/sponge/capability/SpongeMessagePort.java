@@ -2,8 +2,8 @@ package top.wcpe.mc.mpmt.platform.sponge.capability;
 
 import net.kyori.adventure.text.Component;
 import org.spongepowered.api.Sponge;
-import top.wcpe.mc.mpmt.core.domain.port.MessagePort;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.port.MessagePort;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
 
 /**
  * Sponge 消息端口（L3，FR-26）：按 {@link PlayerRef} 的 UUID 找在线玩家，发聊天栏消息（adventure 组件）。

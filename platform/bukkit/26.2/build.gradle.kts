@@ -118,37 +118,38 @@ configure<SpotBugsExtension> {
     toolVersion.set("4.9.8")
 }
 
-val verifyPackaging by tasks.registering {
-    group = "verification"
-    description = "校验 Bukkit $minecraftVersion 产品/验收产物"
-    dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"))
-    // 断言用到的车道常量在配置期取成局部值：断言 lambda 只捕获这些值，
-    // 不捕获脚本对象（配置缓存要求）；断言内容、顺序与失败文案不变。
-    val laneMcVersion = minecraftVersion
-    val laneAdapterClassPath = adapterClassPath
-    val laneAdapterClass = adapterClass
-    val laneApiVersion = apiVersion
-    packagingVerification(
-        laneLabel = "Bukkit",
-        mcVersion = laneMcVersion,
-        product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
-        acceptance = tasks.named<ShadowJar>("acceptanceJar").flatMap { it.archiveFile },
-    ) { product, acceptance ->
-        verifyBukkitProducts(
-            product = product,
-            acceptance = acceptance,
+val verifyPackaging =
+    tasks.register("verifyPackaging") {
+        group = "verification"
+        description = "校验 Bukkit $minecraftVersion 产品/验收产物"
+        dependsOn(tasks.named("shadowJar"), tasks.named("acceptanceJar"))
+        // 断言用到的车道常量在配置期取成局部值：断言 lambda 只捕获这些值，
+        // 不捕获脚本对象（配置缓存要求）；断言内容、顺序与失败文案不变。
+        val laneMcVersion = minecraftVersion
+        val laneAdapterClassPath = adapterClassPath
+        val laneAdapterClass = adapterClass
+        val laneApiVersion = apiVersion
+        packagingVerification(
+            laneLabel = "Bukkit",
             mcVersion = laneMcVersion,
-            adapterClassPath = laneAdapterClassPath,
-            adapterClass = laneAdapterClass,
-            l4Prefix = null,
-            expectFoliaSchedulerClass = true,
-            rejectProductMainInAcceptance = false,
-            rejectAcceptanceInProductYml = false,
-            rejectModernYmlFields = false,
-            apiVersion = laneApiVersion,
-        )
+            product = tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile },
+            acceptance = tasks.named<ShadowJar>("acceptanceJar").flatMap { it.archiveFile },
+        ) { product, acceptance ->
+            verifyBukkitProducts(
+                product = product,
+                acceptance = acceptance,
+                mcVersion = laneMcVersion,
+                adapterClassPath = laneAdapterClassPath,
+                adapterClass = laneAdapterClass,
+                l4Prefix = null,
+                expectFoliaSchedulerClass = true,
+                rejectProductMainInAcceptance = false,
+                rejectAcceptanceInProductYml = false,
+                rejectModernYmlFields = false,
+                apiVersion = laneApiVersion,
+            )
+        }
     }
-}
 
 // 26.2 车道没有"默认轨"：其唯一有效矩阵即 REALSERVER262（见 PlatformLane.BUKKIT_262.defaultMatrix）。
 // 因此在本轮上下文（带 -Pmpmt.acceptance.runId）下若未显式声明矩阵，就按 REALSERVER262 解析报告——

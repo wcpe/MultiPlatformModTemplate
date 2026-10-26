@@ -2,10 +2,10 @@ package top.wcpe.mc.mpmt.platform.forge.modern;
 
 import java.util.Objects;
 import java.util.UUID;
-import top.wcpe.mc.mpmt.core.domain.ban.BanRegistry;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.ban.BanRegistry;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.core.server.BanService;
 import top.wcpe.mc.mpmt.core.server.ServerNetworkFeature;

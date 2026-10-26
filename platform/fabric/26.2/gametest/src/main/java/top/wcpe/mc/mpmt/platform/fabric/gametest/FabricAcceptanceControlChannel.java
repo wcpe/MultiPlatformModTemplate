@@ -10,7 +10,7 @@ import top.wcpe.mc.mpmt.acceptance.control.AcceptanceControlCodec;
 import top.wcpe.mc.mpmt.acceptance.control.AcceptanceControlPacket;
 import top.wcpe.mc.mpmt.acceptance.control.ClientReadyPacket;
 import top.wcpe.mc.mpmt.acceptance.control.StepResultPacket;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricNetworkBindings;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricServerNetwork;
 import top.wcpe.mc.mpmt.platform.fabric.version.FabricVersionAdapter;

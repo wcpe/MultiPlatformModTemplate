@@ -7,17 +7,16 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
-import top.wcpe.mc.mpmt.core.domain.event.EventBusPort;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.DataDirectoryPort;
-import top.wcpe.mc.mpmt.core.domain.port.MessagePort;
-import top.wcpe.mc.mpmt.core.domain.port.PersistencePort;
-import top.wcpe.mc.mpmt.core.domain.port.PlayerPort;
-import top.wcpe.mc.mpmt.core.domain.port.SchedulerPort;
-import top.wcpe.mc.mpmt.core.domain.port.WorldPort;
-import top.wcpe.mc.mpmt.core.domain.ref.PlayerRef;
+import top.wcpe.mc.mpmt.kernel.event.EventBusPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
+import top.wcpe.mc.mpmt.kernel.port.MessagePort;
+import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
+import top.wcpe.mc.mpmt.kernel.port.PlayerPort;
+import top.wcpe.mc.mpmt.kernel.port.SchedulerPort;
+import top.wcpe.mc.mpmt.kernel.port.WorldPort;
+import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
-import top.wcpe.mc.mpmt.domain.capability.PlatformCapabilityExample;
 import top.wcpe.mc.mpmt.domain.capability.PlayerJoinedEvent;
 import top.wcpe.mc.mpmt.domain.capability.PlayerLeftEvent;
 import top.wcpe.mc.mpmt.platform.bukkit.net.BukkitConnectionRegistry;
@@ -26,8 +25,8 @@ import top.wcpe.mc.mpmt.platform.bukkit.version.BukkitVersionAdapters;
 import top.wcpe.mc.mpmt.platform.spi.FeatureGate;
 
 /**
- * Bukkit 平台能力示例装配（L3，FR-26）：装配 L3 端口实现（调度 / 持久化 / 消息 / 数据目录），
- * 把同一份 L0 {@link PlatformCapabilityExample} 接到运行时自有 EventBus，
+ * Bukkit 平台能力装配（L3，FR-26）：装配 L3 端口实现（调度 / 持久化 / 消息 / 数据目录），
+ * 经 {@code Feature} 自动发现挂载 L0 功能域（域自行订阅自有 EventBus，ADR-0028），
  * 并把 Bukkit 玩家进 / 退事件桥接为领域事件投递入总线（ADR-0011）。
  *
  * <p>调度经 L4 适配器选用，避免 main 直接引用 Folia 类型（1.12 车道无 Folia 字节码）。
@@ -86,9 +85,10 @@ public final class BukkitCapabilityBootstrap {
         runtime.ports().register(BukkitConnectionRegistry.class, connectionRegistry);
 
         EventBusPort eventBus = runtime.eventBus();
-        PlatformCapabilityExample example =
-                new PlatformCapabilityExample(persistence, message, scheduler, System::currentTimeMillis);
-        example.register(eventBus);
+        // 功能域经 META-INF/services 自动发现装配（ADR-0028）：车道不认识任何具体域，
+        // 新增域不需要改这里。discover 只是登记，真正的 onEnable（取端口、订阅）发生在
+        // runtime.enable()，故此刻端口已全部注册完毕。
+        runtime.features().discover(BukkitCapabilityBootstrap.class.getClassLoader());
 
         plugin.getServer()
                 .getPluginManager()

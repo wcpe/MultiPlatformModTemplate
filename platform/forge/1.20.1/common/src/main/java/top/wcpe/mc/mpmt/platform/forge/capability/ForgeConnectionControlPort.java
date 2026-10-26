@@ -4,9 +4,9 @@ import java.util.Objects;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionControlPort;
-import top.wcpe.mc.mpmt.core.domain.port.ConnectionHandle;
-import top.wcpe.mc.mpmt.core.domain.ref.EntityRef;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
+import top.wcpe.mc.mpmt.kernel.port.ConnectionHandle;
+import top.wcpe.mc.mpmt.kernel.ref.EntityRef;
 import top.wcpe.mc.mpmt.platform.forge.net.ForgeConnectionHandle;
 
 /** Forge 连接控制端口：按 UUID 重新查询当前玩家并在服务端线程执行真实断开。 */

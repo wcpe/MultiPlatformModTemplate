@@ -2,11 +2,20 @@ package top.wcpe.mc.mpmt.platform.fabric.gametest.client;
 
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.ConnectScreen;
+import net.minecraft.world.Difficulty;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.wcpe.mc.mpmt.acceptance.control.AcceptanceControlCodec;
@@ -38,6 +47,8 @@ public final class AcceptanceClientCompanion {
 
     private RunStepPacket active;
     private int ticksInStep;
+    /** 单机轨只创建一次世界，避免每 tick 重复触发。 */
+    private final AtomicBoolean singleplayerStartAttempted = new AtomicBoolean(false);
 
     /** 注册控制通道接收 + 进服上报就绪 + 逐 tick 服务。 */
     public void register() {
@@ -49,7 +60,43 @@ public final class AcceptanceClientCompanion {
                     client.execute(() -> client.execute(this::sendClientReady));
                 });
         ClientTickEvents.END_CLIENT_TICK.register(this::serveTick);
+        // 单机轨（-Dmpmt.acceptance.singleplayer=true）：无外部服务端可连，
+        // 到主菜单后创建单人世界，由客户端内置服务端承载验收场景。
+        if (Boolean.getBoolean("mpmt.acceptance.singleplayer")) {
+            ClientTickEvents.END_CLIENT_TICK.register(this::maybeStartSingleplayerWorld);
+        }
         LOGGER.info("realserver 验收客户端伴侣已注册");
+    }
+
+    /** 到主菜单且尚未进入世界时创建单人世界（只发起一次）。 */
+    private void maybeStartSingleplayerWorld(Minecraft client) {
+        if (client.level != null) {
+            return; // 已在世界
+        }
+        if (client.screen == null || client.screen instanceof ConnectScreen) {
+            return; // 还在加载或正在连接
+        }
+        if (!singleplayerStartAttempted.compareAndSet(false, true)) {
+            return;
+        }
+        String world = System.getProperty("mpmt.acceptance.singleplayer.world", "mpmt-acceptance");
+        LOGGER.info("realserver 验收伴侣：单机轨，创建单人世界 {}", world);
+        client.execute(
+                () ->
+                        client.createWorldOpenFlows()
+                                .createFreshLevel(
+                                        world,
+                                        new LevelSettings(
+                                                world,
+                                                GameType.SURVIVAL,
+                                                false,
+                                                Difficulty.NORMAL,
+                                                true,
+                                                new GameRules(),
+                                                WorldDataConfiguration.DEFAULT),
+                                        new WorldOptions(
+                                                WorldOptions.randomSeed(), true, false),
+                                        WorldPresets::createNormalWorldDimensions));
     }
 
     private void receive(byte[] data) {
