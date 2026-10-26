@@ -121,7 +121,7 @@ jobs:
           java-version: "25"
 
       - name: 配置 Gradle 缓存
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
 
       # Loom 的 MC 映射 / dev jar（约数 GB）不在 setup-gradle 默认缓存范围内，
       # 每次冷启动都要重新派生，是矩阵各格的主要固定开销。单独按车道锁存。
