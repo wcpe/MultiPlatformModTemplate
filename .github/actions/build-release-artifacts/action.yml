@@ -54,6 +54,12 @@ runs:
     # 本 action 也被 CodeQL 以 disable-build-cache=true 调用，若开启构建缓存写入/命中，
     # compileJava 会取缓存产物而不调用 javac，CodeQL 报 Exit 32。
     # CodeQL 路径跳过本步骤，避免与其 build-cache 策略相互干扰。
+    #
+    # ⚠ 缓存路径必须与下面 `-Dfabric.loom.cache.dir` 指向的目录**完全一致**。
+    # 此前二者错位（缓存 ~/.gradle/caches/fabric-loom，构建读工作区内的
+    # .gradle/loom-user-cache），导致恢复出来的映射与 dev jar 一次都用不上，
+    # 每轮都要重新下载并派生 MC jar / mappings / patched jar——这是 :buildAll 耗时的大头。
+    # 现统一到 ~/.gradle/caches/fabric-loom，并用同一个表达式生成构建参数，从结构上避免再次漂移。
     - name: 缓存 Loom 制品
       if: inputs.disable-build-cache != 'true'
       uses: actions/cache@v4
@@ -85,10 +91,16 @@ runs:
         MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
         EXTRA_GRADLE_ARGS: ${{ inputs.disable-build-cache == 'true' && '--no-build-cache' || '' }}
       run: |
-        ./gradlew "-Dfabric.loom.cache.dir=$GITHUB_WORKSPACE/.gradle/loom-user-cache" \
+        BUILD_START=$(date +%s)
+        ./gradlew "-Dfabric.loom.cache.dir=$HOME/.gradle/caches/fabric-loom" \
           --no-daemon --max-workers=1 --no-watch-fs --console=plain --stacktrace \
           $EXTRA_GRADLE_ARGS \
-          :buildAll
+          :buildAll 2>&1 | tee /tmp/build.log
+        BUILD_RC=${PIPESTATUS[0]}
+        BUILD_SECONDS=$(( $(date +%s) - BUILD_START ))
+        echo "BUILD_RC=$BUILD_RC" >> "$GITHUB_ENV"
+        echo "BUILD_SECONDS=$BUILD_SECONDS" >> "$GITHUB_ENV"
+        exit "$BUILD_RC"
 
     - name: 安装 Node 22
       if: inputs.validate-template == 'true'

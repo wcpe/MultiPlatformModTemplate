@@ -34,6 +34,100 @@ jobs:
         with:
           validate-template: "true"
 
+      # 构建耗时与缓存命中写入 job summary。没有它时，14 分钟的 quality job 在 UI 上
+      # 只有一个「success」，无法判断时间是花在编译、测试还是 loom 派生 MC 制品上，
+      # 也就无法察觉缓存失效（曾因缓存路径与 -Dfabric.loom.cache.dir 错位而整轮无效）。
+      - name: 生成构建报告
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## 全量构建与模板校验"
+            echo
+            if [ -n "${BUILD_SECONDS:-}" ]; then
+              echo "| 项 | 值 |"
+              echo "|---|---|"
+              echo "| 退出码 | ${BUILD_RC:-unknown} |"
+              echo "| 耗时 | $((BUILD_SECONDS / 60))分$((BUILD_SECONDS % 60))秒（${BUILD_SECONDS}s） |"
+            else
+              echo "> 构建未执行到记录耗时（上一步提前失败）。"
+            fi
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -f /tmp/build.log ]; then
+            # Gradle 的任务统计：executed / from-cache / up-to-date 三者的比例直接反映缓存有效性。
+            STATS=$(grep -E "^[0-9]+ actionable tasks:" /tmp/build.log | tail -1)
+            if [ -n "$STATS" ]; then
+              echo "**任务统计**：\`$STATS\`" >> "$GITHUB_STEP_SUMMARY"
+              echo >> "$GITHUB_STEP_SUMMARY"
+            fi
+
+            # loom 的缓存复用情况：出现「共享缓存产物不可复用」说明 MC 制品在重新派生，
+            # 这是 :buildAll 的主要固定开销，出现得多就说明 loom 缓存没生效。
+            REGEN=$(grep -c "共享缓存产物不可复用" /tmp/build.log || true)
+            CACHE_HIT=$(grep -c "命中\|reused\|from cache" /tmp/build.log || true)
+            echo "| 指标 | 值 |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| loom 制品重新生成次数 | ${REGEN} |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Gradle 缓存命中任务数 | ${CACHE_HIT} |" >> "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+
+            # 构建失败时把错误段落摘出来，省得去翻完整日志。
+            if [ "${BUILD_RC:-0}" != "0" ]; then
+              echo "<details><summary>构建失败摘要</summary>" >> "$GITHUB_STEP_SUMMARY"
+              echo >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              grep -A 20 "What went wrong" /tmp/build.log | head -40 >> "$GITHUB_STEP_SUMMARY" || tail -40 /tmp/build.log >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              echo >> "$GITHUB_STEP_SUMMARY"
+              echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
+      # 测试与覆盖率汇总：按模块列出用例数、失败数，一眼能看出哪块退化了。
+      - name: 汇总测试结果
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, xml.etree.ElementTree as ET
+          from collections import defaultdict
+
+          # 一个模块下会有多个测试类文件，须按模块聚合，否则同一模块会重复出现多行。
+          agg = defaultdict(lambda: [0, 0, 0, 0])
+          for path in glob.glob("**/build/test-results/test/*.xml", recursive=True):
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              module = path.split("/build/")[0].replace("/", ":")
+              acc = agg[module]
+              for i, key in enumerate(("tests", "failures", "errors", "skipped")):
+                  acc[i] += int(root.get(key, 0) or 0)
+
+          print("## 测试结果")
+          print()
+          if not agg:
+              print("> 未找到测试结果文件（可能构建在测试前就失败了）。")
+          else:
+              total = [sum(v[i] for v in agg.values()) for i in range(4)]
+              passed = total[0] - total[1] - total[2]
+              rate = passed / total[0] * 100 if total[0] else 0.0
+              print(f"**合计**：{total[0]} 用例 / 失败 {total[1]} / 错误 {total[2]} / 跳过 {total[3]}"
+                    f" —— 通过率 {rate:.1f}%")
+              print()
+              print(f"<details><summary>按模块明细（{len(agg)} 个模块）</summary>")
+              print()
+              print("| 模块 | 用例 | 失败 | 错误 | 跳过 |")
+              print("|---|---|---|---|---|")
+              for module, (t, f, e, s) in sorted(agg.items(), key=lambda kv: -kv[1][0]):
+                  flag = " ❌" if (f or e) else ""
+                  print(f"| `{module}`{flag} | {t} | {f} | {e} | {s} |")
+              print()
+              print("</details>")
+          PY
+
       - name: 上传构建诊断
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
