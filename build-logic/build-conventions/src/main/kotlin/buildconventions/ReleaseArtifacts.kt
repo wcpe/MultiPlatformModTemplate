@@ -112,7 +112,7 @@ private fun releaseArtifacts(project: Project, version: String): List<ReleaseArt
 
 /** 读取 settings 下发的车道目录映射；缺项直接失败，不做路径推导。 */
 private fun laneDirectories(project: Project): Map<*, *> =
-    (project.rootProject.gradle.extensions.extraProperties.get("laneDirectories") as? Map<*, *>)
+    (project.gradle.extensions.extraProperties.get("laneDirectories") as? Map<*, *>)
         ?: error("settings.gradle.kts 未下发 laneDirectories：无法确定车道产物目录")
 
 private fun laneArtifact(

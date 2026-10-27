@@ -100,7 +100,7 @@ private fun registerBuildAllGate(
 private fun allModuleBuildPaths(project: Project): Provider<List<String>> {
     @Suppress("UNCHECKED_CAST")
     val withBuild =
-        project.rootProject.gradle.extensions.extraProperties.get("projectsWithBuildTask") as? MutableSet<String>
+        project.gradle.extensions.extraProperties.get("projectsWithBuildTask") as? MutableSet<String>
             ?: error("settings.gradle.kts 未下发 projectsWithBuildTask：无法装配 buildAll")
     return project.provider {
         withBuild

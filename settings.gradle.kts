@@ -108,6 +108,11 @@ plugins {
 // `this$0` 指向脚本实例，配置缓存会拒绝序列化。
 gradle.extensions.extraProperties.set("projectsWithBuildTask", mutableSetOf<String>())
 
+// 全部已注册工程路径（含根工程的 ":"）。架构守卫的顶层语义校验需要它。
+// 由每个工程在**自身** beforeProject 里登记——根工程配置期读 `rootProject.allprojects`
+// 在 Isolated Projects 下属于跨工程模型访问，故改为事前逐个登记、事后只读这份普通数据。
+gradle.extensions.extraProperties.set("allProjectPaths", mutableListOf<String>())
+
 // 架构守卫（ADR-0028 决策 7 / ADR-0030 决策 6）需要「域模块 → 直接依赖」这张表。
 //
 // 不能由根工程在配置期直接读 `subprojects[i].configurations`：Gradle 广度优先求值，
@@ -177,6 +182,10 @@ gradle.lifecycle.beforeProject {
             cacheChangingModulesFor(365, java.util.concurrent.TimeUnit.DAYS)
         }
     }
+    // 登记全部工程路径（含根工程的 ":"），供架构守卫的顶层语义校验使用。
+    @Suppress("UNCHECKED_CAST")
+    (gradle.extensions.extraProperties.get("allProjectPaths") as MutableList<String>).add(projectPath)
+
     // 登记"确实有 build 任务"的工程供根侧 buildAll 使用（见 projectsWithBuildTask 的说明）。
     afterEvaluate {
         if (tasks.names.contains("build")) {
@@ -187,9 +196,15 @@ gradle.lifecycle.beforeProject {
     }
 
     // 域模块在自身求值完成后上报直接项目依赖（见 domainModuleDependencies 的说明）。
-    // 只处理 :core:domains: 前缀且确实带构建脚本的叶子模块——隐式父工程
-    //（如 :core:domains:capability）没有变体，不参与方向检查。
-    if (projectPath.startsWith(":core:domains:") && buildFile.isFile) {
+    // 覆盖两类功能域：`:core:domains:<域>:<模块>` 与 `:examples:<域>:<模块>`。
+    // 原实现只收 `:core:domains:` 前缀，导致作为范本的 examples/counter 完全不受约束
+    //（ADR-0036 背景三已记录该缺陷），这里一并覆盖。
+    // 隐式父工程（如 :core:domains:capability、:examples:counter）没有变体，靠 buildFile 判定排除。
+    // 判定逻辑内联：settings 脚本里定义的函数是脚本成员，闭包引用会捕获 this$0 破坏配置缓存。
+    val isDomainModule =
+        (projectPath.startsWith(":core:domains:") && projectPath.count { it == ':' } >= 4) ||
+            (projectPath.startsWith(":examples:") && projectPath.count { it == ':' } >= 3)
+    if (isDomainModule && buildFile.isFile) {
         afterEvaluate {
             @Suppress("UNCHECKED_CAST")
             val registry =
@@ -271,15 +286,13 @@ include(
 // 编排扩展 mcTestkit { } 与桩同处该模块，根侧只留 runMcTestkitSmoke / runMcTestkitFoliaSmoke 入口别名。
 include(":e2e:harness")
 
+// bukkit 的聚合壳与共享模块；4 个版本车道（1.12.2 / 1.20.1 / 1.21.1 / 26.2）
+// 与其它平台车道一样由下文 laneDirectories 统一登记，避免两处清单不同步。
 include(
     "platform:bukkit",
     "platform:bukkit:bukkit-api",
     "platform:bukkit:common",
     "platform:bukkit:modern",
-    "platform:bukkit:1.12.2",
-    "platform:bukkit:1.20.1",
-    "platform:bukkit:1.21.1",
-    "platform:bukkit:26.2",
 )
 
 include(
@@ -297,18 +310,10 @@ include(
 // `JarManifestService$Inject_ cannot be cast to JarManifestService`（jar / remapJar 均受影响）。
 // 因此车道路径末段带上加载器前缀（沿用 ADR-0026 背景记录的复合构建名），
 // 目录仍为 `platform/<loader>/<版本>`，构建产物路径与验收报告路径均不变。
-// 车道引入与目录映射二合一：路径字符串逐字保留（契约测试按子串断言），目录显式列表不做推导。
-listOf(
-    "platform:fabric:fabric-1.20.1" to "platform/fabric/1.20.1",
-    "platform:fabric:fabric-1.21.1" to "platform/fabric/1.21.1",
-    "platform:fabric:fabric-26.2" to "platform/fabric/26.2",
-    "platform:forge:forge-1.12.2" to "platform/forge/1.12.2",
-    "platform:forge:forge-1.20.1" to "platform/forge/1.20.1",
-    "platform:forge:forge-1.21.1" to "platform/forge/1.21.1",
-    "platform:forge:forge-26.2" to "platform/forge/26.2",
-    "platform:neoforge:neoforge-1.20.2" to "platform/neoforge/1.20.2",
-    "platform:sponge:sponge-1.20.1" to "platform/sponge/1.20.1",
-).forEach { (path, dir) ->
+//
+// 路径 → 目录的映射**只在 laneDirectories 维护一份**（见上文），此处直接复用：
+// 新增/改名车道只改那一张表，include 与产物聚合同时跟上，不会出现两处清单不同步。
+laneDirectories.forEach { (path, dir) ->
     include(path)
     project(":$path").projectDir = file(dir)
 }
