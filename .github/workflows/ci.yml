@@ -59,7 +59,7 @@ jobs:
             # Gradle 的任务统计：executed / from-cache / up-to-date 三者的比例直接反映缓存有效性。
             STATS=$(grep -E "^[0-9]+ actionable tasks:" /tmp/build.log | tail -1)
             if [ -n "$STATS" ]; then
-              echo "**任务统计**：\`$STATS\`" >> "$GITHUB_STEP_SUMMARY"
+              echo "**任务统计**：\`$STATS\`" | tee -a "$GITHUB_STEP_SUMMARY"
               echo >> "$GITHUB_STEP_SUMMARY"
             fi
 
@@ -67,11 +67,13 @@ jobs:
             # 这是 :buildAll 的主要固定开销，出现得多就说明 loom 缓存没生效。
             REGEN=$(grep -c "共享缓存产物不可复用" /tmp/build.log || true)
             CACHE_HIT=$(grep -c "命中\|reused\|from cache" /tmp/build.log || true)
-            echo "| 指标 | 值 |" >> "$GITHUB_STEP_SUMMARY"
-            echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-            echo "| loom 制品重新生成次数 | ${REGEN} |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| Gradle 缓存命中任务数 | ${CACHE_HIT} |" >> "$GITHUB_STEP_SUMMARY"
-            echo >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "| 指标 | 值 |"
+              echo "|---|---|"
+              echo "| loom 制品重新生成次数 | ${REGEN} |"
+              echo "| Gradle 缓存命中任务数 | ${CACHE_HIT} |"
+              echo
+            } | tee -a "$GITHUB_STEP_SUMMARY"
 
             # 构建失败时把错误段落摘出来，省得去翻完整日志。
             if [ "${BUILD_RC:-0}" != "0" ]; then
@@ -84,6 +86,96 @@ jobs:
               echo "</details>" >> "$GITHUB_STEP_SUMMARY"
             fi
           fi
+
+      # 耗时归因：把「16 分钟花在哪」按任务类别拆开，同时给出任务密集时段。
+      # 之前 summary 只报总耗时，无法回答「是编译慢、测试慢，还是静态分析慢」，
+      # 也就无法判断该优化什么。这里用 Gradle 输出的任务完成时间戳做归因：
+      # 同一类任务的首末时间戳之差（含等待）即可看出该类占了多少墙钟时间。
+      - name: 耗时归因
+        if: always()
+        shell: bash
+        run: |
+          if [ ! -f /tmp/build.log ]; then
+            echo "> 无 /tmp/build.log，跳过耗时归因。" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python3 - <<'PY' 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          import re, datetime
+          from collections import defaultdict
+
+          # 按任务名归类。顺序敏感：先匹配更具体的。
+          CATEGORIES = [
+              ("静态分析 (spotbugs/pmd/checkstyle/detekt)", ("spotbugs", "pmd", "checkstyle", "detekt")),
+              ("格式检查 (ktlint)", ("ktlint",)),
+              ("覆盖率 (jacoco)", ("jacoco",)),
+              ("测试 (test)", ("test",)),
+              ("loom (MC 制品/映射/AT)", ("loom", "Minecraft", "mappings", "accessTransform",
+                                          "generateForge", "manipulate", "remapMinecraft",
+                                          "reobf", "remapJar")),
+              ("编译 (compileJava/classes)", ("compile", "classes")),
+              ("打包 (jar/shadow)", ("jar", "shadow")),
+          ]
+
+          def categorize(task):
+              low = task.lower()
+              for name, pats in CATEGORIES:
+                  if any(p.lower() in low for p in pats):
+                      return name
+              return "其它 (processResources 等)"
+
+          evts = []
+          for line in open("/tmp/build.log", encoding="utf-8", errors="ignore"):
+              if "> Task :" not in line:
+                  continue
+              m = re.search(r"(\d{4}-\d\d-\d\dT[\d:]+)\.\d+Z.*> Task :([\w:.\-]+)", line)
+              if m:
+                  evts.append((datetime.datetime.fromisoformat(m.group(1)), m.group(2)))
+          if not evts:
+              print("> 未能从构建日志解析出任务时间戳。")
+              raise SystemExit
+
+          evts.sort()
+          span = (evts[-1][0] - evts[0][0]).total_seconds()
+
+          # 每个类别：任务数 + 首末时间戳跨度（反映该类在关键路径上占了多久）
+          stats = defaultdict(lambda: {"n": 0, "first": None, "last": None})
+          for ts, task in evts:
+              s = stats[categorize(task)]
+              s["n"] += 1
+              if s["first"] is None:
+                  s["first"] = ts
+              s["last"] = ts
+
+          print()
+          print("## 耗时归因")
+          print()
+          print(f"构建跨度 **{span/60:.1f} 分**，共 {len(evts)} 个任务完成事件。")
+          print()
+          print("> 「跨度」是该类首个任务开始到末个任务完成的墙钟时间，含并行等待，")
+          print("> 因此各类跨度之和会大于总时长；用它看**哪类占据了时间轴**，而不是精确耗时。")
+          print()
+          print("| 类别 | 任务数 | 首任务 | 末任务 | 跨度 |")
+          print("|---|---|---|---|---|")
+          rows = sorted(stats.items(), key=lambda kv: -(kv[1]["last"] - kv[1]["first"]).total_seconds())
+          for name, s in rows:
+              d = (s["last"] - s["first"]).total_seconds()
+              print(f"| {name} | {s['n']} | {s['first'].strftime('%H:%M:%S')} "
+                    f"| {s['last'].strftime('%H:%M:%S')} | {d/60:.1f} 分 |")
+
+          # 最长「无任务完成」间隔：期间必然在跑单个长任务，是真正的串行瓶颈点
+          gaps = []
+          for i in range(len(evts) - 1):
+              sec = (evts[i + 1][0] - evts[i][0]).total_seconds()
+              gaps.append((sec, evts[i][1], evts[i + 1][1]))
+          gaps.sort(reverse=True)
+          print()
+          print("**最长的 5 个「无任务完成」间隔**（期间在跑单个长任务，是串行瓶颈点）：")
+          print()
+          print("| 秒 | 前一个完成的任务 | 后一个完成的任务 |")
+          print("|---|---|---|")
+          for sec, before, after in gaps[:5]:
+              print(f"| {sec:.0f} | `{before[-46:]}` | `{after[-46:]}` |")
+          PY
 
       # 测试与覆盖率汇总：按模块列出用例数、失败数，一眼能看出哪块退化了。
       - name: 汇总测试结果

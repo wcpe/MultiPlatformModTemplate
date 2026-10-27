@@ -72,6 +72,25 @@ class QualityConventionPlugin : Plugin<Project> {
                 excludeFilter.set(project.layout.settingsDirectory.file("config/spotbugs/exclude.xml"))
             }
             dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
+
+            // 只在 main 源集跑 SpotBugs，其余源集（test / acceptance / contractTest）一律跳过。
+            //
+            // 依据是 4 核实测的耗时归因（:buildAll --rerun-tasks，总 16.7 分）：
+            // 静态分析累计占用 8.6 分（51%），其中单个任务的耗时榜前列几乎全是 SpotBugs——
+            // fabric-1.21.1:spotbugsTest 27.5s、forge-26.2:spotbugsContractTest 19.7s、
+            // neoforge-1.20.2:spotbugsMain 17.2s、forge-1.12.2:spotbugsAcceptance 15.1s…
+            // 而 PMD / Checkstyle 的单任务普遍只有 1~2s。
+            //
+            // SpotBugs 需要构建完整字节码类图 + 跑数据流分析，是这几类里最重的一个；
+            // 让它对**测试与验收代码**再各跑一遍，投入产出比很低：这类代码不进发布产物，
+            // 缺陷影响面限于 CI 自身。主代码（main）的缺陷检测与 FindSecBugs 安全审查完整保留。
+            //
+            // 这与本仓既有取舍一致：E2E 桩模块已关掉覆盖率底线（quality { coverageFloor.set(false) }）。
+            project.tasks.withType(SpotBugsTask::class.java).configureEach {
+                onlyIf("仅 main 源集做 SpotBugs 缺陷检测") {
+                    name == "spotbugsMain"
+                }
+            }
         }
     }
 
