@@ -70,9 +70,13 @@ runs:
         # 表现为 genSourcesWithCfr 报「Minecraft jar 尚不存在」而任务创建失败。
         path: ~/.gradle/caches/fabric-loom
         key: loom-${{ runner.os }}-all-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
+        # 只回退到本 job 自己的旧 key（`loom-<os>-all-` 前缀）。
+        # 不要放宽到 `loom-<os>-`：E2E 矩阵各格用的是
+        # `loom-<os>-<matrix.name>-...`（如 `loom-Linux-Folia 1.20.1-...`），
+        # 那条宽前缀会把 quality job 引到「只含单格制品」的缓存上，
+        # 于是 1.12.2 / forge / neoforge 的 patched jar 全部缺失、必被重新派生。
         restore-keys: |
           loom-${{ runner.os }}-all-
-          loom-${{ runner.os }}-
 
     # 单一根构建：全部平台车道为根子模块，一条命令构建 + 校验 + 聚合发布产物。
     # JDK 25 守护（26.2 车道配置期硬校验）；MPMT_JAVA*_HOME 供矩阵轨与跨代车道显式选 JDK。
