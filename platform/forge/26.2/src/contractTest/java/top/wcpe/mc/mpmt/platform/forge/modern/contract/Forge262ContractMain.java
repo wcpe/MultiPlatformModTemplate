@@ -76,8 +76,8 @@ public final class Forge262ContractMain {
                 "Minecraft 版本未冻结为 26.2");
         require("26.2-65.0.9".equals(System.getProperty("mpmt.test.forgeVersion")),
                 "Forge 版本未冻结为 26.2-65.0.9");
-        require("1.17.15".equals(System.getProperty("mpmt.test.loomVersion")),
-                "loom 版本未冻结为 1.17.15（WCPE Loom 正式版）");
+        require("1.17.16".equals(System.getProperty("mpmt.test.loomVersion")),
+                "loom 版本未冻结为 1.17.16（WCPE Loom 正式版）");
         require("9.6.1".equals(System.getProperty("mpmt.test.gradleVersion")),
                 "Gradle 版本未冻结为 9.6.1");
         require(Runtime.version().feature() == 25, "契约测试必须运行于 Java 25");
