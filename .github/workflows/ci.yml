@@ -163,25 +163,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # mcVersion 用于 loom 缓存按版本切分（见「缓存 Loom 制品」步骤），
-          # 必须与该格实际构建的 MC 版本一致。
           - name: Paper 1.20.1
-            mcVersion: "1.20.1"
             lane: ":platform:bukkit:1.20.1"
             product: platform/bukkit/1.20.1
             task: ":e2e:harness:e2eSmoke"
           - name: Folia 1.20.1
-            mcVersion: "1.20.1"
             lane: ":platform:bukkit:1.20.1"
             product: platform/bukkit/1.20.1
             task: ":e2e:harness:e2eSmokeFolia"
           - name: Paper 1.21.1
-            mcVersion: "1.21.1"
             lane: ":platform:bukkit:1.21.1"
             product: platform/bukkit/1.21.1
             task: ":e2e:harness:e2eSmoke1211"
           - name: Paper 26.2
-            mcVersion: "26.2"
             lane: ":platform:bukkit:26.2"
             product: platform/bukkit/26.2
             task: ":e2e:harness:e2eSmoke262"
@@ -224,30 +218,23 @@ jobs:
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
 
       # Loom 的 MC 映射 / dev jar（约数 GB）不在 setup-gradle 默认缓存范围内，
-      # 每次冷启动都要重新派生，是矩阵各格的主要固定开销。单独按车道锁存。
+      # 每次冷启动都要重新派生。
       #
-      # 只缓存 Loom 制品，不改 setup-gradle 的 cache-read-only：后者会让 PR 写入并
-      # 命中 Gradle 构建缓存（org.gradle.caching=true），而 CodeQL 的 manual build
-      # 依赖真实 javac 调用提取源码，命中缓存会报 "didn't build any of it"（Exit 32）。
-      - name: 缓存 Loom 制品
-        uses: actions/cache@v4
+      # **本格只恢复、不保存**：loom 缓存只由 quality job 独占写入（它跑全车道，
+      # 缓存内容最完整）。原因有两个：
+      #   · 体积：assets/(1.4G) + minecraftMaven/(1.0G) 是全版本共享的，4 格各存一份
+      #     会再吃掉 10GB 配额——这正是之前 quality job 的 loom 缓存被挤掉、
+      #     长期 "Cache not found" 的根因；
+      #   · 一致性：多写者用同一个 key 保存不同内容，会让缓存命中到不完整的副本。
+      # 用 actions/cache/restore（只读）复用 quality 的 key 格式，命中即省下派生开销，
+      # 未命中则本格自行派生（单车道成本可接受），不污染缓存。
+      - name: 恢复 Loom 制品（只读）
+        uses: actions/cache/restore@v4
         with:
-          # 只缓存本格真正会用到的那几份制品，**不要**缓存整个 fabric-loom 目录。
-          # 整个目录约 892MB~1.3GB，5 个 job（quality + 4 格）各存一份就会把仓库
-          # 缓存撑到 GitHub 的 10GB 上限之上，超限后 actions/cache 会淘汰条目，
-          # 表现为 quality job 的 loom 缓存长期 "Cache not found"、每轮重新派生 MC。
-          #
-          # 拆成：
-          #   · assets/ 与 minecraftMaven/  —— 所有版本共用的资源与产物仓库，单独一份 key
-          #   · <mcVersion>/               —— 本格对应版本的工作目录
-          # mcVersion 取自 matrix.name 的末段（Paper 1.20.1 → 1.20.1）。
-          path: |
-            ~/.gradle/caches/fabric-loom/assets
-            ~/.gradle/caches/fabric-loom/minecraftMaven
-            ~/.gradle/caches/fabric-loom/${{ matrix.mcVersion }}
-          key: loom-${{ runner.os }}-${{ matrix.mcVersion }}-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
+          path: ~/.gradle/caches/fabric-loom
+          key: loom-${{ runner.os }}-all-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
           restore-keys: |
-            loom-${{ runner.os }}-${{ matrix.mcVersion }}-
+            loom-${{ runner.os }}-all-
 
       # 本格的产品 jar：只有它进被测插件注入；其余车道不构建（矩阵各格自足）。
       - name: 构建本格产品 jar
