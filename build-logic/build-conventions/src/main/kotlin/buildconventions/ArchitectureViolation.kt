@@ -19,6 +19,9 @@ data class ArchitectureViolation(
 
         /** mc-shared 形态：出现 build.gradle.kts。 */
         MC_SHARED_SHAPE,
+
+        /** 依赖方向：域之间互相依赖，或实现模块横向依赖对端实现。 */
+        DEPENDENCY_DIRECTION,
     }
 
     /** 人类可读单行描述。 */

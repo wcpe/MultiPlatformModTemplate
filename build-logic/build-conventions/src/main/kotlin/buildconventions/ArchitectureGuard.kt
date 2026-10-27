@@ -88,6 +88,93 @@ object ArchitectureGuard {
             .toList()
     }
 
+    /**
+     * 依赖方向校验：域之间不得互相依赖；实现模块不得横向依赖对端实现。
+     *
+     * <h2>为什么这条必须留在守卫里</h2>
+     *
+     * 它无法由 ArchUnit 表达：`examples/counter/client` 与 `examples/counter/server` 的类处在
+     * **同一个包** `top.wcpe.mc.mpmt.examples.counter`（core 的 capacity 域同样如此），而
+     * `slices()` 按**包名**切片，同包不同模块切不开——ArchUnit 只能看到「一个包」，看不到
+     * 「两个 Gradle 模块」。依赖声明本身也不拦：`implementation(project(":…:xxx-server"))`
+     * 加进 `-client` 一样编得过。
+     *
+     * 因此判据只能是 **Gradle 项目模型里的模块级直接依赖**（ADR-0030 决策 6 的红线），
+     * 数据由 settings.gradle.kts 让各域模块在自身 afterEvaluate 里上报
+     *（见 `domainModuleDependencies`）。这是结构化事实，不解析任何脚本文本。
+     *
+     * 两条规则：
+     * - 跨域：`core/domains/<域A>` 不得依赖 `core/domains/<域B>`（`examples/<域>` 同理），
+     *   跨域协作只经 EventBus（ADR-0011）；
+     * - 同域内：`-client` 不得依赖 `-server`，反之亦然；跨端协作经 common-api / core /
+     *   各端 internal 抽象，或由车道在装配处组合。
+     *
+     * 抽象模块（`-api` / `-internal` / `core` / `common-api`）不受方向限制。
+     *
+     * @param dependencies 模块路径 → 其直接依赖的模块路径集合
+     * @return 违规列表
+     */
+    fun checkDomainModuleDirections(dependencies: Map<String, Set<String>>): List<ArchitectureViolation> {
+        val violations = mutableListOf<ArchitectureViolation>()
+        dependencies.forEach { (module, deps) ->
+            val moduleDomain = domainOf(module) ?: return@forEach
+            deps.forEach { dep ->
+                val depDomain = domainOf(dep)
+                if (depDomain != null && depDomain != moduleDomain) {
+                    violations +=
+                        ArchitectureViolation(
+                            ArchitectureViolation.Kind.DEPENDENCY_DIRECTION,
+                            module,
+                            "域之间不得互相依赖：它依赖了另一个域「$dep」；" +
+                                "跨域协作应经 EventBus（ADR-0011）",
+                        )
+                    return@forEach
+                }
+                // 只比较同域内的模块；域外依赖（如 :core:kernel）不属本规则管辖。
+                if (depDomain != moduleDomain) {
+                    return@forEach
+                }
+                val side = sideOf(module) ?: return@forEach
+                val depSide = sideOf(dep) ?: return@forEach
+                if (side != depSide) {
+                    violations +=
+                        ArchitectureViolation(
+                            ArchitectureViolation.Kind.DEPENDENCY_DIRECTION,
+                            module,
+                            "实现模块不得依赖对端实现：它依赖了「$dep」（对端 $depSide）；" +
+                                "跨端协作应经 common-api / core / internal 抽象，或由车道在装配处组合",
+                        )
+                }
+            }
+        }
+        return violations
+    }
+
+    /**
+     * 取模块所属域的路径（去掉末段模块名）。
+     *
+     * 只认功能域：`core/domains/<域>` 与 `examples/<域>`。
+     */
+    private fun domainOf(modulePath: String): String? =
+        when {
+            modulePath.contains(":domains:") -> modulePath.substringBeforeLast(':')
+            modulePath.startsWith(":examples:") -> modulePath.substringBeforeLast(':')
+            else -> null
+        }
+
+    /**
+     * 从模块路径识别它的端实现身份。
+     *
+     * 模块名已短化（`client` / `server`，不再是 `<域>-client`），故按末段精确匹配；
+     * 抽象模块（`*-api` / `*-internal` / `core` / `common-api`）返回 null，不受方向限制。
+     */
+    private fun sideOf(modulePath: String): String? =
+        when (modulePath.substringAfterLast(':')) {
+            "client" -> "client"
+            "server" -> "server"
+            else -> null
+        }
+
     private fun relative(root: File, file: File): String =
         file.absolutePath.removePrefix(root.absolutePath).removePrefix(File.separator)
 }

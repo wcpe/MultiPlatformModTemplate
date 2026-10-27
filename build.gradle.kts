@@ -27,7 +27,8 @@ plugins {
     // 根侧编排（发布聚合 + 真服/版本矩阵门禁注册）。须声明在上述报告门插件之后：
     // 该插件注册 verifyRealServerReportsStrict，编排插件为它接线 mustRunAfter。
     id("build-conventions.release")
-    // 架构守卫（ADR-0028 决策 7）：三档扫描 + mc-shared 形态 + 顶层语义 + 孤儿检查。
+    // 架构守卫（ADR-0028 决策 7 / ADR-0036）：mc-shared 形态 + 顶层语义 + 依赖方向。
+    // 分层引用不再扫源码文本，改由依赖声明与 ArchUnit（LayeringArchTest / DomainArchTest）承担。
     id("build-conventions.architecture")
 }
 

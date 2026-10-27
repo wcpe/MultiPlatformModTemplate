@@ -43,7 +43,7 @@ ArchUnit 在**字节码**层面建类图再断言，不受源码写法影响。�
 - **判据决定可靠性**：工程路径与文件存在性是结构化事实，多参数 `include`、动态 `include(path)`、换行缩进、改名都改变不了它；源码文本不是。
 - **避免「有守卫」的错觉**：一个覆盖率 1/30 且测试为绿的守卫，比没有守卫更危险——它让人相信红线被守着。
 - **每种约束用最合适的手段**：分层用类型系统与字节码断言，结构约定用文件系统与工程模型，采集数据用结构化接口。用正则扫文本同时承担这三类职责，是这三处缺陷的共同根因。
-- **删除的检查确有更强的等价物**：`scanSources` 的两档分别对应 `LayeringArchTest`（L0 内核）与依赖声明（模块 classpath）；`checkDomainModuleDirections` 对应 `DomainArchTest`（域间不依赖、无环）。
+- **删除的检查确有更强的等价物**：`scanSources` 的两档分别对应 `LayeringArchTest`（L0 内核）与依赖声明（模块 classpath）；`checkDomainModuleDirections` 的「域间零依赖」部分对应 `DomainArchTest`（域间不依赖、无环）。
 
 ## 后果
 
@@ -55,9 +55,12 @@ ArchUnit 在**字节码**层面建类图再断言，不受源码写法影响。�
 
 **负面与约束**
 
-- `examples/` 下的域**不再有**「域间零依赖」的机检。`DomainArchTest` 的切片范围是 `top.wcpe.mc.mpmt.domain`，不含 `top.wcpe.mc.mpmt.examples`。若要覆盖，应把切片规则扩展到 `examples` 包，或为示例域单独加一条 ArchUnit 规则——**不应**回到读脚本正文的路子。
+- **依赖方向检查保留在守卫里，不用 ArchUnit 替代**（本条为审查后修正原决策）。删掉 `checkDomainModuleDirections` 后，「实现模块不得横向依赖对端实现」（`-client` ↛ `-server`，ADR-0030 决策 6 的红线）会完全失去机检：`examples/counter/client` 与 `examples/counter/server` 的类处在**同一个包** `top.wcpe.mc.mpmt.examples.counter`（capacity 域同样如此），而 `slices()` 按**包名**切片，同包不同模块切不开；依赖声明本身也不拦（写 `implementation(project(":…:xxx-server"))` 一样编得过）。
+  故该检查已恢复，判据改为 **settings 下发的模块级直接依赖**（各域模块在自身 `afterEvaluate` 里上报，见 `domainModuleDependencies`）——这是结构化事实，不解析脚本文本，符合本 ADR 的原则。同时修正原实现只收 `:core:domains:` 前缀的缺陷，`:examples:` 一并覆盖。
+  守卫现为三项：`mc-shared` 形态、顶层语义、依赖方向（域间零依赖 + 同域内实现模块不横向依赖对端）。
 - 新增顶层目录时，守卫只在**已被 include 之后**才报错；「在 settings 里写下非法 include」这一步不拦截。这是有意的取舍：能跑起来才会被检查，而错误的顶层目录一旦 include 就会在 `verifyArchitecture` 立即失败。
 - `mc-shared` 不得被 include 这条红线，现在由「形态检查（无 `build.gradle*`）」间接保证——没有构建脚本就无法被 include。若将来 Gradle 支持无脚本模块，需重新评估。
+- 守卫在输入为空时**直接失败**（`verifyArchitecture` 会检查工程数与域模块数非零）。原因是本仓曾出现「数据源为空导致检查恒绿」的真实缺陷，空输入必须显式报错而不是静默通过。
 
 ## 备选方案
 
