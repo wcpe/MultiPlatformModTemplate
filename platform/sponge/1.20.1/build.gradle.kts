@@ -16,7 +16,7 @@ plugins {
     id("build-conventions.sponge")
     id("org.spongepowered.gradle.plugin")
     id("com.gradleup.shadow") version "8.3.11"
-    // 分析类插件（spotbugs / ktlint / detekt / kover）不在车道内声明：由 build-conventions.quality 应用，
+    // 分析类插件（spotbugs / ktlint / detekt）不在车道内声明：由 build-conventions.quality 应用，
     // 版本与类路径由根 plugins{} 单点 pin，重复声明会分裂插件类加载器并破坏 loom 的清单服务。
 }
 

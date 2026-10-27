@@ -414,6 +414,7 @@ tasks.register("runRealServerAcceptanceHost") {
 }
 
 tasks.named("check") {
-    dependsOn("test", "contractTest", "verifyPackaging", staticQualityTasks, "koverXmlReport")
+    // koverXmlReport 已随 kover 一并移除（本仓业务模块零 Kotlin 源，该任务恒为空转）。
+    dependsOn("test", "contractTest", "verifyPackaging", staticQualityTasks)
 }
 // `build` 依赖 packageArtifacts 的收口已内置到 build-conventions（registerForgePackageArtifacts）

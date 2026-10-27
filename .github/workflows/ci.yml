@@ -163,19 +163,25 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # mcVersion 用于 loom 缓存按版本切分（见「缓存 Loom 制品」步骤），
+          # 必须与该格实际构建的 MC 版本一致。
           - name: Paper 1.20.1
+            mcVersion: "1.20.1"
             lane: ":platform:bukkit:1.20.1"
             product: platform/bukkit/1.20.1
             task: ":e2e:harness:e2eSmoke"
           - name: Folia 1.20.1
+            mcVersion: "1.20.1"
             lane: ":platform:bukkit:1.20.1"
             product: platform/bukkit/1.20.1
             task: ":e2e:harness:e2eSmokeFolia"
           - name: Paper 1.21.1
+            mcVersion: "1.21.1"
             lane: ":platform:bukkit:1.21.1"
             product: platform/bukkit/1.21.1
             task: ":e2e:harness:e2eSmoke1211"
           - name: Paper 26.2
+            mcVersion: "26.2"
             lane: ":platform:bukkit:26.2"
             product: platform/bukkit/26.2
             task: ":e2e:harness:e2eSmoke262"
@@ -226,13 +232,22 @@ jobs:
       - name: 缓存 Loom 制品
         uses: actions/cache@v4
         with:
-          # 只缓存 ~/.gradle 下的共享制品；工作区内的 .gradle/loom-user-cache
-          # 是构建的工作目录，缓存其中间产物会引入「文件在、内容不可用」的半成品。
-          path: ~/.gradle/caches/fabric-loom
-          key: loom-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
+          # 只缓存本格真正会用到的那几份制品，**不要**缓存整个 fabric-loom 目录。
+          # 整个目录约 892MB~1.3GB，5 个 job（quality + 4 格）各存一份就会把仓库
+          # 缓存撑到 GitHub 的 10GB 上限之上，超限后 actions/cache 会淘汰条目，
+          # 表现为 quality job 的 loom 缓存长期 "Cache not found"、每轮重新派生 MC。
+          #
+          # 拆成：
+          #   · assets/ 与 minecraftMaven/  —— 所有版本共用的资源与产物仓库，单独一份 key
+          #   · <mcVersion>/               —— 本格对应版本的工作目录
+          # mcVersion 取自 matrix.name 的末段（Paper 1.20.1 → 1.20.1）。
+          path: |
+            ~/.gradle/caches/fabric-loom/assets
+            ~/.gradle/caches/fabric-loom/minecraftMaven
+            ~/.gradle/caches/fabric-loom/${{ matrix.mcVersion }}
+          key: loom-${{ runner.os }}-${{ matrix.mcVersion }}-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
           restore-keys: |
-            loom-${{ runner.os }}-${{ matrix.name }}-
-            loom-${{ runner.os }}-
+            loom-${{ runner.os }}-${{ matrix.mcVersion }}-
 
       # 本格的产品 jar：只有它进被测插件注入；其余车道不构建（矩阵各格自足）。
       - name: 构建本格产品 jar

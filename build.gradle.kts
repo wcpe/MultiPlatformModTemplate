@@ -10,7 +10,6 @@ plugins {
     // Kotlin 工具链（现接、前瞻就绪；当前仅 .gradle.kts 为 Kotlin，第二期引入 Kotlin 源即生效）
     id("org.jlleitschuh.gradle.ktlint") version "14.2.0" apply false
     id("dev.detekt") version "2.0.0-alpha.6" apply false
-    id("org.jetbrains.kotlinx.kover") version "0.9.9" apply false
     // WCPE Loom（ADR-0025）：必须在根以 apply false 声明，让插件类路径在全构建只加载一次。
     // 若只由各车道在自己的 plugins {} 里请求，Gradle 会按子树各建一份插件类加载器，
     // loom 跨工程迭代（MixinAPMappingService → GradleUtils.allLoomProjects →

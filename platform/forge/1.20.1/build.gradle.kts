@@ -22,7 +22,7 @@ plugins {
     id("top.wcpe.loom")
     // 8.3.11：修复 RelocatorRemapper.mapValue 与 loom 依赖树上新 ASM（visitLdcInsn 传 Type）的不兼容
     id("com.gradleup.shadow") version "8.3.11"
-    // 静态分析插件（checkstyle / pmd / spotbugs+findsecbugs / jacoco / ktlint / detekt / kover）一律由
+    // 静态分析插件（checkstyle / pmd / spotbugs+findsecbugs / jacoco / ktlint / detekt）一律由
     // build-conventions.quality 应用：版本与类路径由根 plugins{} 单点 pin，车道内重复声明会分裂插件类加载器
     // 并破坏 loom 的清单服务。
     id("build-conventions.forge")

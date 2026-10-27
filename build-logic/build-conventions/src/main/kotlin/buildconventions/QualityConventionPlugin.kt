@@ -22,7 +22,7 @@ import org.gradle.testing.jacoco.tasks.JacocoReport
 /**
  * 静态分析与质量门禁（严格）——工程显式 `plugins { id("build-conventions.quality") }` 接入。
  *
- * 覆盖 Checkstyle / PMD / SpotBugs(+FindSecBugs) / ktlint / detekt / kover / JaCoCo，
+ * 覆盖 Checkstyle / PMD / SpotBugs(+FindSecBugs) / ktlint / detekt / JaCoCo，
  * 违规即失败（`isIgnoreFailures = false`），覆盖率下限 LINE 0.70；规则集仍在仓库根 `config/`。
  */
 class QualityConventionPlugin : Plugin<Project> {
@@ -151,12 +151,19 @@ class QualityConventionPlugin : Plugin<Project> {
         }
     }
 
-    /** Kotlin 工具链：ktlint 检 `.gradle.kts`（含插件工程脚本）、detekt 扫 Kotlin 源、kover 备 Kotlin 覆盖率。 */
+    /**
+     * Kotlin 工具链：ktlint 检 `.gradle.kts`（含插件工程脚本）、detekt 扫 Kotlin 源。
+     *
+     * **不再应用 kover**：全仓业务模块零 Kotlin 源（87 个 `.kt` 全在 `build-logic/` 的两个
+     * Gradle 插件工程里），kover 在 29 个模块上各产生 `koverVerify` / `koverCachedVerify` /
+     * `koverGenerateArtifact` 三个空转任务（CI 实测共 127 个），既无被测 Kotlin 代码，
+     * 覆盖率也无从判定。Java 侧的覆盖率门禁由 JaCoCo 承担且设了 0.70 底线
+     *（.claude/rules/static-analysis.md），不影响质量护栏。
+     */
     private fun applyKotlinToolchain(project: Project) {
         project.pluginManager.apply("org.jlleitschuh.gradle.ktlint")
         // detekt 2.x 改用新插件 id（旧 io.gitlab.arturbosch.detekt 仅存在于 1.x）
         project.pluginManager.apply("dev.detekt")
-        project.pluginManager.apply("org.jetbrains.kotlinx.kover")
     }
 
     /**
