@@ -81,6 +81,17 @@ runs:
     # 单一根构建：全部平台车道为根子模块，一条命令构建 + 校验 + 聚合发布产物。
     # JDK 25 守护（26.2 车道配置期硬校验）；MPMT_JAVA*_HOME 供矩阵轨与跨代车道显式选 JDK。
     #
+    # 并发度：此前写死 `--max-workers=1`，等于在 4 核 runner 上只用 1 核跑 885 个任务，
+    # 是本 job 的最大瓶颈。本机实测（同一次 --rerun-tasks 全量）：
+    #   --max-workers=1           25m05s
+    #   4 核（taskset）+ workers=4 19m18s
+    #   不限制（40 核）+ workers=40  6m46s
+    # 说明时间是串行排队而非缓存或编译本身。现交给 Gradle 按 runner 实际核数决定
+    #（org.gradle.parallel=true 已在 gradle.properties 开启）。
+    # 内存侧无风险：org.gradle.jvmargs=-Xmx4g 是堆上限而非预分配；1.12.2 车道的
+    # "-Xmx2G 低内存串行"约束由它自己的 JavaExec 任务参数保证，不依赖全局串行。
+    # 若将来 CI 出现 OOM，优先降 workers（下面 WORKERS 变量）而不是回到 1。
+    #
     # disable-build-cache：CodeQL 靠追踪编译器调用提取源码，构建缓存命中会让
     # compileJava 直接取缓存产物（日志里的 FROM-CACHE）而不调用 javac，于是 CodeQL
     # 报 "this run didn't build any of it"（Exit 32）。故该场景下用 --no-build-cache
@@ -94,10 +105,12 @@ runs:
         MPMT_JAVA21_HOME: ${{ steps.java21.outputs.path }}
         MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
         EXTRA_GRADLE_ARGS: ${{ inputs.disable-build-cache == 'true' && '--no-build-cache' || '' }}
+        # 留一个可调旋钮：CI 出现 OOM 时改小此值即可，无需改命令结构。
+        WORKERS: "4"
       run: |
         BUILD_START=$(date +%s)
         ./gradlew "-Dfabric.loom.cache.dir=$HOME/.gradle/caches/fabric-loom" \
-          --no-daemon --max-workers=1 --no-watch-fs --console=plain --stacktrace \
+          --no-daemon --max-workers="$WORKERS" --no-watch-fs --console=plain --stacktrace \
           $EXTRA_GRADLE_ARGS \
           :buildAll 2>&1 | tee /tmp/build.log
         BUILD_RC=${PIPESTATUS[0]}
@@ -124,7 +137,7 @@ runs:
         MPMT_JAVA17_HOME: ${{ steps.java17.outputs.path }}
         MPMT_JAVA21_HOME: ${{ steps.java21.outputs.path }}
         MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
-      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain :e2e:harness:build
+      run: ./gradlew --no-daemon --max-workers=2 --no-watch-fs --console=plain :e2e:harness:build
 
     - name: 校验 E2E bot 模板
       if: inputs.validate-template == 'true'

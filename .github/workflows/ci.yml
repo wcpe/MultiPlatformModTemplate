@@ -244,8 +244,10 @@ jobs:
           MPMT_JAVA21_HOME: ${{ steps.java21.outputs.path }}
           MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
         run: |
-          ./gradlew "-Dfabric.loom.cache.dir=$GITHUB_WORKSPACE/.gradle/loom-user-cache" \
-            --no-daemon --max-workers=1 --no-watch-fs --console=plain \
+          # loom 缓存目录必须与上面 actions/cache 的 path（~/.gradle/caches/fabric-loom）
+          # 一致，否则恢复出来的 MC 制品一次都用不上，每格都要重新下载并派生。
+          ./gradlew "-Dfabric.loom.cache.dir=$HOME/.gradle/caches/fabric-loom" \
+            --no-daemon --max-workers=2 --no-watch-fs --console=plain \
             ${{ matrix.lane }}:shadowJar
 
       # mc-testkit 编排：起真实服务端、注入产品 jar 与桩 jar、读结果文件判 PASS/FAIL。
@@ -267,8 +269,8 @@ jobs:
           test -f "$JAR" || { echo "[e2e] 未找到产品 jar：$JAR"; exit 1; }
           echo "[e2e] 被测插件：$JAR"
           MC_TESTKIT_E2E_PLUGIN_UNDER_TEST_JAR="$PWD/$JAR" \
-            ./gradlew "-Dfabric.loom.cache.dir=$GITHUB_WORKSPACE/.gradle/loom-user-cache" \
-              --no-daemon --max-workers=1 --no-watch-fs --console=plain \
+            ./gradlew "-Dfabric.loom.cache.dir=$HOME/.gradle/caches/fabric-loom" \
+              --no-daemon --max-workers=2 --no-watch-fs --console=plain \
               ${{ matrix.task }}
 
       - name: 上传本格结果文件
