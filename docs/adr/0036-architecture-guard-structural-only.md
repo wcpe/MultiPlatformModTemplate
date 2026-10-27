@@ -33,10 +33,11 @@ ArchUnit 在**字节码**层面建类图再断言，不受源码写法影响。�
 
 1. **`mc-shared` 形态**：`mc-shared/` 下不得出现 `build.gradle*`。判据是文件系统事实。
 2. **顶层语义**：每个已 include 的工程路径必须落在允许的顶层前缀内。判据是 Gradle 自己的 `Project.getPath()`，遍历全部工程，不解析 `settings.gradle.kts` 文本。
+3. **域依赖方向**：域之间不得互相依赖、同域内 `-client` 与 `-server` 不得互依。判据是 settings 下发的模块级直接依赖（各域模块在自身 `afterEvaluate` 上报），是结构化事实，不解析脚本文本。详见下文「理由」中关于本条恢复的说明。
 
-删除以下内容：源码文本扫描（含 `ArchitectureTier` 三档与 `SourceMasker`）、孤儿检查及其 `mpmt.laneMcVersions` 属性、域依赖方向检查及其脚本正文解析、以及服务这些实现的测试。
+删除以下内容：源码文本扫描（含 `ArchitectureTier` 三档与 `SourceMasker`）、孤儿检查及其 `mpmt.laneMcVersions` 属性、以及服务这些实现的测试。
 
-分层与依赖方向的约束改由两处更强的手段承担：**依赖声明本身**（不在 classpath 上就编译失败）与 **ArchUnit**（`LayeringArchTest` / `DomainArchTest`）。
+除上述三条外的分层约束，由**依赖声明本身**（不在 classpath 上就编译失败）与 **ArchUnit**（`LayeringArchTest` / `DomainArchTest`）承担。
 
 ## 理由
 
@@ -49,7 +50,7 @@ ArchUnit 在**字节码**层面建类图再断言，不受源码写法影响。�
 
 **正面**
 
-- 守卫从 567 行降到 93 行，判据全部是结构化事实，不再需要 `SourceMasker` 这类为文本扫描兜底的辅助设施。
+- 守卫核心从 567 行降到 180 行（`ArchitectureGuard.kt`），判据全部是结构化事实，不再需要 `SourceMasker` 这类为文本扫描兜底的辅助设施。
 - 顶层语义检查的覆盖从实测 1 条提升到 55 个工程；`mc-shared` 形态检查经负向实测确认能拦下植入的 `build.gradle.kts`。
 - 删除了 290 行解析构建脚本文本的代码，与「不得读源码文本做判断」的反模式保持一致。
 
