@@ -10,6 +10,8 @@ target/
 # Gradle / Maven
 .gradle/
 .mvn/timing.properties
+# Kotlin 增量编译会话目录（build-logic 两个插件工程各自生成，纯本机缓存）
+.kotlin/
 
 # IDE / 操作系统
 /.idea/
