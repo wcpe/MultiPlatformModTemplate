@@ -88,36 +88,6 @@ runs:
         restore-keys: |
           loom-${{ runner.os }}-all-
 
-
-    # ── 配置缓存（Gradle configuration cache）────────────────────────────────
-    # 跑到 run 40628759623 的日志时发现：:buildAll 的配置 + 任务图阶段在 CI 上要 164s
-    # （03:48:52 → 03:51:36），占总构建耗时 703s 的 22%——而本地同一阶段只需 21s。
-    # 差距全在“每次都是冷的”：工作区 .gradle/ 不跨 run 保留，所以配置缓存永远不命中。
-    #
-    # 体积不是问题：实测缓存目录只有 2.7MB / 53 个文件，而一条 loom 缓存就是 1.3GB。
-    #
-    # key 绑定到“会影响配置期结果”的四个输入：settings.gradle.kts、gradle.properties、
-    # 全部 build.gradle.kts（含 build-logic 两个插件工程）、build-logic 的全部 .kt
-    # （插件实现变更会改变配置期行为）。四处任一改动就让缓存失效——宁可多算一次配置，
-    # 也不要拿着与当前代码不匹配的缓存去执行任务图。
-    #
-    # 不绑定的输入（故意）：源码 .java、资源文件。它们不影响配置期，只影响执行期，
-    # 而执行期自己的增量/构建缓存已经在管它们。
-    #
-    # 与上面 loom 那一步一致，CodeQL 路径（disable-build-cache=true）跳过：
-    # 该路径要真实执行编译，不应被任何缓存影响。
-    - name: 缓存配置缓存（任务图）
-      if: inputs.disable-build-cache != 'true'
-      uses: actions/cache@v4
-      with:
-        # 工作区内路径：配置缓存默认落在 <project>/.gradle/configuration-cache，
-        # 而不是 ~/.gradle。actions/cache 以 $GITHUB_WORKSPACE 为基准。
-        path: |
-          .gradle/configuration-cache
-        key: gradle-cc-${{ runner.os }}-${{ hashFiles('settings.gradle.kts', 'gradle.properties', '**/build.gradle.kts', 'build-logic/**/*.kt') }}
-        # 精确命中才有意义：任务图必须与当前脚本逐字对应。故意不写 restore-keys，
-        # 避免拿旧脚本算出的任务图去执行（轻则多跑无关任务，重则漏任务）。
-
     # 单一根构建：全部平台车道为根子模块，一条命令构建 + 校验 + 聚合发布产物。
     # JDK 25 守护（26.2 车道配置期硬校验）；MPMT_JAVA*_HOME 供矩阵轨与跨代车道显式选 JDK。
     #
@@ -169,6 +139,19 @@ runs:
         echo "BUILD_SECONDS=$BUILD_SECONDS" >> "$GITHUB_ENV"
         echo "BUILD_WORKERS=$WORKERS" >> "$GITHUB_ENV"
         exit "$BUILD_RC"
+
+    # ⚠ 不要给 `.gradle/configuration-cache` 做 actions/cache 持久化。
+    # 试过并已回滚（run 40669808302）：缓存能存能取，但恢复后直接炸——
+    #   Could not load the value of field `valueSourceType` of
+    #   ConfigurationCacheFingerprint$ValueSource ...
+    #   Class 'org.jetbrains.kotlin.gradle.internal.IsInIdeaSyncValueSource'
+    #   not found in class loader '...settings[:realserver-acceptance]...'
+    # 根因：配置缓存会把 ValueSource 的**类型**序列化进去，回放时按插件类加载器
+    # 去找那个类。跨 runner 时插件类路径（buildSrc / includeBuild / kotlin-dsl）
+    # 的 ClassLoaderScopeIdentifier 对不上，类就找不到了。本机反复验证均是
+    # “Reusing configuration cache.”，因为它在同一台机器上类加载器标识一致——
+    # 这个陷阱在本机测不出来。
+    # 结论：:buildAll 的配置阶段在 CI 上就是得重算（约 164s），不要碰。
 
     - name: 安装 Node 22
       if: inputs.validate-template == 'true'
