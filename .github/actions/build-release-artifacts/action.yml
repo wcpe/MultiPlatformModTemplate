@@ -70,8 +70,7 @@ runs:
         # ② **各车道的 build/loom-cache**——`remapMinecraft*` / `generateForgePrePatchJar` 的
         #    产出。之前没缓这一层，于是即便 ① 命中，每个车道的重映射输出仍是空的，
         #    任务只能重跑：实测 `remapMinecraftNamedMerged` 单个 145~166s，
-        #    全仓 8 个共 ~1200s，是 CI 上最大的单笔固定开销（见
-        #    docs/adr/0037-build-performance-tuning.md 的耗时归因表）。
+        #    全仓 8 个共 ~1200s，是 CI 上最大的单笔固定开销。
         #    体积很小：全部车道合计 ~4.5MB（compared to ① 的 4.2GB）。
         # ③ 不缓存工作区 `.gradle/`：那是构建的工作目录，缓存中间产物会让下游读到
         #    「文件在、内容不可用」的半成品（历史踩坑：genSourcesWithCfr 报 Minecraft jar 尚不存在）。
