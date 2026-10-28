@@ -64,11 +64,22 @@ runs:
       if: inputs.disable-build-cache != 'true'
       uses: actions/cache@v4
       with:
-        # 只缓存 ~/.gradle 下的共享制品（MC jar / 映射 / dev jar）。
-        # 不缓存工作区内的 .gradle/loom-user-cache：那是构建本身的工作目录，
-        # 缓存其中间产物会让下游构建读到「文件在、内容不可用」的半成品，
-        # 表现为 genSourcesWithCfr 报「Minecraft jar 尚不存在」而任务创建失败。
-        path: ~/.gradle/caches/fabric-loom
+        # 三层一起缓存，缺一层就会退化成全量重新派生：
+        #
+        # ① ~/.gradle/caches/fabric-loom——下载的 MC jar / 映射表 / 本地 m2 形式的 dev jar。
+        # ② **各车道的 build/loom-cache**——`remapMinecraft*` / `generateForgePrePatchJar` 的
+        #    产出。之前没缓这一层，于是即便 ① 命中，每个车道的重映射输出仍是空的，
+        #    任务只能重跑：实测 `remapMinecraftNamedMerged` 单个 145~166s，
+        #    全仓 8 个共 ~1200s，是 CI 上最大的单笔固定开销（见
+        #    docs/adr/0037-build-performance-tuning.md 的耗时归因表）。
+        #    体积很小：全部车道合计 ~4.5MB（compared to ① 的 4.2GB）。
+        # ③ 不缓存工作区 `.gradle/`：那是构建的工作目录，缓存中间产物会让下游读到
+        #    「文件在、内容不可用」的半成品（历史踩坑：genSourcesWithCfr 报 Minecraft jar 尚不存在）。
+        #
+        # loom 对 ① 与 ② 都做了内容校验，两份同时恢复不会出现"jar 在但哈希不符"的错配。
+        path: |
+          ~/.gradle/caches/fabric-loom
+          platform/*/*/build/loom-cache
         key: loom-${{ runner.os }}-all-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
         # 只回退到本 job 自己的旧 key（`loom-<os>-all-` 前缀）。
         # 不要放宽到 `loom-<os>-`：E2E 矩阵各格用的是
@@ -105,10 +116,20 @@ runs:
         MPMT_JAVA21_HOME: ${{ steps.java21.outputs.path }}
         MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
         EXTRA_GRADLE_ARGS: ${{ inputs.disable-build-cache == 'true' && '--no-build-cache' || '' }}
-        # 留一个可调旋钮：CI 出现 OOM 时改小此值即可，无需改命令结构。
-        WORKERS: "4"
       run: |
         BUILD_START=$(date +%s)
+        # 并发度按 runner 实际核数自适应，而不是写死数字。
+        #
+        # 之前的演进：--max-workers=1（25m05s）→ 固定 4（19m18s）。写死 4 的问题是
+        # 与 runner 类型耦合：标准 ubuntu-latest 是 4 核，但 public repo 的 larger runner
+        # 或自托管机可能是 8/16 核，那样固定 4 就把资源浪费掉一半。
+        #
+        # 上限 16：再高的话单个 worker 的 JVM（javac / SpotBugs / 测试各一份）会把
+        # 内存吃掉——runner 通常 16GB，每个 worker 峰值可达 0.8~1.2GB。
+        # 下限 2：低于 2 时 loom 的多线程重映射与别的任务会串行排队。
+        CPUS=$(nproc)
+        WORKERS=$(( CPUS > 16 ? 16 : (CPUS < 2 ? 2 : CPUS) ))
+        echo "[ci] runner 核数=$CPUS，Gradle --max-workers=$WORKERS"
         ./gradlew "-Dfabric.loom.cache.dir=$HOME/.gradle/caches/fabric-loom" \
           --no-daemon --max-workers="$WORKERS" --no-watch-fs --console=plain --stacktrace \
           $EXTRA_GRADLE_ARGS \
@@ -117,6 +138,7 @@ runs:
         BUILD_SECONDS=$(( $(date +%s) - BUILD_START ))
         echo "BUILD_RC=$BUILD_RC" >> "$GITHUB_ENV"
         echo "BUILD_SECONDS=$BUILD_SECONDS" >> "$GITHUB_ENV"
+        echo "BUILD_WORKERS=$WORKERS" >> "$GITHUB_ENV"
         exit "$BUILD_RC"
 
     - name: 安装 Node 22

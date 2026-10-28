@@ -323,7 +323,13 @@ jobs:
       - name: 恢复 Loom 制品（只读）
         uses: actions/cache/restore@v4
         with:
-          path: ~/.gradle/caches/fabric-loom
+          # 与 quality job 的「缓存 Loom 制品」保持同一套 path（见
+          # .github/actions/build-release-artifacts/action.yml）：
+          # 除了 ~/.gradle 下的共享制品，还包括各车道的 build/loom-cache。
+          # 缺后者时 remapMinecraft* 的输出为空，本格仍要重新派生（单格 ~150s）。
+          path: |
+            ~/.gradle/caches/fabric-loom
+            platform/*/*/build/loom-cache
           key: loom-${{ runner.os }}-all-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
           restore-keys: |
             loom-${{ runner.os }}-all-
