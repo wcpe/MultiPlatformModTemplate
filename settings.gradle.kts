@@ -3,6 +3,8 @@
 // 物理布局即工程路径：core/* · platform/<loader>/* · modules/*；模块坐标 = group + project.name（path 末段）。
 
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 pluginManagement {
     repositories {
@@ -106,12 +108,21 @@ plugins {
 // 末尾求值，读取它不构成跨工程模型访问。
 // 必须放在 gradle.extensions 里而非脚本局部 val：闭包若引用脚本成员，Kotlin 会生成
 // `this$0` 指向脚本实例，配置缓存会拒绝序列化。
-gradle.extensions.extraProperties.set("projectsWithBuildTask", mutableSetOf<String>())
+//
+// ⚠ 伴生集合必须是**线程安全**的：启用 Isolated Projects 后 Gradle 会并行配置各工程，
+// 多个 `beforeProject` / `afterEvaluate` 回调会同时写这几个容器。用 `mutableSetOf` /
+// `mutableMapOf`（底层 LinkedHashSet / LinkedHashMap）时，并发写在扩容窗口内会让内部
+// 链表与 size 字段脱节，表现为配置缓存序列化阶段的
+// "The map size() is 12, but 1 entries were available when iterating over it.
+//  The map is likely broken or corrupted because of a data race."
+// （实测：启用 IP 后 :buildAll 必失败于 :verifyArchitecture 的 domainDependencies 输入）。
+// 改并发容器后同一构建可稳定通过；顺序不重要（下游都会 sorted）。
+gradle.extensions.extraProperties.set("projectsWithBuildTask", ConcurrentHashMap.newKeySet<String>())
 
 // 全部已注册工程路径（含根工程的 ":"）。架构守卫的顶层语义校验需要它。
 // 由每个工程在**自身** beforeProject 里登记——根工程配置期读 `rootProject.allprojects`
 // 在 Isolated Projects 下属于跨工程模型访问，故改为事前逐个登记、事后只读这份普通数据。
-gradle.extensions.extraProperties.set("allProjectPaths", mutableListOf<String>())
+gradle.extensions.extraProperties.set("allProjectPaths", CopyOnWriteArrayList<String>())
 
 // 架构守卫（ADR-0028 决策 7 / ADR-0030 决策 6）需要「域模块 → 直接依赖」这张表。
 //
@@ -123,7 +134,9 @@ gradle.extensions.extraProperties.set("allProjectPaths", mutableListOf<String>()
 // 正确做法：让每个域工程在**自身求值完成后**上报自己的直接依赖（afterEvaluate 里 `this`
 // 就是该工程自身，不构成跨工程访问，Isolated Projects 允许）。上报结果是普通数据，
 // 存在 gradle.ext 里供根侧读取——读普通数据不算跨工程模型访问。
-gradle.extensions.extraProperties.set("domainModuleDependencies", mutableMapOf<String, Set<String>>())
+//
+// ⚠ 并发容器（理由同上方 projectsWithBuildTask）：IP 下各工程并行 afterEvaluate。
+gradle.extensions.extraProperties.set("domainModuleDependencies", ConcurrentHashMap<String, Set<String>>())
 
 // 域模块（ADR-0030 三段布局）使用独立 group：末段名与 core:client / core:server 等
 // 分层模块重名，Gradle 以 group:name:version 标识模块，重名会被视为同一模块替换
