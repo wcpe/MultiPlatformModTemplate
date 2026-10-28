@@ -204,6 +204,24 @@ class QualityConventionPlugin : Plugin<Project> {
      *
      * 在 afterEvaluate 配置：JavaToolchainService 由模块自身 java 插件注册、晚于插件应用；
      * 无业务源码的聚合壳可能没有 java 插件，此时跳过。
+     *
+     * ── 为何不跟随车道目标版本（性能，2026-10-28）───────────────────────────────
+     * 曾有 3 条 26.2 车道把 `analysisJavaVersion` 设成 25、2 条设成 21，其余默设 17。
+     * 结果是全构建出现 3 种不同的分析 JVM，每种都要单独 fork 一批 worker daemon；
+     * Gradle 的 Worker Daemon 按 JVM 参数分组复用，参数一不同就是另一批进程，
+     * 而每个 worker 的 JVM 启动 + 加载 Checkstyle/PMD 框架就在 1s 量级
+     * （实测 checkstyleMain 单任务 8.6s、pmdMain 10.3s，而实际扫描的代码只有千行级）。
+     *
+     * 关键事实：**分析工具运行 JVM 与被测字节码的目标版本无关**。
+     *   · Checkstyle 10.x 自述只要求 JDK 11+；
+     *   · PMD 7.x 要求 JDK 17+，且它对带更高 major version 的 class 文件是按 classfile
+     *     头解析的，不需要运行在同一版本 JVM 上；
+     *   · 高版本字节码（如 25）在 JDK 17 上确实读不了——但这里让 Checkstyle/PMD 默认
+     *     只看**源码**（Checkstyle 一直是源码，PMD 也以源码为主），源码与 JVM 版本无关。
+     *
+     * 因此分析启动 JVM 统一收归到默认 JDK 17，各车道不再各自抬高。
+     * `QualityExtension.analysisJavaVersion` 仍保留——真出现“某车道必须用更高 JVM 才能分析”
+     * 的实证时仍可单独覆写，但不应作为默认做法。
      */
     private fun pinAnalysisLaunchers(project: Project, quality: QualityExtension) {
         project.afterEvaluate {

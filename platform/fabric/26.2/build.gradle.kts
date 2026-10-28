@@ -82,12 +82,13 @@ repositories {
 
 // ============================================================================
 // 质量工具链：装配由 build-conventions.quality 插件统一承担，此处只声明本车道的偏离项
-// （PMD 规则集需要 7.16；SpotBugs 需更高版本以解析新版 classfile；分析 JVM 与本车道目标一致）。
+// （PMD 规则集需要 7.16；SpotBugs 需更高版本以解析新版 classfile）。
+// 分析 JVM 不跟随车道目标 25：分析工具运行 JVM 与字节码目标版本无关，而多一种分析 JVM
+// 就多一批 worker daemon（理由见 QualityConventionPlugin.pinAnalysisLaunchers）。
 // 覆盖率口径、排除过滤器、findsecbugs、lombok.config 输入登记等均由插件负责。
 quality {
     pmdToolVersion.set("7.16.0")
     spotbugsToolVersion.set("4.9.8")
-    analysisJavaVersion.set(targetJavaVersion)
 }
 
 // fabric 车道参数：版本、产品任务与本车道接线差异在此声明；

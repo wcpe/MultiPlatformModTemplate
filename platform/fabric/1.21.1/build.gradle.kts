@@ -56,10 +56,10 @@ repositories {
     mavenCentral()
     maven("https://maven.fabricmc.net/") { name = "Fabric" }
 }
-// 质量工具链：装配由 build-conventions.quality 插件承担；本车道仅偏离分析 JVM（跟随本车道目标）
-quality {
-    analysisJavaVersion.set(targetJavaVersion)
-}
+// 质量工具链：装配由 build-conventions.quality 插件承担；本车道不偏离分析 JVM。
+// 分析 JVM 保持插件的默认 JDK 17：分析工具运行 JVM 与被测字节码的目标版本无关，
+// 而每多一种分析 JVM 就多一批 worker daemon 要单独 fork（理由见
+// QualityConventionPlugin.pinAnalysisLaunchers 的注释）。
 
 // fabric 车道参数：版本与矩阵轨 JDK 环境变量在此声明；
 // gametest 源集与依赖接线、Loom run、验收元数据注入、模拟服门禁、mod 元数据展开、单测系统属性均由插件承担。
