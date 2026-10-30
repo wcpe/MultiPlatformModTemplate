@@ -44,7 +44,11 @@ pluginManagement {
         // 插件及其 BOM 依赖）。放在靠前位置作为兜底来源，避免因单个上游不可达中断解析。
         maven("https://maven.aliyun.com/repository/public") { name = "AliyunPublic" }
         // WCPE Loom（top.wcpe.loom）发布地：dev.architectury:architectury-loom
+        // releases 与 snapshots 两个仓都声明：快照坐标不会回落到 releases（Nexus 按仓库类型
+        // 各自持有版本，releases 仓不收 SNAPSHOT），只声明 releases 时 mpmt.loomVersion
+        // 指向任何 -SNAPSHOT 版本都会在 CI 上解析失败（本地能过只是因为 mavenLocal 命中 ~/.m2）。
         maven("https://repo.wcpe.top/repository/maven-releases") { name = "WCPE Releases" }
+        maven("https://repo.wcpe.top/repository/maven-snapshots") { name = "WCPE Snapshots" }
         // 通用插件门户必须排在加载器仓库之前：ktlint / detekt / shadow 等只发布在此，
         // 加载器仓库并不持有这些坐标（实测 NeoForged 仓库对 ktlint-gradle 返回 404）。
         // 排在后面时，一次无关仓库的 5xx 就会直接中断整个构建——CI 上曾因 maven.neoforged.net

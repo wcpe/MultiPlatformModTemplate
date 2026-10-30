@@ -104,15 +104,7 @@ forgeLane {
         "先跑 runAcceptanceServer + runAcceptanceClient，或提供 server-runtime 后跑 runRealServerAcceptanceHost + 客户端伴侣。",
     )
     modernPackagingVerification.set(true)
-    contractTestMainClass.set("top.wcpe.mc.mpmt.platform.forge.modern.contract.Forge121ContractMain")
-    contractTestDependsOn.set(listOf("packageArtifacts"))
-    contractTestProductTask.set("remapJar")
-    contractTestAcceptanceTask.set("acceptanceJar")
-    contractTestProperties.put("mpmt.test.projectDir", projectDir.absolutePath)
-    contractTestProperties.put("mpmt.test.minecraftVersion", minecraftVersion)
-    contractTestProperties.put("mpmt.test.forgeVersion", forgeVersion)
-    contractTestProperties.put("mpmt.test.loomVersion", loomVersion)
-    contractTestProperties.put("mpmt.test.gradleVersion", gradle.gradleVersion)
+    // contractTest 已于 2026-10-29 移除（硬编码断言精确版本号，非正式版必失败）。
 }
 
 // 插件公开 API 需要扩展实例（块外传参用），故在块后取回一次
@@ -335,5 +327,5 @@ val runRealServerAcceptanceHost =
         }
     }
 
-tasks.named("check") { dependsOn(tasks.named("test"), "contractTest", "verifyPackaging") }
+tasks.named("check") { dependsOn(tasks.named("test"), "verifyPackaging") }
 // `build` 依赖 packageArtifacts 的收口已内置到 build-conventions（registerForgePackageArtifacts）

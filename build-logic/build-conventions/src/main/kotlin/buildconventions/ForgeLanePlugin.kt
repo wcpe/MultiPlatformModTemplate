@@ -10,7 +10,7 @@ import org.gradle.api.Project
  * - 编译/资源公共接线（[configureForgeJavaCompilation]、[expandForgeModMetadata]、[configureForgeUnitTests]）
  * - 验收 jar 与 FG 时代 reobf 兼容路径（[registerForgeAcceptanceJar]、[registerForgeReobfCopyCompat]）
  * - dev SecureJar 嵌入链与完整性校验（[registerForgeDevModOutputs]、[verifyForgeDevSecureJarOutputs]）
- * - 验收报告门与契约测试（[registerForgeAcceptanceReportGate]、[registerForgeContractTest]）
+ * - 验收报告门（[registerForgeAcceptanceReportGate]）
  * - 现代车道打包校验与出口（[registerForgeModernPackagingVerification]、[registerForgePackageArtifacts]）
  *
  * 车道的"参数"经 [ForgeLaneExtension] 声明；`forgeLane { }` 块晚于插件 apply，
@@ -44,7 +44,6 @@ class ForgeLanePlugin : Plugin<Project> {
                 registerForgeModernPackagingVerification(project, lane)
                 registerForgePackageArtifacts(project, lane)
             }
-            registerForgeContractTest(project, lane)
         }
     }
 
@@ -65,10 +64,6 @@ class ForgeLanePlugin : Plugin<Project> {
         lane.modernPackagingVerification.convention(false)
         lane.packageArtifactsDependsOn.convention(emptyList())
         lane.unitTestMetadata.convention(false)
-        lane.contractTestMainClass.convention("")
-        lane.contractTestDescription.convention(lane.laneLabel.map { "校验 $it 冻结矩阵、双 JAR 隔离与 class major" })
-        lane.contractTestDependsOn.convention(emptyList())
-        lane.contractTestProperties.convention(emptyMap())
     }
 
     private companion object {

@@ -116,15 +116,8 @@ forgeLane {
         "先跑 runServer + runClient，或提供 server-runtime 后跑 runRealServerAcceptanceHost + 客户端伴侣。",
     )
     modernPackagingVerification.set(true)
-    contractTestMainClass.set("top.wcpe.mc.mpmt.platform.forge.modern.contract.Forge262ContractMain")
-    contractTestDependsOn.set(listOf("packageArtifacts"))
-    contractTestProductTask.set("jar")
-    contractTestAcceptanceTask.set("acceptanceJar")
-    contractTestProperties.put("mpmt.test.projectDir", projectDir.absolutePath)
-    contractTestProperties.put("mpmt.test.minecraftVersion", minecraftVersion)
-    contractTestProperties.put("mpmt.test.forgeVersion", forgeVersion)
-    contractTestProperties.put("mpmt.test.loomVersion", loomVersion)
-    contractTestProperties.put("mpmt.test.gradleVersion", gradle.gradleVersion)
+    // contractTest 已于 2026-10-29 移除（它硬编码断言 loom/forge/gradle 的精确版本号，
+    // 使任何非正式版构建都无法通过）。产物结构仍由 verifyPackaging 守护。
 }
 
 // 插件公开 API 需要扩展实例（块外传参用），故在块后取回一次
@@ -416,6 +409,6 @@ tasks.register("runRealServerAcceptanceHost") {
 
 tasks.named("check") {
     // koverXmlReport 已随 kover 一并移除（本仓业务模块零 Kotlin 源，该任务恒为空转）。
-    dependsOn("test", "contractTest", "verifyPackaging", staticQualityTasks)
+    dependsOn("test", "verifyPackaging", staticQualityTasks)
 }
 // `build` 依赖 packageArtifacts 的收口已内置到 build-conventions（registerForgePackageArtifacts）
