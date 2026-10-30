@@ -44,8 +44,16 @@ runs:
         distribution: temurin
         java-version: "25"
 
+    # PR 上也要写/读 Gradle 构建缓存。
+    # setup-gradle 的 cache-read-only 默认值是「非默认分支即为 true」，于是每个 PR 都从零编译
+    # （实测 PR run: 721 任务 / 682 executed / 39 from cache，构建步骤 787s；同一仓库 main 分支
+    # run: 876 任务 / 270 executed / 606 from cache，244s）。这是本 job 最大的一笔可省开销。
+    # Enhanced Caching 的条目 key 含 job-id 与 git-sha，PR 写自己的条目不会污染 main。
+    # 前提：仓库缓存配额充足（已清理掉 4.8GB 遗留条目）。
     - name: 配置 Gradle 缓存
       uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      with:
+        cache-read-only: false
 
     # Loom 制品（MC 映射 / dev jar，数 GB）不在 setup-gradle 默认缓存内，冷启必须重新派生。
     # ⚠ 缓存 path 必须与下面 `-Dfabric.loom.cache.dir` 完全一致（均 ~/.gradle/caches/fabric-loom），
@@ -64,10 +72,33 @@ runs:
           ~/.gradle/caches/fabric-loom
           platform/*/*/build/loom-cache
         key: loom-${{ runner.os }}-all-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
-        # 只回退到本 job 自己的旧 key（`loom-<os>-all-` 前缀）。不要放宽成 `loom-<os>-`：E2E 各格用的是
+        # 只回退到本 job 自己的旧 key（`loom-<os>-all-` 前缀）。不要放宽成 `loom-<os>-`：E2E 各格以前用过
         # `loom-<os>-<matrix.name>-…`，宽前缀会把 quality job 引到只含单格制品的缓存上，patched jar 全部缺失。
         restore-keys: |
           loom-${{ runner.os }}-all-
+
+    # 回收旧的 loom 缓存条目：GitHub 缓存不可变，key 里含 hashFiles('platform/**/build.gradle.kts')，
+    # 所以每改一次车道脚本就产生一条全新的 ~1.3GB 条目，旧的不自动删。实测曾累积到 7 条 / 6.2GB，
+    # 把 10GB 配额挤满，反过来使 gradle-wrapper-zips / transforms / groovy-dsl 这些小条目被 LRU
+    # 逐出（导致每轮重下 133MB Gradle 发行包）。此处保留最新的 2 条，其余同前缀条目一律删。
+    - name: 回收旧的 Loom 缓存条目
+      if: inputs.disable-build-cache != 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      shell: bash
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+      run: |
+        # 只在本仓库的默认分支上跑：PR 的 token 无权限删缓存，且并发写多个 run 时删除会互相干扰。
+        set -euo pipefail
+        KEEP=${LOOM_CACHE_KEEP:-2}
+        gh api "repos/$REPO/actions/caches?per_page=100" \
+          --jq '[.actions_caches[] | select(.key|startswith("loom-"))] | sort_by(.created_at) | reverse | .['"$KEEP"':] | .[] | "\(.id) \(.key)"' \
+        | while read -r id key; do
+            [ -z "${id:-}" ] && continue
+            gh api -X DELETE "repos/$REPO/actions/caches/$id" >/dev/null 2>&1 \
+              && echo "已回收旧缓存 ${key}" || true
+          done
 
     # Mojang 版本清单的预热不在 CI 做：`settings.gradle.kts` 在配置期统一串行预热，
     # 本地构建同样受益（详见那里的注释）。
@@ -94,11 +125,18 @@ runs:
         CPUS=$(nproc)
         WORKERS=$(( CPUS > 16 ? 16 : (CPUS < 2 ? 2 : CPUS) ))
         echo "[ci] runner 核数=$CPUS，Gradle --max-workers=$WORKERS"
+        # shell 带 `-e -o pipefail`：构建失败时下面这条 pipeline 返回非零，`-e` 会**当场终止脚本**，
+        # 于是后面取 PIPESTATUS、写 GITHUB_ENV 的几行都不会执行。实测后果：失败时 summary 只能
+        # 写「构建未执行到记录耗时」，且 BUILD_RC 缺失使失败摘要的 `if [ "${BUILD_RC:-0}" != "0" ]`
+        # 恒假——专为失败写的诊断从不触发。
+        # ⚠ `set +e` 必须放在 pipeline **之前**（放后面就永远轮不到它执行，等于没改）。
+        set +e
         ./gradlew "-Dfabric.loom.cache.dir=$HOME/.gradle/caches/fabric-loom" \
           --no-daemon --max-workers="$WORKERS" --no-watch-fs --console=plain --stacktrace \
           $EXTRA_GRADLE_ARGS \
           :buildAll 2>&1 | tee /tmp/build.log
         BUILD_RC=${PIPESTATUS[0]}
+        set -e
         BUILD_SECONDS=$(( $(date +%s) - BUILD_START ))
         echo "BUILD_RC=$BUILD_RC" >> "$GITHUB_ENV"
         echo "BUILD_SECONDS=$BUILD_SECONDS" >> "$GITHUB_ENV"
@@ -117,17 +155,9 @@ runs:
         cache: npm
         cache-dependency-path: e2e/bot/package-lock.json
 
-    # A 车道桩是根构建子模块（无自有 wrapper / settings），故在仓库根以 JDK 25 构建。
-    - name: 构建 E2E harness
-      if: inputs.validate-template == 'true'
-      shell: bash
-      env:
-        JAVA_HOME: ${{ steps.java25.outputs.path }}
-        MPMT_JAVA8_HOME: ${{ steps.java8.outputs.path }}
-        MPMT_JAVA17_HOME: ${{ steps.java17.outputs.path }}
-        MPMT_JAVA21_HOME: ${{ steps.java21.outputs.path }}
-        MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
-      run: ./gradlew --no-daemon --max-workers=2 --no-watch-fs --console=plain :e2e:harness:build
+    # `:e2e:harness` 是根构建子模块（无自有 settings/wrapper），其 build 任务已由上面的
+    # `:buildAll` 经 projectsWithBuildTask 登记后跑过，单独再跑一次实测 17 个任务全部
+    # UP-TO-DATE（~17s 纯起步开销、零产出），故不再重复调用。
 
     - name: 校验 E2E bot 模板
       if: inputs.validate-template == 'true'

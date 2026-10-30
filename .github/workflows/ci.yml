@@ -61,14 +61,16 @@ jobs:
               echo >> "$GITHUB_STEP_SUMMARY"
             fi
 
-            # loom 缓存复用：出现「共享缓存产物不可复用」说明 MC 制品在重新派生（:buildAll 的固定开销大头）。
-            REGEN=$(grep -c "共享缓存产物不可复用" /tmp/build.log || true)
-            CACHE_HIT=$(grep -c "命中\|reused\|from cache" /tmp/build.log || true)
+            # 从同一行汇总里拆出真实计数，不再靠 grep 日志猜。
+            # 原先用 `grep -c "命中\|reused\|from cache"`，但 `--console=plain` 下任务的
+            # 缓存标记是大写 `FROM-CACHE`，小写字面量只命中汇总行本身，得到恒为 1 的假值；
+            # 「共享缓存产物不可复用」那条更不存在于 loom 输出里（零次），于是恒为 0。
+            # 两个假指标都在往「缓存正常」的方向说谎，比没有指标更坏。
+            CACHE_HIT=$(printf '%s\n' "$STATS" | sed -n 's/.*, \([0-9]\{1,\}\) from cache.*/\1/p')
             {
               echo "| 指标 | 值 |"
               echo "|---|---|"
-              echo "| loom 制品重新生成次数 | ${REGEN} |"
-              echo "| Gradle 缓存命中任务数 | ${CACHE_HIT} |"
+              echo "| Gradle 缓存命中任务数 | ${CACHE_HIT:-未知} |"
               echo
             } | tee -a "$GITHUB_STEP_SUMMARY"
 
@@ -215,21 +217,10 @@ jobs:
       - name: 配置 Gradle 缓存
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
-      # Loom 制品（MC 映射 / dev jar，数 GB）不在 setup-gradle 默认缓存内，冷启必须重新派生。
-      # **本格只恢复、不保存**：loom 缓存只由 quality job 独占写入（它跑全车道、内容最完整）——四格各存
-      # 一份会吃掉 10GB 配额（assets 1.4G + minecraftMaven 1.0G）并把 quality 的缓存挤掉；多写者同 key
-      # 保存不同内容也会命中到不完整副本。未命中时本格自行派生（单车道成本可接受）。
-      - name: 恢复 Loom 制品（只读）
-        uses: actions/cache/restore@v4 # 钉主版本 v4：必须与 build-release-artifacts 的 actions/cache@v4 同主版本，否则缓存 key 不通
-        with:
-          # path 必须与 quality job 的「缓存 Loom 制品」一致（含各车道 build/loom-cache）：
-          # 缺后者时 remap* 输出为空，本格仍要重新派生（单格 ~150s）。
-          path: |
-            ~/.gradle/caches/fabric-loom
-            platform/*/*/build/loom-cache
-          key: loom-${{ runner.os }}-all-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
-          restore-keys: |
-            loom-${{ runner.os }}-all-
+      # 不恢复 loom 缓存：矩阵四格全部只构建 :platform:bukkit:*，而 bukkit 车道脚本
+      # 未应用任何 loom 插件（无 fabric-loom / architectury-loom），实测各格日志里 loom 派生态
+      # 任务数为 0。恢复一份 1.37GB 缓存纯属浪费（四格共 ~45s 带宽），且 restore 会刷新
+      # last_accessed_at，让这些无用的巨条目长期不被 LRU 驱逐，反过来挤占 quality 的配额。
 
       # Mojang 版本清单预热在 `settings.gradle.kts` 配置期统一做（本地与 CI 共用），这里不再重复。
 
