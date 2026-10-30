@@ -334,6 +334,25 @@ jobs:
           restore-keys: |
             loom-${{ runner.os }}-all-
 
+      # 与本格恢复的缓存一样，清单副本来自旧 key（上次写入 2026-10-28），必然超过 loom 的
+      # 一天保留期。不预热就会让本格内的多个车道工程在并行配置时同时下载、撞上 loom 下载器
+      # 那个不可重入的 `.lock` 互斥（详见 .github/actions/build-release-artifacts/action.yml
+      # 里同名步骤的说明）。这里串行写一次，成本一次 280KB 下载。
+      - name: 预热 Mojang 版本清单（串行）
+        shell: bash
+        run: |
+          set -euo pipefail
+          MANIFEST="${HOME}/.gradle/caches/fabric-loom/mojang_versions_manifest.json"
+          mkdir -p "$(dirname "$MANIFEST")"
+          URL="https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+          if curl -fsSL --retry 3 --retry-delay 2 --max-time 120 -o "${MANIFEST}.tmp" "$URL"; then
+            mv -f "${MANIFEST}.tmp" "$MANIFEST"
+            echo "已预热版本清单：$(wc -c < "$MANIFEST") 字节"
+          else
+            rm -f "${MANIFEST}.tmp"
+            echo "::warning::预热版本清单失败，回退给 loom 自行下载"
+          fi
+
       # 本格的产品 jar：只有它进被测插件注入；其余车道不构建（矩阵各格自足）。
       - name: 构建本格产品 jar
         shell: bash

@@ -88,6 +88,45 @@ runs:
         restore-keys: |
           loom-${{ runner.os }}-all-
 
+    # 预热版本清单（mojang_versions_manifest.json，约 280KB），让后面的并行配置直接复用。
+    #
+    # 为什么必须这样做：loom 的下载器用 `.lock` 文件做互斥（`Download.createLock` 用
+    # `Files.createFile`，已存在即抛），这套锁在**同一 JVM 内的多工程并行配置**下不可重入。
+    # 本仓开着了 `org.gradle.unsafe.isolated-projects=true` 与 `org.gradle.parallel=true`，
+    # 13 个车道工程会在配置期同时调 `MinecraftMetadataProvider.getManifestEntry()`，
+    # 争用同一个清单文件，于是出现三种失败形态：
+    #   · `EOFException: End of input at line 1 column … path $.versions[566].id`（读到截断内容）
+    #   · `Failed to create MD5 hash … No such file or directory`（算哈希时文件已被删）
+    #   · `Failed download after 3 attempts`（三次重试都撞锁）
+    # 实测 2026-10-30 两轮 CI 均因此失败，且失败集合随轮次变化（Paper 1.21.1 上轮红下轮绿），
+    # 是典型的竞争而非代码缺陷。
+    #
+    # 这份清单的有意保留期只有一天（`DownloadBuilder.defaultCache()` → `maxAge(ONE_DAY)`），
+    # 而缓存恢复出来的副本来自 2026-10-28，**必然已过期**，于是每个工程都会走重新下载路径，
+    # 那个并发窗口就必然被撞上。
+    #
+    # 修法：在启动 Gradle 之前**串行地**把文件写好并刷新 mtime，使并行配置阶段所有工程
+    # 都判定为「新鲜、不需下载」，从根本上不进入那个竞争路径。
+    # 不能简单地删掉文件：那会让所有工程同时发现缺失、同时去下载，反而把竞争从
+    # 「部分触发」变成「必然全量触发」（已试过，更差）。
+    - name: 预热 Mojang 版本清单（串行，避开并行配置期的下载竞争）
+      if: inputs.disable-build-cache != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        MANIFEST="${HOME}/.gradle/caches/fabric-loom/mojang_versions_manifest.json"
+        mkdir -p "$(dirname "$MANIFEST")"
+        URL="https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+        # 先写临时文件再原子重命名，不留下半成品窗口。
+        # 下载失败不阻断构建：退化为让 loom 自己下载（与修前行为一致，不会更差）。
+        if curl -fsSL --retry 3 --retry-delay 2 --max-time 120 -o "${MANIFEST}.tmp" "$URL"; then
+          mv -f "${MANIFEST}.tmp" "$MANIFEST"
+          echo "已预热版本清单：$(wc -c < "$MANIFEST") 字节"
+        else
+          rm -f "${MANIFEST}.tmp"
+          echo "::warning::预热版本清单失败，回退给 loom 自行下载"
+        fi
+
     # 单一根构建：全部平台车道为根子模块，一条命令构建 + 校验 + 聚合发布产物。
     # JDK 25 守护（26.2 车道配置期硬校验）；MPMT_JAVA*_HOME 供矩阵轨与跨代车道显式选 JDK。
     #
