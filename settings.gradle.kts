@@ -334,3 +334,74 @@ laneDirectories.forEach { (path, dir) ->
     include(path)
     project(":$path").projectDir = file(dir)
 }
+
+// ============================================================================
+// Mojang 版本清单预热（本地与 CI 共用）
+//
+// loom 在**每个** loom 工程的配置期各自调 `MinecraftMetadataProvider.getManifestEntry()`，
+// 全部指向同一份 `<userCache>/mojang_versions_manifest.json`。而它的下载互斥是
+// `Download.createLock` 的 `Files.createFile`（已存在即抛）配合 `getAndResetLock` 的
+// `Files.delete`，这套「独占创建 + 抢到就删」的锁在**同一 JVM 的并行配置**下不可重入：
+// 开了 `org.gradle.parallel` 与 `org.gradle.unsafe.isolated-projects` 后多个工程同时进入，
+// 表现为三种随机失败：
+//   · EOFException: End of input at line 1 column … path $.versions[N].id（读到别人写一半的内容）
+//   · Failed to create MD5 hash … No such file or directory（算哈希时文件被对方删了）
+//   · Failed download after 3 attempts（三次重试均撞锁）
+//
+// 它在「清单过期」时必然出现：`DownloadBuilder.defaultCache()` 给的保留期是 **1 天**
+// （`Download.isOutdated` 按 mtime 判定），只要恢复的缓存超过一天，每个工程都会重新下载。
+//
+// 修法：在 settings 阶段（早于所有工程配置）**串行地**写好这份清单并刷新 mtime。
+// 此后并发配置的各工程都判定「新鲜、不需下载」，不会进入那条竞争路径。
+// 下载失败不阻断构建：退化为让 loom 自行下载（与未预热时行为一致）。
+//
+// 不能改成「只删不写」：那会让所有工程同时发现缺失、同时去下载，把偶发竞争变成必然。
+// 放在 settings 而不是 CI 脚本里，是因为本地构建同样会中招；修在源头两处都受益。
+// ============================================================================
+run {
+    // 与 loom 的默认 userCache 一致：`<gradle user home>/caches/fabric-loom`。
+    // 允许用 loom 自己的属性覆盖（CI 用 -Dfabric.loom.cache.dir 指定同一目录）。
+    val loomCacheOverride = System.getProperty("fabric.loom.cache.dir")
+    val loomCache =
+        if (loomCacheOverride.isNullOrBlank()) {
+            gradle.gradleUserHomeDir.resolve("caches/fabric-loom")
+        } else {
+            file(loomCacheOverride)
+        }
+    val manifest = loomCache.resolve("mojang_versions_manifest.json")
+    val manifestUrl = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+
+    // 离线下跳过：此时不该产生任何网络访问，交给 loom 用现有文件或自行报错。
+    val offline = gradle.startParameter.isOffline
+
+    val stale = !manifest.isFile || System.currentTimeMillis() - manifest.lastModified() > 12L * 60 * 60 * 1000
+
+    if (!offline && stale) {
+        // 先写同目录临时文件再原子替换，避免任何读到半成品的窗口。
+        val tmp = manifest.resolveSibling(manifest.name + ".warm.tmp")
+        val ok =
+            runCatching {
+                manifest.parentFile.mkdirs()
+                java.net.URI(manifestUrl).toURL().openStream().use { input ->
+                    tmp.outputStream().use { output -> input.copyTo(output) }
+                }
+                // 原子替换（同目录，同一文件系统）。
+                java.nio.file.Files.move(
+                    tmp.toPath(),
+                    manifest.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                )
+                true
+            }.getOrElse {
+                runCatching { tmp.delete() }
+                false
+            }
+
+        if (ok) {
+            logger.lifecycle("[mpmt] 已预热 Mojang 版本清单（${manifest.length()} 字节），并行配置期不再下载")
+        } else {
+            logger.warn("[mpmt] 预热 Mojang 版本清单失败，回退给 loom 自行下载（可能与并行配置竞争）")
+        }
+    }
+}

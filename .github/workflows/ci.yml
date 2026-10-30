@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: 检出仓库
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -34,9 +34,7 @@ jobs:
         with:
           validate-template: "true"
 
-      # 构建耗时与缓存命中写入 job summary。没有它时，14 分钟的 quality job 在 UI 上
-      # 只有一个「success」，无法判断时间是花在编译、测试还是 loom 派生 MC 制品上，
-      # 也就无法察觉缓存失效（曾因缓存路径与 -Dfabric.loom.cache.dir 错位而整轮无效）。
+      # 构建耗时、任务统计与缓存命中写入 job summary：没有它，十几分钟的 quality job 在 UI 上只有一个「success」。
       - name: 生成构建报告
         if: always()
         shell: bash
@@ -63,8 +61,7 @@ jobs:
               echo >> "$GITHUB_STEP_SUMMARY"
             fi
 
-            # loom 的缓存复用情况：出现「共享缓存产物不可复用」说明 MC 制品在重新派生，
-            # 这是 :buildAll 的主要固定开销，出现得多就说明 loom 缓存没生效。
+            # loom 缓存复用：出现「共享缓存产物不可复用」说明 MC 制品在重新派生（:buildAll 的固定开销大头）。
             REGEN=$(grep -c "共享缓存产物不可复用" /tmp/build.log || true)
             CACHE_HIT=$(grep -c "命中\|reused\|from cache" /tmp/build.log || true)
             {
@@ -86,96 +83,6 @@ jobs:
               echo "</details>" >> "$GITHUB_STEP_SUMMARY"
             fi
           fi
-
-      # 耗时归因：把「16 分钟花在哪」按任务类别拆开，同时给出任务密集时段。
-      # 之前 summary 只报总耗时，无法回答「是编译慢、测试慢，还是静态分析慢」，
-      # 也就无法判断该优化什么。这里用 Gradle 输出的任务完成时间戳做归因：
-      # 同一类任务的首末时间戳之差（含等待）即可看出该类占了多少墙钟时间。
-      - name: 耗时归因
-        if: always()
-        shell: bash
-        run: |
-          if [ ! -f /tmp/build.log ]; then
-            echo "> 无 /tmp/build.log，跳过耗时归因。" | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          python3 - <<'PY' 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
-          import re, datetime
-          from collections import defaultdict
-
-          # 按任务名归类。顺序敏感：先匹配更具体的。
-          CATEGORIES = [
-              ("静态分析 (spotbugs/pmd/checkstyle/detekt)", ("spotbugs", "pmd", "checkstyle", "detekt")),
-              ("格式检查 (ktlint)", ("ktlint",)),
-              ("覆盖率 (jacoco)", ("jacoco",)),
-              ("测试 (test)", ("test",)),
-              ("loom (MC 制品/映射/AT)", ("loom", "Minecraft", "mappings", "accessTransform",
-                                          "generateForge", "manipulate", "remapMinecraft",
-                                          "reobf", "remapJar")),
-              ("编译 (compileJava/classes)", ("compile", "classes")),
-              ("打包 (jar/shadow)", ("jar", "shadow")),
-          ]
-
-          def categorize(task):
-              low = task.lower()
-              for name, pats in CATEGORIES:
-                  if any(p.lower() in low for p in pats):
-                      return name
-              return "其它 (processResources 等)"
-
-          evts = []
-          for line in open("/tmp/build.log", encoding="utf-8", errors="ignore"):
-              if "> Task :" not in line:
-                  continue
-              m = re.search(r"(\d{4}-\d\d-\d\dT[\d:]+)\.\d+Z.*> Task :([\w:.\-]+)", line)
-              if m:
-                  evts.append((datetime.datetime.fromisoformat(m.group(1)), m.group(2)))
-          if not evts:
-              print("> 未能从构建日志解析出任务时间戳。")
-              raise SystemExit
-
-          evts.sort()
-          span = (evts[-1][0] - evts[0][0]).total_seconds()
-
-          # 每个类别：任务数 + 首末时间戳跨度（反映该类在关键路径上占了多久）
-          stats = defaultdict(lambda: {"n": 0, "first": None, "last": None})
-          for ts, task in evts:
-              s = stats[categorize(task)]
-              s["n"] += 1
-              if s["first"] is None:
-                  s["first"] = ts
-              s["last"] = ts
-
-          print()
-          print("## 耗时归因")
-          print()
-          print(f"构建跨度 **{span/60:.1f} 分**，共 {len(evts)} 个任务完成事件。")
-          print()
-          print("> 「跨度」是该类首个任务开始到末个任务完成的墙钟时间，含并行等待，")
-          print("> 因此各类跨度之和会大于总时长；用它看**哪类占据了时间轴**，而不是精确耗时。")
-          print()
-          print("| 类别 | 任务数 | 首任务 | 末任务 | 跨度 |")
-          print("|---|---|---|---|---|")
-          rows = sorted(stats.items(), key=lambda kv: -(kv[1]["last"] - kv[1]["first"]).total_seconds())
-          for name, s in rows:
-              d = (s["last"] - s["first"]).total_seconds()
-              print(f"| {name} | {s['n']} | {s['first'].strftime('%H:%M:%S')} "
-                    f"| {s['last'].strftime('%H:%M:%S')} | {d/60:.1f} 分 |")
-
-          # 最长「无任务完成」间隔：期间必然在跑单个长任务，是真正的串行瓶颈点
-          gaps = []
-          for i in range(len(evts) - 1):
-              sec = (evts[i + 1][0] - evts[i][0]).total_seconds()
-              gaps.append((sec, evts[i][1], evts[i + 1][1]))
-          gaps.sort(reverse=True)
-          print()
-          print("**最长的 5 个「无任务完成」间隔**（期间在跑单个长任务，是串行瓶颈点）：")
-          print()
-          print("| 秒 | 前一个完成的任务 | 后一个完成的任务 |")
-          print("|---|---|---|")
-          for sec, before, after in gaps[:5]:
-              print(f"| {sec:.0f} | `{before[-46:]}` | `{after[-46:]}` |")
-          PY
 
       # 测试与覆盖率汇总：按模块列出用例数、失败数，一眼能看出哪块退化了。
       - name: 汇总测试结果
@@ -222,7 +129,7 @@ jobs:
 
       - name: 上传构建诊断
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ci-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -236,15 +143,14 @@ jobs:
 
       - name: 上传默认分支发布制品
         if: success() && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-artifacts-${{ github.sha }}
           path: build/dist/**
           if-no-files-found: error
           retention-days: 30
 
-# E2E 版本矩阵：用 mc-testkit（远端 Maven 的 0.9.3）逐格并行起真实服务端跑 A 车道场景。
-# 每格 = 一个 MC 版本/平台 + 该版本的产品 jar；结果文件由 e2e-report 汇总成一份报告。
+# E2E 版本矩阵：用 mc-testkit 逐格并行起真实服务端跑 A 车道场景，每格 = 一个版本/平台 + 其产品 jar。
   e2e-matrix:
     name: E2E 矩阵 · ${{ matrix.name }}
     runs-on: ubuntu-latest
@@ -273,60 +179,51 @@ jobs:
             task: ":e2e:harness:e2eSmoke262"
     steps:
       - name: 检出仓库
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: 安装 Java 8（toolchain 目标）
         id: java8
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "8"
 
       - name: 安装 Java 17（1.20.1 后端）
         id: java17
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "17"
 
       - name: 安装 Java 21（1.21.1 后端）
         id: java21
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "21"
 
       - name: 安装 Java 25（26.2 后端与根构建守护）
         id: java25
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "25"
 
       - name: 配置 Gradle 缓存
-        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
-      # Loom 的 MC 映射 / dev jar（约数 GB）不在 setup-gradle 默认缓存范围内，
-      # 每次冷启动都要重新派生。
-      #
-      # **本格只恢复、不保存**：loom 缓存只由 quality job 独占写入（它跑全车道，
-      # 缓存内容最完整）。原因有两个：
-      #   · 体积：assets/(1.4G) + minecraftMaven/(1.0G) 是全版本共享的，4 格各存一份
-      #     会再吃掉 10GB 配额——这正是之前 quality job 的 loom 缓存被挤掉、
-      #     长期 "Cache not found" 的根因；
-      #   · 一致性：多写者用同一个 key 保存不同内容，会让缓存命中到不完整的副本。
-      # 用 actions/cache/restore（只读）复用 quality 的 key 格式，命中即省下派生开销，
-      # 未命中则本格自行派生（单车道成本可接受），不污染缓存。
+      # Loom 制品（MC 映射 / dev jar，数 GB）不在 setup-gradle 默认缓存内，冷启必须重新派生。
+      # **本格只恢复、不保存**：loom 缓存只由 quality job 独占写入（它跑全车道、内容最完整）——四格各存
+      # 一份会吃掉 10GB 配额（assets 1.4G + minecraftMaven 1.0G）并把 quality 的缓存挤掉；多写者同 key
+      # 保存不同内容也会命中到不完整副本。未命中时本格自行派生（单车道成本可接受）。
       - name: 恢复 Loom 制品（只读）
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v4 # 钉主版本 v4：必须与 build-release-artifacts 的 actions/cache@v4 同主版本，否则缓存 key 不通
         with:
-          # 与 quality job 的「缓存 Loom 制品」保持同一套 path（见
-          # .github/actions/build-release-artifacts/action.yml）：
-          # 除了 ~/.gradle 下的共享制品，还包括各车道的 build/loom-cache。
-          # 缺后者时 remapMinecraft* 的输出为空，本格仍要重新派生（单格 ~150s）。
+          # path 必须与 quality job 的「缓存 Loom 制品」一致（含各车道 build/loom-cache）：
+          # 缺后者时 remap* 输出为空，本格仍要重新派生（单格 ~150s）。
           path: |
             ~/.gradle/caches/fabric-loom
             platform/*/*/build/loom-cache
@@ -334,24 +231,7 @@ jobs:
           restore-keys: |
             loom-${{ runner.os }}-all-
 
-      # 与本格恢复的缓存一样，清单副本来自旧 key（上次写入 2026-10-28），必然超过 loom 的
-      # 一天保留期。不预热就会让本格内的多个车道工程在并行配置时同时下载、撞上 loom 下载器
-      # 那个不可重入的 `.lock` 互斥（详见 .github/actions/build-release-artifacts/action.yml
-      # 里同名步骤的说明）。这里串行写一次，成本一次 280KB 下载。
-      - name: 预热 Mojang 版本清单（串行）
-        shell: bash
-        run: |
-          set -euo pipefail
-          MANIFEST="${HOME}/.gradle/caches/fabric-loom/mojang_versions_manifest.json"
-          mkdir -p "$(dirname "$MANIFEST")"
-          URL="https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
-          if curl -fsSL --retry 3 --retry-delay 2 --max-time 120 -o "${MANIFEST}.tmp" "$URL"; then
-            mv -f "${MANIFEST}.tmp" "$MANIFEST"
-            echo "已预热版本清单：$(wc -c < "$MANIFEST") 字节"
-          else
-            rm -f "${MANIFEST}.tmp"
-            echo "::warning::预热版本清单失败，回退给 loom 自行下载"
-          fi
+      # Mojang 版本清单预热在 `settings.gradle.kts` 配置期统一做（本地与 CI 共用），这里不再重复。
 
       # 本格的产品 jar：只有它进被测插件注入；其余车道不构建（矩阵各格自足）。
       - name: 构建本格产品 jar
@@ -363,14 +243,13 @@ jobs:
           MPMT_JAVA21_HOME: ${{ steps.java21.outputs.path }}
           MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
         run: |
-          # loom 缓存目录必须与上面 actions/cache 的 path（~/.gradle/caches/fabric-loom）
-          # 一致，否则恢复出来的 MC 制品一次都用不上，每格都要重新下载并派生。
+          # loom 缓存目录必须与上面 actions/cache 的 path（~/.gradle/caches/fabric-loom）一致，
+          # 否则恢复出来的 MC 制品一次都用不上。
           ./gradlew "-Dfabric.loom.cache.dir=$HOME/.gradle/caches/fabric-loom" \
             --no-daemon --max-workers=2 --no-watch-fs --console=plain \
             ${{ matrix.lane }}:shadowJar
 
-      # mc-testkit 编排：起真实服务端、注入产品 jar 与桩 jar、读结果文件判 PASS/FAIL。
-      # 插件坐标直接解析远端 WCPE Releases（0.9.3 与 harness-core 0.1.1 均已发布），无需本地发布。
+      # mc-testkit 编排：起真实服务端、注入产品 jar 与桩 jar、读结果文件判 PASS/FAIL（插件坐标走远端 WCPE Releases）。
       - name: 运行 mc-testkit E2E（${{ matrix.name }}）
         shell: bash
         env:
@@ -394,7 +273,7 @@ jobs:
 
       - name: 上传本格结果文件
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-results-${{ strategy.job-index }}-${{ matrix.name }}
           path: e2e/harness/build/mc-testkit/results/**

@@ -14,137 +14,69 @@ inputs:
 runs:
   using: composite
   steps:
-    # 根构建硬要求守护 JVM ≥ 25（26.2 两条车道的 loom 与车道脚本在配置期硬校验，ADR-0026 决策 4）。
-    # 8/17/21 仅作为 toolchain 目标由 foojay 解析；此处显式安装以命中 CI 缓存、避免每次下载。
+    # 根构建守护 JVM ≥ 25（26.2 车道在配置期硬校验，ADR-0026）；8/17/21 仅作 toolchain 目标由 foojay 解析，
+    # 此处显式安装以命中 CI 缓存、避免每次下载。
     - name: 安装 Java 8
       id: java8
-      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+      uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
       with:
         distribution: temurin
         java-version: "8"
 
     - name: 安装 Java 17
       id: java17
-      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+      uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
       with:
         distribution: temurin
         java-version: "17"
 
     - name: 安装 Java 21
       id: java21
-      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+      uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
       with:
         distribution: temurin
         java-version: "21"
 
     - name: 安装 Java 25（根构建守护 JVM）
       id: java25
-      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+      uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
       with:
         distribution: temurin
         java-version: "25"
 
     - name: 配置 Gradle 缓存
-      uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+      uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
-    # Loom 的 MC 映射 / dev jar（约数 GB）不在 setup-gradle 默认缓存范围内，
-    # 每次冷启动都要重新派生，是 :buildAll 的主要固定开销。
-    #
-    # 只缓存 Loom 制品（映射与 dev jar），不动 setup-gradle 的 cache-read-only：
-    # 本 action 也被 CodeQL 以 disable-build-cache=true 调用，若开启构建缓存写入/命中，
-    # compileJava 会取缓存产物而不调用 javac，CodeQL 报 Exit 32。
-    # CodeQL 路径跳过本步骤，避免与其 build-cache 策略相互干扰。
-    #
-    # ⚠ 缓存路径必须与下面 `-Dfabric.loom.cache.dir` 指向的目录**完全一致**。
-    # 此前二者错位（缓存 ~/.gradle/caches/fabric-loom，构建读工作区内的
-    # .gradle/loom-user-cache），导致恢复出来的映射与 dev jar 一次都用不上，
-    # 每轮都要重新下载并派生 MC jar / mappings / patched jar——这是 :buildAll 耗时的大头。
-    # 现统一到 ~/.gradle/caches/fabric-loom，并用同一个表达式生成构建参数，从结构上避免再次漂移。
+    # Loom 制品（MC 映射 / dev jar，数 GB）不在 setup-gradle 默认缓存内，冷启必须重新派生。
+    # ⚠ 缓存 path 必须与下面 `-Dfabric.loom.cache.dir` 完全一致（均 ~/.gradle/caches/fabric-loom），
+    # 错位时恢复出来的映射 / dev jar 一次都用不上。
+    # 不要开构建缓存的写入/命中：本 action 也被 CodeQL 以 disable-build-cache=true 调用，命中时
+    # compileJava 取缓存产物而不调 javac，CodeQL 报 Exit 32，故其路径跳过本步骤。
     - name: 缓存 Loom 制品
       if: inputs.disable-build-cache != 'true'
-      uses: actions/cache@v4
+      uses: actions/cache@v4 # 钉主版本 v4：必须与 ci.yml 的 actions/cache/restore@v4 同主版本，否则缓存 key 不通
       with:
-        # 三层一起缓存，缺一层就会退化成全量重新派生：
-        #
-        # ① ~/.gradle/caches/fabric-loom——下载的 MC jar / 映射表 / 本地 m2 形式的 dev jar。
-        # ② **各车道的 build/loom-cache**——`remapMinecraft*` / `generateForgePrePatchJar` 的
-        #    产出。之前没缓这一层，于是即便 ① 命中，每个车道的重映射输出仍是空的，
-        #    任务只能重跑：实测 `remapMinecraftNamedMerged` 单个 145~166s，
-        #    全仓 8 个共 ~1200s，是 CI 上最大的单笔固定开销。
-        #    体积很小：全部车道合计 ~4.5MB（compared to ① 的 4.2GB）。
-        # ③ 不缓存工作区 `.gradle/`：那是构建的工作目录，缓存中间产物会让下游读到
-        #    「文件在、内容不可用」的半成品（历史踩坑：genSourcesWithCfr 报 Minecraft jar 尚不存在）。
-        #
-        # loom 对 ① 与 ② 都做了内容校验，两份同时恢复不会出现"jar 在但哈希不符"的错配。
+        # 三层一起缓存，缺一层就退化成全量重新派生：① ~/.gradle/caches/fabric-loom（MC jar / 映射表 /
+        # dev jar）；② 各车道的 build/loom-cache（remap* 产出，单个 145~166s、全仓 ~1200s，是固定开销
+        # 大头但合计仅 ~4.5MB）；③ 绝不缓存工作区 `.gradle/`——其中的半成品会让下游读到「文件在、内容
+        # 不可用」（genSourcesWithCfr 报 MC jar 尚不存在）。loom 对 ①② 都做校验，两份同时恢复不会错配。
         path: |
           ~/.gradle/caches/fabric-loom
           platform/*/*/build/loom-cache
         key: loom-${{ runner.os }}-all-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
-        # 只回退到本 job 自己的旧 key（`loom-<os>-all-` 前缀）。
-        # 不要放宽到 `loom-<os>-`：E2E 矩阵各格用的是
-        # `loom-<os>-<matrix.name>-...`（如 `loom-Linux-Folia 1.20.1-...`），
-        # 那条宽前缀会把 quality job 引到「只含单格制品」的缓存上，
-        # 于是 1.12.2 / forge / neoforge 的 patched jar 全部缺失、必被重新派生。
+        # 只回退到本 job 自己的旧 key（`loom-<os>-all-` 前缀）。不要放宽成 `loom-<os>-`：E2E 各格用的是
+        # `loom-<os>-<matrix.name>-…`，宽前缀会把 quality job 引到只含单格制品的缓存上，patched jar 全部缺失。
         restore-keys: |
           loom-${{ runner.os }}-all-
 
-    # 预热版本清单（mojang_versions_manifest.json，约 280KB），让后面的并行配置直接复用。
-    #
-    # 为什么必须这样做：loom 的下载器用 `.lock` 文件做互斥（`Download.createLock` 用
-    # `Files.createFile`，已存在即抛），这套锁在**同一 JVM 内的多工程并行配置**下不可重入。
-    # 本仓开着了 `org.gradle.unsafe.isolated-projects=true` 与 `org.gradle.parallel=true`，
-    # 13 个车道工程会在配置期同时调 `MinecraftMetadataProvider.getManifestEntry()`，
-    # 争用同一个清单文件，于是出现三种失败形态：
-    #   · `EOFException: End of input at line 1 column … path $.versions[566].id`（读到截断内容）
-    #   · `Failed to create MD5 hash … No such file or directory`（算哈希时文件已被删）
-    #   · `Failed download after 3 attempts`（三次重试都撞锁）
-    # 实测 2026-10-30 两轮 CI 均因此失败，且失败集合随轮次变化（Paper 1.21.1 上轮红下轮绿），
-    # 是典型的竞争而非代码缺陷。
-    #
-    # 这份清单的有意保留期只有一天（`DownloadBuilder.defaultCache()` → `maxAge(ONE_DAY)`），
-    # 而缓存恢复出来的副本来自 2026-10-28，**必然已过期**，于是每个工程都会走重新下载路径，
-    # 那个并发窗口就必然被撞上。
-    #
-    # 修法：在启动 Gradle 之前**串行地**把文件写好并刷新 mtime，使并行配置阶段所有工程
-    # 都判定为「新鲜、不需下载」，从根本上不进入那个竞争路径。
-    # 不能简单地删掉文件：那会让所有工程同时发现缺失、同时去下载，反而把竞争从
-    # 「部分触发」变成「必然全量触发」（已试过，更差）。
-    - name: 预热 Mojang 版本清单（串行，避开并行配置期的下载竞争）
-      if: inputs.disable-build-cache != 'true'
-      shell: bash
-      run: |
-        set -euo pipefail
-        MANIFEST="${HOME}/.gradle/caches/fabric-loom/mojang_versions_manifest.json"
-        mkdir -p "$(dirname "$MANIFEST")"
-        URL="https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
-        # 先写临时文件再原子重命名，不留下半成品窗口。
-        # 下载失败不阻断构建：退化为让 loom 自己下载（与修前行为一致，不会更差）。
-        if curl -fsSL --retry 3 --retry-delay 2 --max-time 120 -o "${MANIFEST}.tmp" "$URL"; then
-          mv -f "${MANIFEST}.tmp" "$MANIFEST"
-          echo "已预热版本清单：$(wc -c < "$MANIFEST") 字节"
-        else
-          rm -f "${MANIFEST}.tmp"
-          echo "::warning::预热版本清单失败，回退给 loom 自行下载"
-        fi
+    # Mojang 版本清单的预热不在 CI 做：`settings.gradle.kts` 在配置期统一串行预热，
+    # 本地构建同样受益（详见那里的注释）。
 
-    # 单一根构建：全部平台车道为根子模块，一条命令构建 + 校验 + 聚合发布产物。
-    # JDK 25 守护（26.2 车道配置期硬校验）；MPMT_JAVA*_HOME 供矩阵轨与跨代车道显式选 JDK。
-    #
-    # 并发度：此前写死 `--max-workers=1`，等于在 4 核 runner 上只用 1 核跑 885 个任务，
-    # 是本 job 的最大瓶颈。本机实测（同一次 --rerun-tasks 全量）：
-    #   --max-workers=1           25m05s
-    #   4 核（taskset）+ workers=4 19m18s
-    #   不限制（40 核）+ workers=40  6m46s
-    # 说明时间是串行排队而非缓存或编译本身。现交给 Gradle 按 runner 实际核数决定
-    #（org.gradle.parallel=true 已在 gradle.properties 开启）。
-    # 内存侧无风险：org.gradle.jvmargs=-Xmx4g 是堆上限而非预分配；1.12.2 车道的
-    # "-Xmx2G 低内存串行"约束由它自己的 JavaExec 任务参数保证，不依赖全局串行。
-    # 若将来 CI 出现 OOM，优先降 workers（下面 WORKERS 变量）而不是回到 1。
-    #
-    # disable-build-cache：CodeQL 靠追踪编译器调用提取源码，构建缓存命中会让
-    # compileJava 直接取缓存产物（日志里的 FROM-CACHE）而不调用 javac，于是 CodeQL
-    # 报 "this run didn't build any of it"（Exit 32）。故该场景下用 --no-build-cache
-    # 覆盖 gradle.properties 的 org.gradle.caching=true，强制真实编译。
+    # 单一根构建：全车道为根子模块，一条命令构建 + 校验 + 聚合发布产物（JDK 25 守护，ADR-0026）。
+    # 并发度**不要写死**：交给 Gradle 按 runner 实际核数决定（写死会与 runner 类型耦合）；若 CI 出现 OOM，
+    # 优先降下面的 WORKERS 而不是回到 --max-workers=1。
+    # disable-build-cache：CodeQL 靠追踪编译器调用提取源码，缓存命中会让 compileJava 取缓存产物
+    # （FROM-CACHE）而不调 javac、报 Exit 32；故该场景用 --no-build-cache 覆盖 org.gradle.caching=true。
     - name: 根全量构建（全车道制品 + 发布产物结构门 + dist 聚合）
       shell: bash
       env:
@@ -156,15 +88,9 @@ runs:
         EXTRA_GRADLE_ARGS: ${{ inputs.disable-build-cache == 'true' && '--no-build-cache' || '' }}
       run: |
         BUILD_START=$(date +%s)
-        # 并发度按 runner 实际核数自适应，而不是写死数字。
-        #
-        # 之前的演进：--max-workers=1（25m05s）→ 固定 4（19m18s）。写死 4 的问题是
-        # 与 runner 类型耦合：标准 ubuntu-latest 是 4 核，但 public repo 的 larger runner
-        # 或自托管机可能是 8/16 核，那样固定 4 就把资源浪费掉一半。
-        #
-        # 上限 16：再高的话单个 worker 的 JVM（javac / SpotBugs / 测试各一份）会把
-        # 内存吃掉——runner 通常 16GB，每个 worker 峰值可达 0.8~1.2GB。
-        # 下限 2：低于 2 时 loom 的多线程重映射与别的任务会串行排队。
+        # 并发度按 runner 实际核数自适应，而不是写死数字。上限 16：再高单个 worker 的 JVM（javac /
+        # SpotBugs / 测试）会把内存吃光（16GB runner，每 worker 峰值 0.8~1.2GB）；下限 2：再低 loom 的
+        # 多线程重映射会串行排队。
         CPUS=$(nproc)
         WORKERS=$(( CPUS > 16 ? 16 : (CPUS < 2 ? 2 : CPUS) ))
         echo "[ci] runner 核数=$CPUS，Gradle --max-workers=$WORKERS"
@@ -179,28 +105,19 @@ runs:
         echo "BUILD_WORKERS=$WORKERS" >> "$GITHUB_ENV"
         exit "$BUILD_RC"
 
-    # ⚠ 不要给 `.gradle/configuration-cache` 做 actions/cache 持久化。
-    # 试过并已回滚（run 40669808302）：缓存能存能取，但恢复后直接炸——
-    #   Could not load the value of field `valueSourceType` of
-    #   ConfigurationCacheFingerprint$ValueSource ...
-    #   Class 'org.jetbrains.kotlin.gradle.internal.IsInIdeaSyncValueSource'
-    #   not found in class loader '...settings[:realserver-acceptance]...'
-    # 根因：配置缓存会把 ValueSource 的**类型**序列化进去，回放时按插件类加载器
-    # 去找那个类。跨 runner 时插件类路径（buildSrc / includeBuild / kotlin-dsl）
-    # 的 ClassLoaderScopeIdentifier 对不上，类就找不到了。本机反复验证均是
-    # “Reusing configuration cache.”，因为它在同一台机器上类加载器标识一致——
-    # 这个陷阱在本机测不出来。
-    # 结论：:buildAll 的配置阶段在 CI 上就是得重算（约 164s），不要碰。
+    # ⚠ 不要给 `.gradle/configuration-cache` 做 actions/cache 持久化：跨 runner 回放时插件类加载器标识
+    # 对不上，直接报 ValueSource 类找不到（试过并已回滚，run 40669808302，详见 CHANGELOG.md）。
+    # 本机复现不了此问题（同一台机器类加载器标识一致），别拿本地「Reusing configuration cache」当验证。
 
     - name: 安装 Node 22
       if: inputs.validate-template == 'true'
-      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       with:
         node-version: "22"
         cache: npm
         cache-dependency-path: e2e/bot/package-lock.json
 
-    # A 车道桩是根构建子模块（ADR-0026：无自有 wrapper / settings），故在仓库根以 JDK 25 守护构建。
+    # A 车道桩是根构建子模块（无自有 wrapper / settings），故在仓库根以 JDK 25 构建。
     - name: 构建 E2E harness
       if: inputs.validate-template == 'true'
       shell: bash
