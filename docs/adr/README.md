@@ -40,6 +40,7 @@
 | [0033](0033-forge-artifact-namespace-named.md) | Forge 车道 patched jar 的重映射目标统一到 named，消除与运行期制品的命名空间并存 | 已弃用（实测证伪，见文内「证伪后的修正」） |
 | [0034](0034-forge-member-supplementary-remap.md) | 按 Forge 自身两版 jar 的成员差异，对最终 jar 做补充成员名改写 | 提议中 |
 | [0035](0035-acceptance-jar-does-not-shade-product-classes.md) | 验收插件不 shade 产品侧类，改由产品插件在运行期提供（修 ClassLoader 冲突） | 已接受 |
+| [0036](0036-architecture-guard-structural-only.md) | 架构守卫只做结构性检查，分层约束交给依赖声明与 ArchUnit | 已接受 |
 
 > 模板：状态 / 背景 / 决策 / 理由 / 后果 / 备选方案，见 [`_template.md`](_template.md)。
 

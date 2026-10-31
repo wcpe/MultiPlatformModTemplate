@@ -67,7 +67,9 @@ object ForgeModules {
 }
 
 /**
- * 现代 forge 车道（1.21.1 / 26.2）的源集形状：common / server / client 分目录 + acceptance / contractTest。
+ * 现代 forge 车道（1.21.1 / 26.2）的源集形状：common / server / client 分目录 + acceptance。
+ *
+ * （contractTest 源集已于 2026-10-29 移除。）
  *
  * 必须在车道脚本的 `loom { runs { … } }` 与依赖声明之前完成（run 的 `source(acceptance)` 直接取源集对象）。
  *
@@ -91,12 +93,7 @@ fun registerForgeModernSourceSets(project: Project) {
             compileClasspath += main.output + main.compileClasspath
             runtimeClasspath = output + main.output + main.runtimeClasspath
         }
-    sourceSets.create("contractTest") {
-        java.setSrcDirs(listOf("src/contractTest/java"))
-        resources.setSrcDirs(listOf("src/contractTest/resources"))
-        compileClasspath += main.output + acceptance.output + sourceSets.getByName("test").compileClasspath
-        runtimeClasspath += output + compileClasspath
-    }
+    // contractTest 源集已于 2026-10-29 移除（硬编码断言精确版本号，非正式版必失败）。
     listOf(main, acceptance).forEach { sourceSet ->
         sourceSet.output.setResourcesDir(
             sourceSet.java.destinationDirectory
@@ -108,12 +105,6 @@ fun registerForgeModernSourceSets(project: Project) {
     project.configurations
         .getByName("acceptanceCompileOnly")
         .extendsFrom(project.configurations.getByName("compileOnly"))
-    project.configurations
-        .getByName("contractTestImplementation")
-        .extendsFrom(project.configurations.getByName("testImplementation"))
-    project.configurations
-        .getByName("contractTestRuntimeOnly")
-        .extendsFrom(project.configurations.getByName("testRuntimeOnly"))
 }
 
 /**

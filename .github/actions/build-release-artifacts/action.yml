@@ -14,67 +14,100 @@ inputs:
 runs:
   using: composite
   steps:
-    # 根构建硬要求守护 JVM ≥ 25（26.2 两条车道的 loom 与车道脚本在配置期硬校验，ADR-0026 决策 4）。
-    # 8/17/21 仅作为 toolchain 目标由 foojay 解析；此处显式安装以命中 CI 缓存、避免每次下载。
+    # 根构建守护 JVM ≥ 25（26.2 车道在配置期硬校验，ADR-0026）；8/17/21 仅作 toolchain 目标由 foojay 解析，
+    # 此处显式安装以命中 CI 缓存、避免每次下载。
     - name: 安装 Java 8
       id: java8
-      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+      uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
       with:
         distribution: temurin
         java-version: "8"
 
     - name: 安装 Java 17
       id: java17
-      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+      uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
       with:
         distribution: temurin
         java-version: "17"
 
     - name: 安装 Java 21
       id: java21
-      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+      uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
       with:
         distribution: temurin
         java-version: "21"
 
     - name: 安装 Java 25（根构建守护 JVM）
       id: java25
-      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+      uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
       with:
         distribution: temurin
         java-version: "25"
 
+    # PR 上也要写/读 Gradle 构建缓存。
+    # setup-gradle 的 cache-read-only 默认值是「非默认分支即为 true」，于是每个 PR 都从零编译
+    # （实测 PR run: 721 任务 / 682 executed / 39 from cache，构建步骤 787s；同一仓库 main 分支
+    # run: 876 任务 / 270 executed / 606 from cache，244s）。这是本 job 最大的一笔可省开销。
+    # Enhanced Caching 的条目 key 含 job-id 与 git-sha，PR 写自己的条目不会污染 main。
+    # 前提：仓库缓存配额充足（已清理掉 4.8GB 遗留条目）。
     - name: 配置 Gradle 缓存
-      uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+      uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      with:
+        cache-read-only: false
 
-    # Loom 的 MC 映射 / dev jar（约数 GB）不在 setup-gradle 默认缓存范围内，
-    # 每次冷启动都要重新派生，是 :buildAll 的主要固定开销。
-    #
-    # 只缓存 Loom 制品（映射与 dev jar），不动 setup-gradle 的 cache-read-only：
-    # 本 action 也被 CodeQL 以 disable-build-cache=true 调用，若开启构建缓存写入/命中，
-    # compileJava 会取缓存产物而不调用 javac，CodeQL 报 Exit 32。
-    # CodeQL 路径跳过本步骤，避免与其 build-cache 策略相互干扰。
+    # Loom 制品（MC 映射 / dev jar，数 GB）不在 setup-gradle 默认缓存内，冷启必须重新派生。
+    # ⚠ 缓存 path 必须与下面 `-Dfabric.loom.cache.dir` 完全一致（均 ~/.gradle/caches/fabric-loom），
+    # 错位时恢复出来的映射 / dev jar 一次都用不上。
+    # 不要开构建缓存的写入/命中：本 action 也被 CodeQL 以 disable-build-cache=true 调用，命中时
+    # compileJava 取缓存产物而不调 javac，CodeQL 报 Exit 32，故其路径跳过本步骤。
     - name: 缓存 Loom 制品
       if: inputs.disable-build-cache != 'true'
-      uses: actions/cache@v4
+      uses: actions/cache@v4 # 钉主版本 v4：必须与 ci.yml 的 actions/cache/restore@v4 同主版本，否则缓存 key 不通
       with:
-        # 只缓存 ~/.gradle 下的共享制品（MC jar / 映射 / dev jar）。
-        # 不缓存工作区内的 .gradle/loom-user-cache：那是构建本身的工作目录，
-        # 缓存其中间产物会让下游构建读到「文件在、内容不可用」的半成品，
-        # 表现为 genSourcesWithCfr 报「Minecraft jar 尚不存在」而任务创建失败。
-        path: ~/.gradle/caches/fabric-loom
+        # 三层一起缓存，缺一层就退化成全量重新派生：① ~/.gradle/caches/fabric-loom（MC jar / 映射表 /
+        # dev jar）；② 各车道的 build/loom-cache（remap* 产出，单个 145~166s、全仓 ~1200s，是固定开销
+        # 大头但合计仅 ~4.5MB）；③ 绝不缓存工作区 `.gradle/`——其中的半成品会让下游读到「文件在、内容
+        # 不可用」（genSourcesWithCfr 报 MC jar 尚不存在）。loom 对 ①② 都做校验，两份同时恢复不会错配。
+        path: |
+          ~/.gradle/caches/fabric-loom
+          platform/*/*/build/loom-cache
         key: loom-${{ runner.os }}-all-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
+        # 只回退到本 job 自己的旧 key（`loom-<os>-all-` 前缀）。不要放宽成 `loom-<os>-`：E2E 各格以前用过
+        # `loom-<os>-<matrix.name>-…`，宽前缀会把 quality job 引到只含单格制品的缓存上，patched jar 全部缺失。
         restore-keys: |
           loom-${{ runner.os }}-all-
-          loom-${{ runner.os }}-
 
-    # 单一根构建：全部平台车道为根子模块，一条命令构建 + 校验 + 聚合发布产物。
-    # JDK 25 守护（26.2 车道配置期硬校验）；MPMT_JAVA*_HOME 供矩阵轨与跨代车道显式选 JDK。
-    #
-    # disable-build-cache：CodeQL 靠追踪编译器调用提取源码，构建缓存命中会让
-    # compileJava 直接取缓存产物（日志里的 FROM-CACHE）而不调用 javac，于是 CodeQL
-    # 报 "this run didn't build any of it"（Exit 32）。故该场景下用 --no-build-cache
-    # 覆盖 gradle.properties 的 org.gradle.caching=true，强制真实编译。
+    # 回收旧的 loom 缓存条目：GitHub 缓存不可变，key 里含 hashFiles('platform/**/build.gradle.kts')，
+    # 所以每改一次车道脚本就产生一条全新的 ~1.3GB 条目，旧的不自动删。实测曾累积到 7 条 / 6.2GB，
+    # 把 10GB 配额挤满，反过来使 gradle-wrapper-zips / transforms / groovy-dsl 这些小条目被 LRU
+    # 逐出（导致每轮重下 133MB Gradle 发行包）。此处保留最新的 2 条，其余同前缀条目一律删。
+    - name: 回收旧的 Loom 缓存条目
+      if: inputs.disable-build-cache != 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      shell: bash
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+      run: |
+        # 只在本仓库的默认分支上跑：PR 的 token 无权限删缓存，且并发写多个 run 时删除会互相干扰。
+        set -euo pipefail
+        KEEP=${LOOM_CACHE_KEEP:-2}
+        gh api "repos/$REPO/actions/caches?per_page=100" \
+          --jq '[.actions_caches[] | select(.key|startswith("loom-"))] | sort_by(.created_at) | reverse | .['"$KEEP"':] | .[] | "\(.id) \(.key)"' \
+        | while read -r id key; do
+            [ -z "${id:-}" ] && continue
+            gh api -X DELETE "repos/$REPO/actions/caches/$id" >/dev/null 2>&1 \
+              && echo "已回收旧缓存 ${key}" || true
+          done
+
+    # Mojang 版本清单的预热不在 CI 做：`settings.gradle.kts` 在配置期统一串行预热，
+    # 本地构建同样受益（详见那里的注释）。
+
+    # 单一根构建：全车道为根子模块，一条命令构建 + 校验 + 聚合发布产物（JDK 25 守护，ADR-0026）。
+    # 并发度**不要写死**：交给 Gradle 按 runner 实际核数决定（写死会与 runner 类型耦合）；若 CI 出现 OOM，
+    # 优先降下面的 WORKERS 而不是回到 --max-workers=1。
+    # disable-build-cache：CodeQL 靠追踪编译器调用提取源码，缓存命中会让 compileJava 取缓存产物
+    # （FROM-CACHE）而不调 javac、报 Exit 32；故该场景用 --no-build-cache 覆盖 org.gradle.caching=true。
     - name: 根全量构建（全车道制品 + 发布产物结构门 + dist 聚合）
       shell: bash
       env:
@@ -85,30 +118,46 @@ runs:
         MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
         EXTRA_GRADLE_ARGS: ${{ inputs.disable-build-cache == 'true' && '--no-build-cache' || '' }}
       run: |
-        ./gradlew "-Dfabric.loom.cache.dir=$GITHUB_WORKSPACE/.gradle/loom-user-cache" \
-          --no-daemon --max-workers=1 --no-watch-fs --console=plain --stacktrace \
+        BUILD_START=$(date +%s)
+        # 并发度按 runner 实际核数自适应，而不是写死数字。上限 16：再高单个 worker 的 JVM（javac /
+        # SpotBugs / 测试）会把内存吃光（16GB runner，每 worker 峰值 0.8~1.2GB）；下限 2：再低 loom 的
+        # 多线程重映射会串行排队。
+        CPUS=$(nproc)
+        WORKERS=$(( CPUS > 16 ? 16 : (CPUS < 2 ? 2 : CPUS) ))
+        echo "[ci] runner 核数=$CPUS，Gradle --max-workers=$WORKERS"
+        # shell 带 `-e -o pipefail`：构建失败时下面这条 pipeline 返回非零，`-e` 会**当场终止脚本**，
+        # 于是后面取 PIPESTATUS、写 GITHUB_ENV 的几行都不会执行。实测后果：失败时 summary 只能
+        # 写「构建未执行到记录耗时」，且 BUILD_RC 缺失使失败摘要的 `if [ "${BUILD_RC:-0}" != "0" ]`
+        # 恒假——专为失败写的诊断从不触发。
+        # ⚠ `set +e` 必须放在 pipeline **之前**（放后面就永远轮不到它执行，等于没改）。
+        set +e
+        ./gradlew "-Dfabric.loom.cache.dir=$HOME/.gradle/caches/fabric-loom" \
+          --no-daemon --max-workers="$WORKERS" --no-watch-fs --console=plain --stacktrace \
           $EXTRA_GRADLE_ARGS \
-          :buildAll
+          :buildAll 2>&1 | tee /tmp/build.log
+        BUILD_RC=${PIPESTATUS[0]}
+        set -e
+        BUILD_SECONDS=$(( $(date +%s) - BUILD_START ))
+        echo "BUILD_RC=$BUILD_RC" >> "$GITHUB_ENV"
+        echo "BUILD_SECONDS=$BUILD_SECONDS" >> "$GITHUB_ENV"
+        echo "BUILD_WORKERS=$WORKERS" >> "$GITHUB_ENV"
+        exit "$BUILD_RC"
+
+    # ⚠ 不要给 `.gradle/configuration-cache` 做 actions/cache 持久化：跨 runner 回放时插件类加载器标识
+    # 对不上，直接报 ValueSource 类找不到（试过并已回滚，run 40669808302，详见 CHANGELOG.md）。
+    # 本机复现不了此问题（同一台机器类加载器标识一致），别拿本地「Reusing configuration cache」当验证。
 
     - name: 安装 Node 22
       if: inputs.validate-template == 'true'
-      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       with:
         node-version: "22"
         cache: npm
         cache-dependency-path: e2e/bot/package-lock.json
 
-    # A 车道桩是根构建子模块（ADR-0026：无自有 wrapper / settings），故在仓库根以 JDK 25 守护构建。
-    - name: 构建 E2E harness
-      if: inputs.validate-template == 'true'
-      shell: bash
-      env:
-        JAVA_HOME: ${{ steps.java25.outputs.path }}
-        MPMT_JAVA8_HOME: ${{ steps.java8.outputs.path }}
-        MPMT_JAVA17_HOME: ${{ steps.java17.outputs.path }}
-        MPMT_JAVA21_HOME: ${{ steps.java21.outputs.path }}
-        MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
-      run: ./gradlew --no-daemon --max-workers=1 --no-watch-fs --console=plain :e2e:harness:build
+    # `:e2e:harness` 是根构建子模块（无自有 settings/wrapper），其 build 任务已由上面的
+    # `:buildAll` 经 projectsWithBuildTask 登记后跑过，单独再跑一次实测 17 个任务全部
+    # UP-TO-DATE（~17s 纯起步开销、零产出），故不再重复调用。
 
     - name: 校验 E2E bot 模板
       if: inputs.validate-template == 'true'

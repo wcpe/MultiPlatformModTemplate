@@ -18,7 +18,7 @@ plugins {
     // 车道约定插件须在 loom 之后应用：gametest 源集要晚于 loom 按现有源集注册 migrate*Mappings 任务的时机创建
     id("build-conventions.fabric")
     id("com.gradleup.shadow") version "8.3.11"
-    // 分析类插件（spotbugs / ktlint / detekt / kover）不在车道内声明：由 build-conventions.quality 应用，
+    // 分析类插件（spotbugs / ktlint / detekt）不在车道内声明：由 build-conventions.quality 应用，
     // 版本与类路径由根 plugins{} 单点 pin，重复声明会分裂插件类加载器并破坏 loom 的清单服务。
 }
 
@@ -56,10 +56,10 @@ repositories {
     mavenCentral()
     maven("https://maven.fabricmc.net/") { name = "Fabric" }
 }
-// 质量工具链：装配由 build-conventions.quality 插件承担；本车道仅偏离分析 JVM（跟随本车道目标）
-quality {
-    analysisJavaVersion.set(targetJavaVersion)
-}
+// 质量工具链：装配由 build-conventions.quality 插件承担；本车道不偏离分析 JVM。
+// 分析 JVM 保持插件的默认 JDK 17：分析工具运行 JVM 与被测字节码的目标版本无关，
+// 而每多一种分析 JVM 就多一批 worker daemon 要单独 fork（理由见
+// QualityConventionPlugin.pinAnalysisLaunchers 的注释）。
 
 // fabric 车道参数：版本与矩阵轨 JDK 环境变量在此声明；
 // gametest 源集与依赖接线、Loom run、验收元数据注入、模拟服门禁、mod 元数据展开、单测系统属性均由插件承担。
@@ -197,24 +197,28 @@ tasks.register("runRealServerAcceptance") {
     group = "verification"
     description =
         "严格校验 Fabric realserver acceptance v2 报告（默认轨；-Pmpmt.acceptance.matrix 声明矩阵值时校验 MATRIX + 公共三场景 + RESULT PASS）"
-    doLast {
-        val matrixId = (project.findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
-        val report =
-            if (matrixId.isNotEmpty()) {
-                val custom = (project.findProperty("mpmt.acceptance.report") as String?)?.trim().orEmpty()
-                if (custom.isNotEmpty()) {
-                    file(custom)
-                } else {
-                    layout.buildDirectory
-                        .file("acceptance/server-report-${matrixId.lowercase()}.txt")
-                        .get()
-                        .asFile
-                }
+    // 配置缓存约束：属性解析、报告路径与场景清单全部在**配置期**固化成普通值，
+    // doLast 只捕获这些值与任务自身的 logger，不捕获 project / 扩展对象。
+    val matrixId = (findProperty("mpmt.acceptance.matrix") as String?)?.trim().orEmpty()
+    val matrixRunId = (findProperty("mpmt.acceptance.runId") as String?)?.trim()?.takeIf { it.isNotEmpty() }
+    val reportFile =
+        if (matrixId.isNotEmpty()) {
+            val custom = (findProperty("mpmt.acceptance.report") as String?)?.trim().orEmpty()
+            if (custom.isNotEmpty()) {
+                file(custom)
             } else {
-                fabric.acceptanceReport.get().asFile
+                layout.buildDirectory
+                    .file("acceptance/server-report-${matrixId.lowercase()}.txt")
+                    .get()
+                    .asFile
             }
+        } else {
+            fabric.acceptanceReport.get().asFile
+        }
+    val realScenarios = fabric.realScenarios.get()
+    doLast {
         // 校验实现与其余车道共用 build-conventions 的单份实现（判定顺序与失败文案逐字保留）。
-        verifyDefaultTrackReport(project, report, matrixId, "fabric", fabric.realScenarios.get())
+        verifyDefaultTrackReport(logger, reportFile, matrixId, matrixRunId, "fabric", realScenarios)
     }
 }
 

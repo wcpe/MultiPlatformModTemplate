@@ -6,8 +6,8 @@ plugins {
     `java-library`
 }
 
-group = "top.wcpe.mc.mpmt"
-version = rootProject.file("VERSION").readText().trim()
+// group / version 由 settings.gradle.kts 的 gradle.lifecycle.beforeProject 统一下发；
+// 此处不再回读根工程（rootProject.file 属于跨工程访问，Isolated Projects 会拒绝）。
 
 // modern 公共层用 1.20.1 paper-api 编译；1.21 server 再叠自己的 API
 val paperApi = "io.papermc.paper:paper-api:1.20.1-R0.1-SNAPSHOT"

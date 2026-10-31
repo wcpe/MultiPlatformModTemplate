@@ -3,6 +3,8 @@
 // 物理布局即工程路径：core/* · platform/<loader>/* · modules/*；模块坐标 = group + project.name（path 末段）。
 
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 pluginManagement {
     repositories {
@@ -42,8 +44,12 @@ pluginManagement {
         // 插件及其 BOM 依赖）。放在靠前位置作为兜底来源，避免因单个上游不可达中断解析。
         maven("https://maven.aliyun.com/repository/public") { name = "AliyunPublic" }
         // WCPE Loom（top.wcpe.loom）发布地：dev.architectury:architectury-loom
+        // releases 与 snapshots 两个仓都声明：快照坐标不会回落到 releases（Nexus 按仓库类型
+        // 各自持有版本，releases 仓不收 SNAPSHOT），只声明 releases 时 mpmt.loomVersion
+        // 指向任何 -SNAPSHOT 版本都会在 CI 上解析失败（本地能过只是因为 mavenLocal 命中 ~/.m2）。
         maven("https://repo.wcpe.top/repository/maven-releases") { name = "WCPE Releases" }
-        // 通用插件门户必须排在加载器仓库之前：ktlint / detekt / kover / shadow 等只发布在此，
+        maven("https://repo.wcpe.top/repository/maven-snapshots") { name = "WCPE Snapshots" }
+        // 通用插件门户必须排在加载器仓库之前：ktlint / detekt / shadow 等只发布在此，
         // 加载器仓库并不持有这些坐标（实测 NeoForged 仓库对 ktlint-gradle 返回 404）。
         // 排在后面时，一次无关仓库的 5xx 就会直接中断整个构建——CI 上曾因 maven.neoforged.net
         // 返回 502 拉取 ktlint-gradle 而失败。
@@ -82,6 +88,178 @@ pluginManagement {
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
 }
+
+// ============================================================================
+// 工程坐标与跨工程策略的单点下发（Isolated Projects 友好）
+//
+// 原先这些规则写在根 build.gradle.kts 的 allprojects { } / subprojects { } 里。
+// Isolated Projects（Gradle 9.x）禁止一个工程在配置期触碰其它工程的可变模型，
+// 根工程改子工程的 group / version / configurations 正属此列，会被记为
+// "cannot access 'Project.group' functionality on subprojects via 'allprojects'"。
+//
+// 官方替代是 `gradle.lifecycle.beforeProject { }`：回调里 `this` 是**即将配置的那个工程自身**，
+// 因此每个工程只配置自己，不构成跨工程访问。顺序语义与原先一致（配置该工程之前执行）。
+// ============================================================================
+
+// 版本号唯一来源 = 根目录 VERSION 文件（testing-and-quality §3）。
+// 在 settings 层经 beforeProject 内的 providers.fileContents 读一次并缓存，
+// 这样各子工程不必用 rootProject.file(...) 反向访问根工程（IP 记为跨工程访问）。
+
+// `buildAll` 需要"哪些工程真的有 build 任务"这份清单。Isolated Projects 禁止聚合侧遍历
+// subprojects 读它们的任务容器，故由每个工程在**自身** afterEvaluate 里登记（自己看自己的
+// 任务容器不构成跨工程访问）。聚合壳目录（`:core` / `:platform:bukkit` 等只有一行注释、
+// 未应用 base/java 插件）因此自然被排除。该集合是普通数据，根侧用 provider 延迟到配置
+// 末尾求值，读取它不构成跨工程模型访问。
+// 必须放在 gradle.extensions 里而非脚本局部 val：闭包若引用脚本成员，Kotlin 会生成
+// `this$0` 指向脚本实例，配置缓存会拒绝序列化。
+//
+// ⚠ 伴生集合必须是**线程安全**的：启用 Isolated Projects 后 Gradle 会并行配置各工程，
+// 多个 `beforeProject` / `afterEvaluate` 回调会同时写这几个容器。用 `mutableSetOf` /
+// `mutableMapOf`（底层 LinkedHashSet / LinkedHashMap）时，并发写在扩容窗口内会让内部
+// 链表与 size 字段脱节，表现为配置缓存序列化阶段的
+// "The map size() is 12, but 1 entries were available when iterating over it.
+//  The map is likely broken or corrupted because of a data race."
+// （实测：启用 IP 后 :buildAll 必失败于 :verifyArchitecture 的 domainDependencies 输入）。
+// 改并发容器后同一构建可稳定通过；顺序不重要（下游都会 sorted）。
+gradle.extensions.extraProperties.set("projectsWithBuildTask", ConcurrentHashMap.newKeySet<String>())
+
+// 全部已注册工程路径（含根工程的 ":"）。架构守卫的顶层语义校验需要它。
+// 由每个工程在**自身** beforeProject 里登记——根工程配置期读 `rootProject.allprojects`
+// 在 Isolated Projects 下属于跨工程模型访问，故改为事前逐个登记、事后只读这份普通数据。
+gradle.extensions.extraProperties.set("allProjectPaths", CopyOnWriteArrayList<String>())
+
+// 架构守卫（ADR-0028 决策 7 / ADR-0030 决策 6）需要「域模块 → 直接依赖」这张表。
+//
+// 不能由根工程在配置期直接读 `subprojects[i].configurations`：Gradle 广度优先求值，
+// 根工程先于子工程，那一刻子工程的 java 插件还没 apply、configurations 容器是空的，
+// 于是检查永远拿到空表、静默通过（实测：连 api(project(...)) 都看不到）。
+// 也不能用 evaluationDependsOn 去强行提前子工程求值——那是官方明确的反模式。
+//
+// 正确做法：让每个域工程在**自身求值完成后**上报自己的直接依赖（afterEvaluate 里 `this`
+// 就是该工程自身，不构成跨工程访问，Isolated Projects 允许）。上报结果是普通数据，
+// 存在 gradle.ext 里供根侧读取——读普通数据不算跨工程模型访问。
+//
+// ⚠ 并发容器（理由同上方 projectsWithBuildTask）：IP 下各工程并行 afterEvaluate。
+gradle.extensions.extraProperties.set("domainModuleDependencies", ConcurrentHashMap<String, Set<String>>())
+
+// 域模块（ADR-0030 三段布局）使用独立 group：末段名与 core:client / core:server 等
+// 分层模块重名，Gradle 以 group:name:version 标识模块，重名会被视为同一模块替换
+// （实测 :core:server 被 :core:domains:capability:server 顶掉）。
+//
+// 配置缓存硬约束：`gradle.lifecycle.beforeProject { }` 的 action 不得捕获 settings 脚本对象。
+// Kotlin DSL 里脚本顶层的 val / fun 都是**脚本类的成员**，闭包里引用它们会生成 `this$0`
+// 指向脚本实例，实测报 "cannot serialize Gradle script object references"。因此：
+//   · 闭包内只使用字面量与 Project 自身成员（`path` / `providers` / `layout` / `gradle`）；
+//   · 版本号在现场经 `providers.fileContents` 读取并缓存进 extraProperties，不回读脚本 val。
+gradle.lifecycle.beforeProject {
+    val projectPath = path
+
+    // 版本号唯一来源 = 根目录 VERSION（testing-and-quality §3）。
+    // 只在首个工程上读一次并缓存：beforeProject 会为每个工程各跑一遍。
+    // 注意 ExtraPropertiesExtension.get() 在键不存在时会抛 MissingPropertyException，
+    // 不能用 `as? String` 兜底，必须先 has() 判断。
+    val sharedProperties = gradle.extensions.extraProperties
+    val resolvedVersion =
+        if (sharedProperties.has("mpmtVersion")) {
+            sharedProperties.get("mpmtVersion") as String
+        } else {
+            providers
+                .fileContents(layout.settingsDirectory.file("VERSION"))
+                .asText
+                .get()
+                .trim()
+                .also { sharedProperties.set("mpmtVersion", it) }
+        }
+
+    // 域模块给独立 group（判定逻辑内联，不引用脚本函数）。
+    group =
+        if (projectPath.contains(":domains:") ||
+            (projectPath.startsWith(":examples:") && projectPath.count { it == ':' } >= 2)
+        ) {
+            val segments = projectPath.split(":").filter { it.isNotEmpty() }
+            val domain =
+                if (segments.contains("domains")) {
+                    segments.getOrElse(segments.indexOf("domains") + 1) { "unknown" }
+                } else {
+                    segments.getOrElse(1) { "unknown" }
+                }
+            "top.wcpe.mc.mpmt.domains.$domain"
+        } else {
+            "top.wcpe.mc.mpmt"
+        }
+    version = resolvedVersion
+
+    // SNAPSHOT（changing module）默认仅缓存 24 小时，每次 CI 都要回源校验 metadata；
+    // 上游（如 repo.papermc.io）抖动即让构建失败（实测见过 502 Bad Gateway）。
+    // 本仓库依赖的旧版本线 SNAPSHOT 事实上已冻结——paper-api 1.20.1 停在 build 178（2023-09）、
+    // 1.20.4 停在 build 176（2024-10）——故把 TTL 放宽，避免无谓回源。
+    // 需要主动取上游新快照时，用 --refresh-dependencies 显式刷新即可。
+    configurations.all {
+        resolutionStrategy {
+            cacheChangingModulesFor(365, java.util.concurrent.TimeUnit.DAYS)
+        }
+    }
+    // 登记全部工程路径（含根工程的 ":"），供架构守卫的顶层语义校验使用。
+    @Suppress("UNCHECKED_CAST")
+    (gradle.extensions.extraProperties.get("allProjectPaths") as MutableList<String>).add(projectPath)
+
+    // 登记"确实有 build 任务"的工程供根侧 buildAll 使用（见 projectsWithBuildTask 的说明）。
+    afterEvaluate {
+        if (tasks.names.contains("build")) {
+            @Suppress("UNCHECKED_CAST")
+            (gradle.extensions.extraProperties
+                .get("projectsWithBuildTask") as MutableSet<String>).add(projectPath)
+        }
+    }
+
+    // 域模块在自身求值完成后上报直接项目依赖（见 domainModuleDependencies 的说明）。
+    // 覆盖两类功能域：`:core:domains:<域>:<模块>` 与 `:examples:<域>:<模块>`。
+    // 原实现只收 `:core:domains:` 前缀，导致作为范本的 examples/counter 完全不受约束
+    //（ADR-0036 背景三已记录该缺陷），这里一并覆盖。
+    // 隐式父工程（如 :core:domains:capability、:examples:counter）没有变体，靠 buildFile 判定排除。
+    // 判定逻辑内联：settings 脚本里定义的函数是脚本成员，闭包引用会捕获 this$0 破坏配置缓存。
+    val isDomainModule =
+        (projectPath.startsWith(":core:domains:") && projectPath.count { it == ':' } >= 4) ||
+            (projectPath.startsWith(":examples:") && projectPath.count { it == ':' } >= 3)
+    if (isDomainModule && buildFile.isFile) {
+        afterEvaluate {
+            @Suppress("UNCHECKED_CAST")
+            val registry =
+                gradle.extensions.extraProperties
+                    .get("domainModuleDependencies") as MutableMap<String, Set<String>>
+            registry[projectPath] =
+                configurations
+                    .flatMap { configuration ->
+                        configuration.dependencies.withType(org.gradle.api.artifacts.ProjectDependency::class.java)
+                    }.map { dependency -> dependency.path }
+                    .toSet()
+        }
+    }
+}
+
+// 车道目录映射的唯一真源：settings 决定 include 与 projectDir 的对应关系，
+// 产物聚合任务（build-conventions.release 的 collectReleaseArtifacts）据此拼产物路径。
+// 通过 gradle.ext 以不可变值下发给构建脚本——这样聚合侧不必读别的工程的
+// layout.buildDirectory（IP 禁止），也不会因缺一份映射而算错目录。
+val laneDirectories: Map<String, String> =
+    mapOf(
+        "platform:fabric:fabric-1.20.1" to "platform/fabric/1.20.1",
+        "platform:fabric:fabric-1.21.1" to "platform/fabric/1.21.1",
+        "platform:fabric:fabric-26.2" to "platform/fabric/26.2",
+        "platform:forge:forge-1.12.2" to "platform/forge/1.12.2",
+        "platform:forge:forge-1.20.1" to "platform/forge/1.20.1",
+        "platform:forge:forge-1.21.1" to "platform/forge/1.21.1",
+        "platform:forge:forge-26.2" to "platform/forge/26.2",
+        "platform:neoforge:neoforge-1.20.2" to "platform/neoforge/1.20.2",
+        "platform:sponge:sponge-1.20.1" to "platform/sponge/1.20.1",
+        // Bukkit 各版本目录与路径末段逐字一致（无加载器前缀），但仍显式登记：
+        // 聚合侧只查这一张表，缺项即失败，避免"路径推导"在将来重新引入隐式假设。
+        "platform:bukkit:1.12.2" to "platform/bukkit/1.12.2",
+        "platform:bukkit:1.20.1" to "platform/bukkit/1.20.1",
+        "platform:bukkit:1.21.1" to "platform/bukkit/1.21.1",
+        "platform:bukkit:26.2" to "platform/bukkit/26.2",
+    )
+gradle.extensions.extraProperties.set("laneDirectories", laneDirectories)
 
 rootProject.name = "mpmt"
 
@@ -125,15 +303,13 @@ include(
 // 编排扩展 mcTestkit { } 与桩同处该模块，根侧只留 runMcTestkitSmoke / runMcTestkitFoliaSmoke 入口别名。
 include(":e2e:harness")
 
+// bukkit 的聚合壳与共享模块；4 个版本车道（1.12.2 / 1.20.1 / 1.21.1 / 26.2）
+// 与其它平台车道一样由下文 laneDirectories 统一登记，避免两处清单不同步。
 include(
     "platform:bukkit",
     "platform:bukkit:bukkit-api",
     "platform:bukkit:common",
     "platform:bukkit:modern",
-    "platform:bukkit:1.12.2",
-    "platform:bukkit:1.20.1",
-    "platform:bukkit:1.21.1",
-    "platform:bukkit:26.2",
 )
 
 include(
@@ -151,18 +327,81 @@ include(
 // `JarManifestService$Inject_ cannot be cast to JarManifestService`（jar / remapJar 均受影响）。
 // 因此车道路径末段带上加载器前缀（沿用 ADR-0026 背景记录的复合构建名），
 // 目录仍为 `platform/<loader>/<版本>`，构建产物路径与验收报告路径均不变。
-// 车道引入与目录映射二合一：路径字符串逐字保留（契约测试按子串断言），目录显式列表不做推导。
-listOf(
-    "platform:fabric:fabric-1.20.1" to "platform/fabric/1.20.1",
-    "platform:fabric:fabric-1.21.1" to "platform/fabric/1.21.1",
-    "platform:fabric:fabric-26.2" to "platform/fabric/26.2",
-    "platform:forge:forge-1.12.2" to "platform/forge/1.12.2",
-    "platform:forge:forge-1.20.1" to "platform/forge/1.20.1",
-    "platform:forge:forge-1.21.1" to "platform/forge/1.21.1",
-    "platform:forge:forge-26.2" to "platform/forge/26.2",
-    "platform:neoforge:neoforge-1.20.2" to "platform/neoforge/1.20.2",
-    "platform:sponge:sponge-1.20.1" to "platform/sponge/1.20.1",
-).forEach { (path, dir) ->
+//
+// 路径 → 目录的映射**只在 laneDirectories 维护一份**（见上文），此处直接复用：
+// 新增/改名车道只改那一张表，include 与产物聚合同时跟上，不会出现两处清单不同步。
+laneDirectories.forEach { (path, dir) ->
     include(path)
     project(":$path").projectDir = file(dir)
+}
+
+// ============================================================================
+// Mojang 版本清单预热（本地与 CI 共用）
+//
+// loom 在**每个** loom 工程的配置期各自调 `MinecraftMetadataProvider.getManifestEntry()`，
+// 全部指向同一份 `<userCache>/mojang_versions_manifest.json`。而它的下载互斥是
+// `Download.createLock` 的 `Files.createFile`（已存在即抛）配合 `getAndResetLock` 的
+// `Files.delete`，这套「独占创建 + 抢到就删」的锁在**同一 JVM 的并行配置**下不可重入：
+// 开了 `org.gradle.parallel` 与 `org.gradle.unsafe.isolated-projects` 后多个工程同时进入，
+// 表现为三种随机失败：
+//   · EOFException: End of input at line 1 column … path $.versions[N].id（读到别人写一半的内容）
+//   · Failed to create MD5 hash … No such file or directory（算哈希时文件被对方删了）
+//   · Failed download after 3 attempts（三次重试均撞锁）
+//
+// 它在「清单过期」时必然出现：`DownloadBuilder.defaultCache()` 给的保留期是 **1 天**
+// （`Download.isOutdated` 按 mtime 判定），只要恢复的缓存超过一天，每个工程都会重新下载。
+//
+// 修法：在 settings 阶段（早于所有工程配置）**串行地**写好这份清单并刷新 mtime。
+// 此后并发配置的各工程都判定「新鲜、不需下载」，不会进入那条竞争路径。
+// 下载失败不阻断构建：退化为让 loom 自行下载（与未预热时行为一致）。
+//
+// 不能改成「只删不写」：那会让所有工程同时发现缺失、同时去下载，把偶发竞争变成必然。
+// 放在 settings 而不是 CI 脚本里，是因为本地构建同样会中招；修在源头两处都受益。
+// ============================================================================
+run {
+    // 与 loom 的默认 userCache 一致：`<gradle user home>/caches/fabric-loom`。
+    // 允许用 loom 自己的属性覆盖（CI 用 -Dfabric.loom.cache.dir 指定同一目录）。
+    val loomCacheOverride = System.getProperty("fabric.loom.cache.dir")
+    val loomCache =
+        if (loomCacheOverride.isNullOrBlank()) {
+            gradle.gradleUserHomeDir.resolve("caches/fabric-loom")
+        } else {
+            file(loomCacheOverride)
+        }
+    val manifest = loomCache.resolve("mojang_versions_manifest.json")
+    val manifestUrl = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+
+    // 离线下跳过：此时不该产生任何网络访问，交给 loom 用现有文件或自行报错。
+    val offline = gradle.startParameter.isOffline
+
+    val stale = !manifest.isFile || System.currentTimeMillis() - manifest.lastModified() > 12L * 60 * 60 * 1000
+
+    if (!offline && stale) {
+        // 先写同目录临时文件再原子替换，避免任何读到半成品的窗口。
+        val tmp = manifest.resolveSibling(manifest.name + ".warm.tmp")
+        val ok =
+            runCatching {
+                manifest.parentFile.mkdirs()
+                java.net.URI(manifestUrl).toURL().openStream().use { input ->
+                    tmp.outputStream().use { output -> input.copyTo(output) }
+                }
+                // 原子替换（同目录，同一文件系统）。
+                java.nio.file.Files.move(
+                    tmp.toPath(),
+                    manifest.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                )
+                true
+            }.getOrElse {
+                runCatching { tmp.delete() }
+                false
+            }
+
+        if (ok) {
+            logger.lifecycle("[mpmt] 已预热 Mojang 版本清单（${manifest.length()} 字节），并行配置期不再下载")
+        } else {
+            logger.warn("[mpmt] 预热 Mojang 版本清单失败，回退给 loom 自行下载（可能与并行配置竞争）")
+        }
+    }
 }

@@ -1,6 +1,7 @@
 package top.wcpe.mc.mpmt.gradle.realserver
 
 import java.io.File
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -17,6 +18,10 @@ internal object FillV3Downloads {
     private const val CONNECT_TIMEOUT_MS: Int = 30_000
     private const val READ_TIMEOUT_MS: Int = 60_000
 
+    /** 下载成功的状态码闭区间：200 OK 至 299 各变体（含 206 部分内容）。 */
+    private const val HTTP_SUCCESS_MIN: Int = 200
+    private const val HTTP_SUCCESS_MAX: Int = 299
+
     fun fetchText(url: String): String {
         val conn = open(url)
         try {
@@ -30,8 +35,9 @@ internal object FillV3Downloads {
         val conn = open(url)
         try {
             conn.instanceFollowRedirects = false
-            if (conn.responseCode !in 200..299) {
-                throw IllegalStateException("下载响应状态异常：${conn.responseCode}")
+            if (conn.responseCode !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
+                // HTTP 状态异常归入 I/O 失败：调用方只需按 IOException 收口一次。
+                throw IOException("下载响应状态异常：${conn.responseCode}")
             }
             conn.inputStream.use { input -> dest.outputStream().use { output -> input.copyTo(output) } }
         } finally {

@@ -102,13 +102,18 @@ fun configureForgeReportProperties(
 @Suppress("ThrowsCount")
 internal fun registerForgeAcceptanceReportGate(project: Project, lane: ForgeLaneExtension) {
     val laneLabel = lane.laneLabel.get()
+    // 配置缓存约束：报告路径、提示文案与候选清单在**配置期**固化成普通值，
+    // doLast 只捕获这些值，不捕获 project 与 lane 扩展对象——否则配置缓存在存储阶段
+    // 报 "cannot serialize Gradle script object references" 并令构建失败。
+    val report = project.acceptanceReportFrom(lane.acceptanceReportCandidates.get())
+    val reportHint = lane.acceptanceReportHint.get()
+    val gateClientHint = lane.acceptanceGateClientHint.get()
     project.tasks.register("verifyAcceptanceReport") {
         group = "verification"
         description = "校验 $laneLabel 真服/验收报告末行 RESULT PASS"
         doLast {
-            val report = project.acceptanceReportFrom(lane.acceptanceReportCandidates.get())
             if (!report.isFile) {
-                throw GradleException("未找到 $laneLabel 验收报告：${report.absolutePath}\n" + lane.acceptanceReportHint.get())
+                throw GradleException("未找到 $laneLabel 验收报告：${report.absolutePath}\n$reportHint")
             }
             val lines =
                 report
@@ -133,8 +138,7 @@ internal fun registerForgeAcceptanceReportGate(project: Project, lane: ForgeLane
     }
     project.tasks.register("runRealServerAcceptance") {
         group = "verification"
-        description =
-            "$laneLabel realserver 门禁：校验权威报告 RESULT PASS（须先起服 + ${lane.acceptanceGateClientHint.get()}）"
+        description = "$laneLabel realserver 门禁：校验权威报告 RESULT PASS（须先起服 + $gateClientHint）"
         dependsOn("verifyAcceptanceReport")
     }
 }
@@ -169,42 +173,3 @@ internal fun registerForgeAcceptanceRecipe(project: Project, lane: ForgeLaneExte
     }
 }
 
-/**
- * 契约测试：`contractTest` 源集运行车道契约主类，产品 / 验收 jar 路径与版本元数据经 `mpmt.test.*` 注入。
- *
- * 主类留空表示本车道不注册（1.20.1 走 `acceptanceContractTest` 的测试源集形态）。
- */
-internal fun registerForgeContractTest(project: Project, lane: ForgeLaneExtension) {
-    val contractTestMainClass = lane.contractTestMainClass.get()
-    if (contractTestMainClass.isEmpty()) {
-        return
-    }
-    val productTask = project.tasks.named(lane.contractTestProductTask.get(), AbstractArchiveTask::class.java)
-    val acceptanceTask = project.tasks.named(lane.contractTestAcceptanceTask.get(), AbstractArchiveTask::class.java)
-    val contractTestSourceSet = project.extensions.getByType(SourceSetContainer::class.java).getByName("contractTest")
-    project.tasks.register("contractTest", JavaExec::class.java) {
-        group = "verification"
-        description = lane.contractTestDescription.get()
-        dependsOn("contractTestClasses", productTask)
-        lane.contractTestDependsOn.get().forEach { dependsOn(it) }
-        classpath = contractTestSourceSet.runtimeClasspath
-        mainClass.set(lane.contractTestMainClass.get())
-        javaLauncher.set(forgeJavaLauncher(project, lane.targetJavaVersion.get()))
-        systemProperty("mpmt.test.repositoryRoot", project.rootProject.projectDir.absolutePath)
-        systemProperty(
-            "mpmt.test.productJar",
-            productTask
-                .flatMap { it.archiveFile }
-                .get()
-                .asFile.absolutePath,
-        )
-        systemProperty(
-            "mpmt.test.acceptanceJar",
-            acceptanceTask
-                .flatMap { it.archiveFile }
-                .get()
-                .asFile.absolutePath,
-        )
-        lane.contractTestProperties.get().forEach { (name, value) -> systemProperty(name, value) }
-    }
-}

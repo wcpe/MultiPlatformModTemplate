@@ -5,33 +5,66 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import java.io.File
 
+/**
+ * 严格报告门的全部校验输入：配置期固化成不可变值（File / String），动作只读它，不捕获 Project。
+ *
+ * <p>可空字段对应「执行期才发现缺失」的 `-P` 属性：缺失时动作内报与迁移前逐字一致的错误，
+ * 不在配置期抛异常（否则任何不带这些参数的构建都会在配置阶段失败）。
+ */
+private class RealServerStrictGateSpec(
+    val rootDir: File,
+    val version: String,
+    val runId: String?,
+    val startEpochMs: String?,
+    val matrix: String?,
+    val forgeServerRuntime: String?,
+)
+
 /** 将 26.2 真服严格报告校验放在 build-logic，避免根 Kotlin DSL 依赖插件实现类。 */
 class RealServerReportGatePlugin : Plugin<Project> {
     override fun apply(target: Project) {
         target.tasks.register("verifyRealServerReportsStrict") {
             group = "verification"
             description = "校验 26.2 三车道的当前权威报告与本轮制品"
-            doLast { verify(target) }
+            // 配置期把校验需要的一切固化成不可变值：动作只捕获这些值，不捕获 project，
+            // 否则配置缓存会因 Project 不可序列化而失败（本仓已开启 configuration-cache）。
+            // 取值放在 register 动作内：任务实体化时 version 已是最终值，且属性读取发生在配置期，
+            // 携带这些 -P 的构建会被正确纳入配置缓存键。
+            val spec =
+                RealServerStrictGateSpec(
+                    rootDir = target.rootDir,
+                    version = target.version.toString(),
+                    runId = gateProperty(target, "mpmt.acceptance.runId"),
+                    startEpochMs = gateProperty(target, "mpmt.acceptance.startEpochMs"),
+                    matrix = gateProperty(target, "mpmt.acceptance.matrix"),
+                    forgeServerRuntime = gateProperty(target, "mpmt.acceptance.forge.serverRuntime"),
+                )
+            doLast { verify(spec) }
         }
     }
 
-    private fun verify(project: Project) {
-        val run = required(project, "mpmt.acceptance.runId")
-        val start =
-            required(project, "mpmt.acceptance.startEpochMs").toLongOrNull()
-                ?: throw GradleException("真服门的 mpmt.acceptance.startEpochMs 必须是非负整数")
-        if (start < 0L) throw GradleException("真服门的 mpmt.acceptance.startEpochMs 必须是非负整数")
-        if (required(project, "mpmt.acceptance.matrix") != "REALSERVER262") {
-            throw GradleException("真服门需要 -Pmpmt.acceptance.matrix=REALSERVER262")
+    private fun verify(spec: RealServerStrictGateSpec) {
+        val run = spec.runId.required("mpmt.acceptance.runId")
+        val start = parseStartEpochMs(spec.startEpochMs)
+        if (spec.matrix != MATRIX_262) {
+            throw GradleException("真服门需要 -Pmpmt.acceptance.matrix=$MATRIX_262")
         }
-        val version = project.version.toString()
-        verifyPaper(project, run, start, version)
-        verifyFabric(project, run, start, version)
-        verifyForge(project, run, start, version)
+        val version = spec.version
+        verifyPaper(spec.rootDir, run, start, version)
+        verifyFabric(spec.rootDir, run, start, version)
+        verifyForge(spec, run, start, version)
     }
 
-    private fun verifyPaper(project: Project, run: String, start: Long, version: String) {
-        val root = project.rootDir
+    /** `startEpochMs` 必须是非负整数：缺失、非数字、负数三种情况共用一句文案。 */
+    private fun parseStartEpochMs(raw: String?): Long {
+        val start = raw.required("mpmt.acceptance.startEpochMs").toLongOrNull()
+        if (start == null || start < 0L) {
+            throw GradleException("真服门的 mpmt.acceptance.startEpochMs 必须是非负整数")
+        }
+        return start
+    }
+
+    private fun verifyPaper(root: File, run: String, start: Long, version: String) {
         val bukkit = artifact(root, "platform/bukkit/26.2/build/libs/mpmt-bukkit-26.2-$version.jar")
         val fabric = artifact(root, "platform/fabric/26.2/build/libs/mpmt-fabric-26.2-$version.jar")
         verifyReport(
@@ -49,8 +82,7 @@ class RealServerReportGatePlugin : Plugin<Project> {
         )
     }
 
-    private fun verifyFabric(project: Project, run: String, start: Long, version: String) {
-        val root = project.rootDir
+    private fun verifyFabric(root: File, run: String, start: Long, version: String) {
         val fabric = artifact(root, "platform/fabric/26.2/build/libs/mpmt-fabric-26.2-$version.jar")
         verifyReport(
             "Fabric",
@@ -61,8 +93,8 @@ class RealServerReportGatePlugin : Plugin<Project> {
         )
     }
 
-    private fun verifyForge(project: Project, run: String, start: Long, version: String) {
-        val root = project.rootDir
+    private fun verifyForge(spec: RealServerStrictGateSpec, run: String, start: Long, version: String) {
+        val root = spec.rootDir
         // 候选报告：真实专用服写 run-realserver/，dev 编排写 run-acceptance-server/。
         // 两者可能同时存在（例如上一轮真实服留下的报告），故不能只按"文件是否存在"取第一个：
         // 优先取 RUN_ID 匹配本轮的候选，取不到再退回第一个存在的文件，
@@ -84,7 +116,7 @@ class RealServerReportGatePlugin : Plugin<Project> {
             run,
             start,
             artifacts(
-                File(required(project, "mpmt.acceptance.forge.serverRuntime")),
+                File(spec.forgeServerRuntime.required("mpmt.acceptance.forge.serverRuntime")),
                 forge,
                 artifact(root, "platform/forge/26.2/build/libs/mpmt-forge-acceptance-26.2-$version.jar"),
                 forge,
@@ -120,13 +152,20 @@ class RealServerReportGatePlugin : Plugin<Project> {
 
     private fun artifact(root: File, path: String): File = File(root, path)
 
-    private fun required(project: Project, property: String): String {
-        val value =
-            project.providers
-                .gradleProperty(property)
-                .orNull
-                ?.trim()
-        if (value.isNullOrEmpty()) throw GradleException("真服门需要 -P$property")
-        return value
+    /** 读 `-P` 属性并在配置期固化；缺失时保留 null，由动作内报与迁移前一致的错误。 */
+    private fun gateProperty(project: Project, property: String): String? =
+        project.providers
+            .gradleProperty(property)
+            .orNull
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+
+    /** 必需属性：缺失即报迁移前的错误文案。 */
+    private fun String?.required(property: String): String =
+        this ?: throw GradleException("真服门需要 -P$property")
+
+    private companion object {
+        /** 真服严格门只认这一轮矩阵标识。 */
+        const val MATRIX_262 = "REALSERVER262"
     }
 }

@@ -19,8 +19,8 @@ plugins {
     id("top.wcpe.mc.mpmt.realserver-acceptance")
 }
 
-group = "top.wcpe.mc.mpmt"
-version = rootProject.file("VERSION").readText().trim()
+// group / version 由 settings.gradle.kts 的 gradle.lifecycle.beforeProject 统一下发；
+// 此处不再回读根工程（rootProject.file 属于跨工程访问，Isolated Projects 会拒绝）。
 
 val minecraftVersion = "1.21.1"
 val apiCoordinate = "io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT"

@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: 检出仓库
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -34,9 +34,104 @@ jobs:
         with:
           validate-template: "true"
 
+      # 构建耗时、任务统计与缓存命中写入 job summary：没有它，十几分钟的 quality job 在 UI 上只有一个「success」。
+      - name: 生成构建报告
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## 全量构建与模板校验"
+            echo
+            if [ -n "${BUILD_SECONDS:-}" ]; then
+              echo "| 项 | 值 |"
+              echo "|---|---|"
+              echo "| 退出码 | ${BUILD_RC:-unknown} |"
+              echo "| 耗时 | $((BUILD_SECONDS / 60))分$((BUILD_SECONDS % 60))秒（${BUILD_SECONDS}s） |"
+            else
+              echo "> 构建未执行到记录耗时（上一步提前失败）。"
+            fi
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -f /tmp/build.log ]; then
+            # Gradle 的任务统计：executed / from-cache / up-to-date 三者的比例直接反映缓存有效性。
+            STATS=$(grep -E "^[0-9]+ actionable tasks:" /tmp/build.log | tail -1)
+            if [ -n "$STATS" ]; then
+              echo "**任务统计**：\`$STATS\`" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo >> "$GITHUB_STEP_SUMMARY"
+            fi
+
+            # 从同一行汇总里拆出真实计数，不再靠 grep 日志猜。
+            # 原先用 `grep -c "命中\|reused\|from cache"`，但 `--console=plain` 下任务的
+            # 缓存标记是大写 `FROM-CACHE`，小写字面量只命中汇总行本身，得到恒为 1 的假值；
+            # 「共享缓存产物不可复用」那条更不存在于 loom 输出里（零次），于是恒为 0。
+            # 两个假指标都在往「缓存正常」的方向说谎，比没有指标更坏。
+            CACHE_HIT=$(printf '%s\n' "$STATS" | sed -n 's/.*, \([0-9]\{1,\}\) from cache.*/\1/p')
+            {
+              echo "| 指标 | 值 |"
+              echo "|---|---|"
+              echo "| Gradle 缓存命中任务数 | ${CACHE_HIT:-未知} |"
+              echo
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+
+            # 构建失败时把错误段落摘出来，省得去翻完整日志。
+            if [ "${BUILD_RC:-0}" != "0" ]; then
+              echo "<details><summary>构建失败摘要</summary>" >> "$GITHUB_STEP_SUMMARY"
+              echo >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              grep -A 20 "What went wrong" /tmp/build.log | head -40 >> "$GITHUB_STEP_SUMMARY" || tail -40 /tmp/build.log >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              echo >> "$GITHUB_STEP_SUMMARY"
+              echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
+      # 测试与覆盖率汇总：按模块列出用例数、失败数，一眼能看出哪块退化了。
+      - name: 汇总测试结果
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, xml.etree.ElementTree as ET
+          from collections import defaultdict
+
+          # 一个模块下会有多个测试类文件，须按模块聚合，否则同一模块会重复出现多行。
+          agg = defaultdict(lambda: [0, 0, 0, 0])
+          for path in glob.glob("**/build/test-results/test/*.xml", recursive=True):
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              module = path.split("/build/")[0].replace("/", ":")
+              acc = agg[module]
+              for i, key in enumerate(("tests", "failures", "errors", "skipped")):
+                  acc[i] += int(root.get(key, 0) or 0)
+
+          print("## 测试结果")
+          print()
+          if not agg:
+              print("> 未找到测试结果文件（可能构建在测试前就失败了）。")
+          else:
+              total = [sum(v[i] for v in agg.values()) for i in range(4)]
+              passed = total[0] - total[1] - total[2]
+              rate = passed / total[0] * 100 if total[0] else 0.0
+              print(f"**合计**：{total[0]} 用例 / 失败 {total[1]} / 错误 {total[2]} / 跳过 {total[3]}"
+                    f" —— 通过率 {rate:.1f}%")
+              print()
+              print(f"<details><summary>按模块明细（{len(agg)} 个模块）</summary>")
+              print()
+              print("| 模块 | 用例 | 失败 | 错误 | 跳过 |")
+              print("|---|---|---|---|---|")
+              for module, (t, f, e, s) in sorted(agg.items(), key=lambda kv: -kv[1][0]):
+                  flag = " ❌" if (f or e) else ""
+                  print(f"| `{module}`{flag} | {t} | {f} | {e} | {s} |")
+              print()
+              print("</details>")
+          PY
+
       - name: 上传构建诊断
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ci-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -50,15 +145,14 @@ jobs:
 
       - name: 上传默认分支发布制品
         if: success() && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-artifacts-${{ github.sha }}
           path: build/dist/**
           if-no-files-found: error
           retention-days: 30
 
-# E2E 版本矩阵：用 mc-testkit（远端 Maven 的 0.9.3）逐格并行起真实服务端跑 A 车道场景。
-# 每格 = 一个 MC 版本/平台 + 该版本的产品 jar；结果文件由 e2e-report 汇总成一份报告。
+# E2E 版本矩阵：用 mc-testkit 逐格并行起真实服务端跑 A 车道场景，每格 = 一个版本/平台 + 其产品 jar。
   e2e-matrix:
     name: E2E 矩阵 · ${{ matrix.name }}
     runs-on: ubuntu-latest
@@ -87,58 +181,48 @@ jobs:
             task: ":e2e:harness:e2eSmoke262"
     steps:
       - name: 检出仓库
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: 安装 Java 8（toolchain 目标）
         id: java8
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "8"
 
       - name: 安装 Java 17（1.20.1 后端）
         id: java17
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "17"
 
       - name: 安装 Java 21（1.21.1 后端）
         id: java21
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "21"
 
       - name: 安装 Java 25（26.2 后端与根构建守护）
         id: java25
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "25"
 
       - name: 配置 Gradle 缓存
-        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
-      # Loom 的 MC 映射 / dev jar（约数 GB）不在 setup-gradle 默认缓存范围内，
-      # 每次冷启动都要重新派生，是矩阵各格的主要固定开销。单独按车道锁存。
-      #
-      # 只缓存 Loom 制品，不改 setup-gradle 的 cache-read-only：后者会让 PR 写入并
-      # 命中 Gradle 构建缓存（org.gradle.caching=true），而 CodeQL 的 manual build
-      # 依赖真实 javac 调用提取源码，命中缓存会报 "didn't build any of it"（Exit 32）。
-      - name: 缓存 Loom 制品
-        uses: actions/cache@v4
-        with:
-          # 只缓存 ~/.gradle 下的共享制品；工作区内的 .gradle/loom-user-cache
-          # 是构建的工作目录，缓存其中间产物会引入「文件在、内容不可用」的半成品。
-          path: ~/.gradle/caches/fabric-loom
-          key: loom-${{ runner.os }}-${{ matrix.name }}-${{ hashFiles('gradle.properties', 'platform/**/build.gradle.kts') }}
-          restore-keys: |
-            loom-${{ runner.os }}-${{ matrix.name }}-
-            loom-${{ runner.os }}-
+      # 不恢复 loom 缓存：矩阵四格全部只构建 :platform:bukkit:*，而 bukkit 车道脚本
+      # 未应用任何 loom 插件（无 fabric-loom / architectury-loom），实测各格日志里 loom 派生态
+      # 任务数为 0。恢复一份 1.37GB 缓存纯属浪费（四格共 ~45s 带宽），且 restore 会刷新
+      # last_accessed_at，让这些无用的巨条目长期不被 LRU 驱逐，反过来挤占 quality 的配额。
+
+      # Mojang 版本清单预热在 `settings.gradle.kts` 配置期统一做（本地与 CI 共用），这里不再重复。
 
       # 本格的产品 jar：只有它进被测插件注入；其余车道不构建（矩阵各格自足）。
       - name: 构建本格产品 jar
@@ -150,12 +234,13 @@ jobs:
           MPMT_JAVA21_HOME: ${{ steps.java21.outputs.path }}
           MPMT_JAVA25_HOME: ${{ steps.java25.outputs.path }}
         run: |
-          ./gradlew "-Dfabric.loom.cache.dir=$GITHUB_WORKSPACE/.gradle/loom-user-cache" \
-            --no-daemon --max-workers=1 --no-watch-fs --console=plain \
+          # loom 缓存目录必须与上面 actions/cache 的 path（~/.gradle/caches/fabric-loom）一致，
+          # 否则恢复出来的 MC 制品一次都用不上。
+          ./gradlew "-Dfabric.loom.cache.dir=$HOME/.gradle/caches/fabric-loom" \
+            --no-daemon --max-workers=2 --no-watch-fs --console=plain \
             ${{ matrix.lane }}:shadowJar
 
-      # mc-testkit 编排：起真实服务端、注入产品 jar 与桩 jar、读结果文件判 PASS/FAIL。
-      # 插件坐标直接解析远端 WCPE Releases（0.9.3 与 harness-core 0.1.1 均已发布），无需本地发布。
+      # mc-testkit 编排：起真实服务端、注入产品 jar 与桩 jar、读结果文件判 PASS/FAIL（插件坐标走远端 WCPE Releases）。
       - name: 运行 mc-testkit E2E（${{ matrix.name }}）
         shell: bash
         env:
@@ -173,13 +258,13 @@ jobs:
           test -f "$JAR" || { echo "[e2e] 未找到产品 jar：$JAR"; exit 1; }
           echo "[e2e] 被测插件：$JAR"
           MC_TESTKIT_E2E_PLUGIN_UNDER_TEST_JAR="$PWD/$JAR" \
-            ./gradlew "-Dfabric.loom.cache.dir=$GITHUB_WORKSPACE/.gradle/loom-user-cache" \
-              --no-daemon --max-workers=1 --no-watch-fs --console=plain \
+            ./gradlew "-Dfabric.loom.cache.dir=$HOME/.gradle/caches/fabric-loom" \
+              --no-daemon --max-workers=2 --no-watch-fs --console=plain \
               ${{ matrix.task }}
 
       - name: 上传本格结果文件
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-results-${{ strategy.job-index }}-${{ matrix.name }}
           path: e2e/harness/build/mc-testkit/results/**

@@ -22,7 +22,7 @@ import org.gradle.testing.jacoco.tasks.JacocoReport
 /**
  * 静态分析与质量门禁（严格）——工程显式 `plugins { id("build-conventions.quality") }` 接入。
  *
- * 覆盖 Checkstyle / PMD / SpotBugs(+FindSecBugs) / ktlint / detekt / kover / JaCoCo，
+ * 覆盖 Checkstyle / PMD / SpotBugs(+FindSecBugs) / ktlint / detekt / JaCoCo，
  * 违规即失败（`isIgnoreFailures = false`），覆盖率下限 LINE 0.70；规则集仍在仓库根 `config/`。
  */
 class QualityConventionPlugin : Plugin<Project> {
@@ -49,7 +49,7 @@ class QualityConventionPlugin : Plugin<Project> {
         project.afterEvaluate {
             configure<CheckstyleExtension> {
                 toolVersion = quality.checkstyleToolVersion.get()
-                configFile = project.rootProject.file("config/checkstyle/checkstyle.xml")
+                configFile = project.layout.settingsDirectory.file("config/checkstyle/checkstyle.xml").asFile
                 isIgnoreFailures = false
                 maxWarnings = 0
             }
@@ -57,7 +57,7 @@ class QualityConventionPlugin : Plugin<Project> {
             configure<PmdExtension> {
                 toolVersion = quality.pmdToolVersion.get()
                 isConsoleOutput = true
-                ruleSetConfig = project.resources.text.fromFile(project.rootProject.file("config/pmd/ruleset.xml"))
+                ruleSetConfig = project.resources.text.fromFile(project.layout.settingsDirectory.file("config/pmd/ruleset.xml"))
                 ruleSets = emptyList()
                 isIgnoreFailures = false
             }
@@ -69,9 +69,28 @@ class QualityConventionPlugin : Plugin<Project> {
                 effort.set(Effort.MAX)
                 // 报告 MEDIUM 及以上置信度，避免 LOW 置信度噪声拖垮严格门禁
                 reportLevel.set(Confidence.MEDIUM)
-                excludeFilter.set(project.rootProject.file("config/spotbugs/exclude.xml"))
+                excludeFilter.set(project.layout.settingsDirectory.file("config/spotbugs/exclude.xml"))
             }
             dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
+
+            // 只在 main 源集跑 SpotBugs，其余源集（test / acceptance / contractTest）一律跳过。
+            //
+            // 依据是 4 核实测的耗时归因（:buildAll --rerun-tasks，总 16.7 分）：
+            // 静态分析累计占用 8.6 分（51%），其中单个任务的耗时榜前列几乎全是 SpotBugs——
+            // fabric-1.21.1:spotbugsTest 27.5s、forge-26.2:spotbugsContractTest 19.7s、
+            // neoforge-1.20.2:spotbugsMain 17.2s、forge-1.12.2:spotbugsAcceptance 15.1s…
+            // 而 PMD / Checkstyle 的单任务普遍只有 1~2s。
+            //
+            // SpotBugs 需要构建完整字节码类图 + 跑数据流分析，是这几类里最重的一个；
+            // 让它对**测试与验收代码**再各跑一遍，投入产出比很低：这类代码不进发布产物，
+            // 缺陷影响面限于 CI 自身。主代码（main）的缺陷检测与 FindSecBugs 安全审查完整保留。
+            //
+            // 这与本仓既有取舍一致：E2E 桩模块已关掉覆盖率底线（quality { coverageFloor.set(false) }）。
+            project.tasks.withType(SpotBugsTask::class.java).configureEach {
+                onlyIf("仅 main 源集做 SpotBugs 缺陷检测") {
+                    name == "spotbugsMain"
+                }
+            }
         }
     }
 
@@ -151,12 +170,19 @@ class QualityConventionPlugin : Plugin<Project> {
         }
     }
 
-    /** Kotlin 工具链：ktlint 检 `.gradle.kts`（含插件工程脚本）、detekt 扫 Kotlin 源、kover 备 Kotlin 覆盖率。 */
+    /**
+     * Kotlin 工具链：ktlint 检 `.gradle.kts`（含插件工程脚本）、detekt 扫 Kotlin 源。
+     *
+     * **不再应用 kover**：全仓业务模块零 Kotlin 源（87 个 `.kt` 全在 `build-logic/` 的两个
+     * Gradle 插件工程里），kover 在 29 个模块上各产生 `koverVerify` / `koverCachedVerify` /
+     * `koverGenerateArtifact` 三个空转任务（CI 实测共 127 个），既无被测 Kotlin 代码，
+     * 覆盖率也无从判定。Java 侧的覆盖率门禁由 JaCoCo 承担且设了 0.70 底线
+     *（.claude/rules/static-analysis.md），不影响质量护栏。
+     */
     private fun applyKotlinToolchain(project: Project) {
         project.pluginManager.apply("org.jlleitschuh.gradle.ktlint")
         // detekt 2.x 改用新插件 id（旧 io.gitlab.arturbosch.detekt 仅存在于 1.x）
         project.pluginManager.apply("dev.detekt")
-        project.pluginManager.apply("org.jetbrains.kotlinx.kover")
     }
 
     /**
@@ -166,7 +192,7 @@ class QualityConventionPlugin : Plugin<Project> {
     private fun wireCompileInputs(project: Project) {
         project.tasks.withType(JavaCompile::class.java).configureEach {
             inputs
-                .file(project.rootProject.file("lombok.config"))
+                .file(project.layout.settingsDirectory.file("lombok.config"))
                 .withPropertyName("lombokConfig")
                 .withPathSensitivity(PathSensitivity.RELATIVE)
         }
@@ -178,6 +204,24 @@ class QualityConventionPlugin : Plugin<Project> {
      *
      * 在 afterEvaluate 配置：JavaToolchainService 由模块自身 java 插件注册、晚于插件应用；
      * 无业务源码的聚合壳可能没有 java 插件，此时跳过。
+     *
+     * ── 为何不跟随车道目标版本（性能，2026-10-28）───────────────────────────────
+     * 曾有 3 条 26.2 车道把 `analysisJavaVersion` 设成 25、2 条设成 21，其余默设 17。
+     * 结果是全构建出现 3 种不同的分析 JVM，每种都要单独 fork 一批 worker daemon；
+     * Gradle 的 Worker Daemon 按 JVM 参数分组复用，参数一不同就是另一批进程，
+     * 而每个 worker 的 JVM 启动 + 加载 Checkstyle/PMD 框架就在 1s 量级
+     * （实测 checkstyleMain 单任务 8.6s、pmdMain 10.3s，而实际扫描的代码只有千行级）。
+     *
+     * 关键事实：**分析工具运行 JVM 与被测字节码的目标版本无关**。
+     *   · Checkstyle 10.x 自述只要求 JDK 11+；
+     *   · PMD 7.x 要求 JDK 17+，且它对带更高 major version 的 class 文件是按 classfile
+     *     头解析的，不需要运行在同一版本 JVM 上；
+     *   · 高版本字节码（如 25）在 JDK 17 上确实读不了——但这里让 Checkstyle/PMD 默认
+     *     只看**源码**（Checkstyle 一直是源码，PMD 也以源码为主），源码与 JVM 版本无关。
+     *
+     * 因此分析启动 JVM 统一收归到默认 JDK 17，各车道不再各自抬高。
+     * `QualityExtension.analysisJavaVersion` 仍保留——真出现“某车道必须用更高 JVM 才能分析”
+     * 的实证时仍可单独覆写，但不应作为默认做法。
      */
     private fun pinAnalysisLaunchers(project: Project, quality: QualityExtension) {
         project.afterEvaluate {

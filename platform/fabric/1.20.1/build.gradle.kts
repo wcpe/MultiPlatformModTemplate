@@ -18,7 +18,7 @@ plugins {
     // 车道约定插件须在 loom 之后应用：gametest 源集要晚于 loom 按现有源集注册 migrate*Mappings 任务的时机创建
     id("build-conventions.fabric")
     id("com.gradleup.shadow") version "8.3.11"
-    // 分析类插件（spotbugs / ktlint / detekt / kover）不在车道内声明：由 build-conventions.quality 应用，
+    // 分析类插件（spotbugs / ktlint / detekt）不在车道内声明：由 build-conventions.quality 应用，
     // 版本与类路径由根 plugins{} 单点 pin，重复声明会分裂插件类加载器并破坏 loom 的清单服务。
 }
 
@@ -194,10 +194,15 @@ tasks.named("build") {
 tasks.register("runRealServerAcceptance") {
     group = "verification"
     description = "严格校验 Fabric realserver acceptance v2 报告与完整默认轨 REAL_REQUIRED"
+    // 配置缓存约束：这些值必须声明为**任务配置块内的局部 val**。
+    // 若放脚本顶层再在 doLast 里引用，Kotlin 生成的闭包会捕获脚本实例（this$0），
+    // 配置缓存报 "cannot serialize Gradle script object references"。
+    val reportFile = fabric.acceptanceReport.get().asFile
+    val realScenarios = fabric.realScenarios.get()
     doLast {
-        val report = fabric.acceptanceReport.get().asFile
         // 校验实现与其余车道共用 build-conventions 的单份实现（判定顺序与失败文案逐字保留）。
-        verifyDefaultTrackReport(project, report, "", "fabric", fabric.realScenarios.get())
+        // 本车道无矩阵轨，matrixId 传空、matrixRunId 传 null。
+        verifyDefaultTrackReport(logger, reportFile, "", null, "fabric", realScenarios)
     }
 }
 

@@ -2,6 +2,7 @@ package buildconventions
 
 import org.gradle.api.Project
 import org.gradle.api.Task
+import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.TaskProvider
 
 /**
@@ -60,8 +61,12 @@ private fun registerFabric262LaneShell(
 }
 
 /**
- * 一键全量构建：全部平台车道已是根构建子模块（ADR-0026），直接聚合 subprojects 的 build，
+ * 一键全量构建：全部平台车道已是根构建子模块（ADR-0026），聚合各工程的 `build`，
  * 并显式执行最终发布产物结构门 + dist 聚合。
+ *
+ * 不用 `project.subprojects.map { it.tasks.matching { ... } }`——那是配置期读取其它工程的
+ * 任务容器，Isolated Projects 会拒绝（"cannot access 'Project.tasks' functionality"）。
+ * 改为从 settings 下发的工程清单拼任务路径：协调逻辑仍集中在根，且不触碰别的工程模型。
  */
 private fun registerBuildAllGate(
     project: Project,
@@ -71,14 +76,36 @@ private fun registerBuildAllGate(
     project.tasks.register("buildAll") {
         group = "build"
         description = "构建全部模块、校验发布产物并聚合到 build/dist/"
-        dependsOn(
-            project.subprojects
-                .filterNot { it.path == ":platform:bukkit" }
-                .map { subproject -> subproject.tasks.matching { it.name == "build" } },
-        )
+        dependsOn(allModuleBuildPaths(project))
         dependsOn(verifyReleasePackaging)
         dependsOn(collectReleaseArtifacts)
         // 架构守卫（ADR-0028 决策 7）：全量构建必须过守卫，否则规则会因无人调用而形同虚设。
         dependsOn("verifyArchitecture")
+    }
+}
+
+/**
+ * 全部可构建子工程的 `:path:build` 任务路径。
+ *
+ * 清单来源：settings.gradle.kts 在 `beforeProject` / `afterEvaluate` 里逐个登记。
+ * 根工程先于子工程配置，注册任务时集合尚未填满，故用 `provider { }` 延迟到配置末尾求值
+ *（此时所有工程的 afterEvaluate 都已执行）。集合本身是 settings 下发的普通数据，
+ * 读取它不构成跨工程模型访问。
+ *
+ * 只取登记为"确实有 build 任务"的工程：聚合壳（`:core` / `:platform:bukkit` 等只有一行注释、
+ * 未应用 base/java 插件）没有 build 任务。该判定由各工程在自身 afterEvaluate 里完成，
+ * 与迁移前根侧 `subproject.tasks.matching { it.name == "build" }` 的过滤语义一致。
+ * 另外仍显式排除 `:platform:bukkit`——它是聚合壳，其 build 不作数。
+ */
+private fun allModuleBuildPaths(project: Project): Provider<List<String>> {
+    @Suppress("UNCHECKED_CAST")
+    val withBuild =
+        project.gradle.extensions.extraProperties.get("projectsWithBuildTask") as? MutableSet<String>
+            ?: error("settings.gradle.kts 未下发 projectsWithBuildTask：无法装配 buildAll")
+    return project.provider {
+        withBuild
+            .filterNot { it == ":" || it == ":platform:bukkit" }
+            .sorted()
+            .map { "$it:build" }
     }
 }

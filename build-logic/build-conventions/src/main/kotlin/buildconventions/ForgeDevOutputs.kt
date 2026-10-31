@@ -76,7 +76,8 @@ private fun wireForgeDevModOutputDependencies(
     listOf("checkstyleAcceptance", "pmdAcceptance", "spotbugsAcceptance").forEach { name ->
         project.tasks.named(name).configure { dependsOn(embedAcceptanceTask) }
     }
-    listOf("compileContractTestJava", "test").forEach { name ->
+    // compileContractTestJava 已不存在（contractTest 源集属2026-10-29 移除）
+    listOf("test").forEach { name ->
         project.tasks.named(name).configure { dependsOn(FORGE_PREPARE_DEV_MOD_OUTPUTS_TASK) }
     }
     project.tasks.named(FORGE_ACCEPTANCE_JAR_TASK).configure { dependsOn(embedAcceptanceTask) }

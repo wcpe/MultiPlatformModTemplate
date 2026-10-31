@@ -83,21 +83,7 @@ abstract class ForgeLaneExtension {
     /** 单测是否注入 `mpmt.test.*` 版本元数据（现代车道；1.12.2 / 1.20.1 原样不注入）。 */
     abstract val unitTestMetadata: Property<Boolean>
 
-    /** 契约测试主类；留空表示本车道不注册 JavaExec 契约测试。 */
-    abstract val contractTestMainClass: Property<String>
-
-    /** 契约测试任务描述。 */
-    abstract val contractTestDescription: Property<String>
-
-    /** 契约测试附加依赖任务（`contractTestClasses` 与产品 jar 任务由插件补齐）。 */
-    abstract val contractTestDependsOn: ListProperty<String>
-
-    /** 契约测试取产品 jar / 验收 jar 的任务名。 */
-    abstract val contractTestProductTask: Property<String>
-    abstract val contractTestAcceptanceTask: Property<String>
-
-    /** 契约测试的补充 `mpmt.test.*` 版本属性（仓库根、产品与验收 jar 路径由插件补齐）。 */
-    abstract val contractTestProperties: MapProperty<String, String>
+    // contractTest 相关属性已于 2026-10-29 全部移除（硬编码断言精确版本号，非正式版必失败）。
 
     /**
      * 验收伴侣 remap 任务的产物归档名（如 `mpmt-acceptance-forge`）；留空表示本车道无此任务。

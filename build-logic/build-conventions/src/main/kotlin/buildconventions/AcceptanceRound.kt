@@ -65,12 +65,19 @@ fun Project.acceptanceReportFrom(candidates: List<String>): File {
 /**
  * 校验权威报告：v2 头、MATRIX 命中、RUN_ID 属于本轮、末行 RESULT PASS、公共场景各一次 PASS。
  * 判定顺序与失败文案与各车道原实现一致。
+ *
+ * 配置缓存约束：本函数**不接收 `Project`**——`runId` 由调用方在配置期从 `-P` 解析后固化传入。
+ * 任务动作里若为取属性而捕获 `Project`，配置缓存会在存储阶段失败。
  */
 // 报告校验按契约逐项失败即抛：五个判据（头 / 矩阵 / 轮次 / 结果 / 场景）各自独立，判定顺序与文案不可合并，
 // 拆函数只会让契约更难对照，故此处保留单函数多次抛错并抑制该规则。
 @Suppress("ThrowsCount")
-fun Project.verifyAcceptanceRoundReport(report: File, matrixId: String) {
-    val lines = report.readLines().map { it.trim() }.filter { it.isNotEmpty() }
+fun verifyAcceptanceRoundReport(
+    report: File,
+    matrixId: String,
+    runId: String,
+    lines: List<String> = report.readLines().map { it.trim() }.filter { it.isNotEmpty() },
+) {
     if (lines.firstOrNull() != "SERVER-GAMETEST-REPORT v2") {
         throw GradleException("[realserver] 报告不是 acceptance v2")
     }
@@ -78,7 +85,6 @@ fun Project.verifyAcceptanceRoundReport(report: File, matrixId: String) {
     if (matrixLine == null || !matrixLine.contains(matrixId)) {
         throw GradleException("[realserver] 矩阵报告缺少 MATRIX $matrixId：$matrixLine")
     }
-    val runId = requiredAcceptanceProperty(matrixId, AcceptanceRound.RUN_ID_PROPERTY)
     if (lines.none { it == "RUN_ID\t$runId" || it == "RUN_ID $runId" }) {
         throw GradleException("[realserver] 矩阵 $matrixId 报告不属于当前运行：$runId")
     }
@@ -94,4 +100,18 @@ fun Project.verifyAcceptanceRoundReport(report: File, matrixId: String) {
             throw GradleException("[realserver] 矩阵 $matrixId 缺少公共场景 PASS：$id")
         }
     }
+}
+
+/**
+ * `Project` 扩展版：从 `-P` 读取 runId 后转交纯函数实现。
+ *
+ * 仅用于**配置期**调用（需要 Project 才能 `findProperty`）。任务动作内请直接用上面的纯函数版，
+ * 否则会因捕获 Project 而破坏配置缓存。
+ */
+fun Project.verifyAcceptanceRoundReport(report: File, matrixId: String) {
+    verifyAcceptanceRoundReport(
+        report = report,
+        matrixId = matrixId,
+        runId = requiredAcceptanceProperty(matrixId, AcceptanceRound.RUN_ID_PROPERTY),
+    )
 }

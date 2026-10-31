@@ -14,11 +14,19 @@ import java.io.File
  * 不做 sh 编排；仅供 Gradle 任务调用。
  */
 object AcceptanceReportGate {
+    private const val RESULT_PREFIX = "RESULT "
+    private const val RESULT_PASS = "RESULT PASS"
+
     fun verify(reportFile: File) {
+        // 判定与抛错分开：所有拒绝理由先落成文案，出口只有一个，便于调用方统一收口。
+        val problem = problemOf(reportFile)
+        if (problem != null) throw GradleException(problem)
+    }
+
+    /** 返回拒绝理由；`null` 表示放行。 */
+    private fun problemOf(reportFile: File): String? {
         if (!reportFile.isFile) {
-            throw GradleException(
-                "未找到验收报告：${reportFile.absolutePath}（先跑对应平台 runAcceptance* / 真服驱动）",
-            )
+            return "未找到验收报告：${reportFile.absolutePath}（先跑对应平台 runAcceptance* / 真服驱动）"
         }
         val text = reportFile.readText()
         val lines =
@@ -27,19 +35,14 @@ object AcceptanceReportGate {
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
                 .toList()
-        if (lines.isEmpty()) {
-            throw GradleException("验收报告为空：${reportFile.absolutePath}")
-        }
-        val last = lines.last()
-        if (!last.startsWith("RESULT ")) {
-            throw GradleException(
-                "验收报告末行不是 RESULT 行：${reportFile.absolutePath}\n$last",
-            )
-        }
-        if (last != "RESULT PASS") {
-            throw GradleException(
-                "验收未通过（$last）：${reportFile.absolutePath}\n—— 报告全文 ——\n$text",
-            )
+        val last = lines.lastOrNull()
+        return when {
+            last == null -> "验收报告为空：${reportFile.absolutePath}"
+            !last.startsWith(RESULT_PREFIX) ->
+                "验收报告末行不是 RESULT 行：${reportFile.absolutePath}\n$last"
+            last != RESULT_PASS ->
+                "验收未通过（$last）：${reportFile.absolutePath}\n—— 报告全文 ——\n$text"
+            else -> null
         }
     }
 }

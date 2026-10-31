@@ -4,6 +4,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.tasks.TaskProvider
+import java.io.File
 
 /**
  * 26.2 三车道交付门（注册在根工程）：构建 Paper / Fabric / Forge 26.2 产物并校验当前权威真服报告。
@@ -36,21 +37,18 @@ private fun registerBuildRealServerArtifacts262(
             buildFabric262,
             ":platform:forge:forge-26.2:packageArtifacts",
         )
+        // 配置期把 Forge 26.2 的两个产物路径固化成普通 File：动作只捕获这两个值，不捕获 project，
+        // 否则配置缓存会在存储阶段因 Project 不可序列化而失败（本仓已开启 configuration-cache）。
+        // 取值放在 register 动作内：任务实体化发生在全部工程配置完成之后，此处拿到的是最终 buildDirectory。
+        val forgeBuildDir =
+            project
+                .project(":platform:forge:forge-26.2")
+                .layout.buildDirectory
+                .get()
+                .asFile
+        val forgeProduct = File(forgeBuildDir, "libs/mpmt-forge-26.2-$version.jar")
+        val forgeAcceptance = File(forgeBuildDir, "libs/mpmt-forge-acceptance-26.2-$version.jar")
         doLast {
-            val forgeProduct =
-                project
-                    .project(":platform:forge:forge-26.2")
-                    .layout.buildDirectory
-                    .file("libs/mpmt-forge-26.2-$version.jar")
-                    .get()
-                    .asFile
-            val forgeAcceptance =
-                project
-                    .project(":platform:forge:forge-26.2")
-                    .layout.buildDirectory
-                    .file("libs/mpmt-forge-acceptance-26.2-$version.jar")
-                    .get()
-                    .asFile
             if (!forgeProduct.isFile || !forgeAcceptance.isFile) {
                 throw GradleException(
                     "缺少 Forge 26.2 产品或验收产物（已于本次依赖 :platform:forge:forge-26.2:packageArtifacts，仍缺失说明该任务未产出预期命名）：" +

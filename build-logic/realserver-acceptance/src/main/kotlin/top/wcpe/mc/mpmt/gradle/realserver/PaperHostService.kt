@@ -2,12 +2,7 @@ package top.wcpe.mc.mpmt.gradle.realserver
 
 import org.gradle.api.provider.Property
 import java.io.File
-import java.nio.file.AtomicMoveNotSupportedException
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
-import java.util.UUID
 import java.util.concurrent.TimeUnit
-import java.util.zip.ZipFile
 
 /**
  * 托管后台 Paper 宿主进程的 BuildService（B 增强）。
@@ -18,6 +13,8 @@ import java.util.zip.ZipFile
  *
  * <p>对齐 AllinCore PaperRealServerService 的核心契约，去掉 AllinCore 业务特判
  * （PAPI / 加密 / 代理集群），仅保留 MPMT Bukkit realserver 所需：产品 jar + 验收 jar + 报告路径。
+ * <p>jar 缓存解析见 [PaperJarCache]，运行目录铺装见 [PaperRunDirectory]，
+ * 插件部署见 [PluginJarDeployer]，命令行拼装见 [PaperLaunchCommand]。
  */
 abstract class PaperHostService :
     org.gradle.api.services.BuildService<PaperHostService.Params>,
@@ -119,139 +116,30 @@ abstract class PaperHostService :
 
     private fun startPaper() {
         val runDir = parameters.runDir.get().asFile
-        val cacheDir = parameters.cacheDir.get().asFile
         val port = parameters.port.get()
-        val mcVersion = parameters.paperVersion.get()
+        val paperJar =
+            PaperJarCache(parameters.cacheDir.get().asFile, logger)
+                .resolve(parameters.paperVersion.get(), frozenPaperArtifact())
+        val artifacts =
+            PaperArtifacts(
+                product = parameters.pluginJar.get().asFile,
+                acceptance = parameters.acceptanceDriverJar.get().asFile,
+                clientProduct = parameters.acceptanceClientProductJar.orNull?.asFile,
+                clientAcceptance = parameters.acceptanceClientAcceptanceJar.orNull?.asFile,
+            )
 
-        val paperJar = resolvePaperJar(cacheDir, mcVersion, frozenPaperArtifact())
-        val productJar = parameters.pluginJar.get().asFile
-        val acceptanceJar = parameters.acceptanceDriverJar.get().asFile
-        val clientProductJar = parameters.acceptanceClientProductJar.orNull?.asFile ?: productJar
-        val clientAcceptanceJar = parameters.acceptanceClientAcceptanceJar.orNull?.asFile ?: acceptanceJar
+        PaperRunDirectory.prepare(runDir, port)
+        deployPlugins(runDir, artifacts)
 
-        runDir.mkdirs()
-        File(runDir, "eula.txt").writeText("eula=true\n")
-        File(runDir, "server.properties").writeText(
-            """
-            |server-port=$port
-            |online-mode=false
-            |max-players=20
-            |spawn-protection=0
-            |level-type=flat
-            |generate-structures=false
-            |spawn-monsters=true
-            |spawn-animals=true
-            |spawn-npcs=false
-            |difficulty=normal
-            |motd=MPMT realserver acceptance
-            |enable-command-block=true
-            |white-list=false
-            |enforce-whitelist=false
-            |
-            """.trimMargin(),
-        )
-        val offlineUuid =
-            UUID.nameUUIDFromBytes("OfflinePlayer:WCPE".toByteArray(Charsets.UTF_8))
-        File(runDir, "ops.json").writeText(
-            """
-            |[
-            |  {
-            |    "uuid": "$offlineUuid",
-            |    "name": "WCPE",
-            |    "level": 4,
-            |    "bypassesPlayerLimit": true
-            |  }
-            |]
-            |
-            """.trimMargin(),
-        )
-
-        val pluginsDir = File(runDir, "plugins").apply { mkdirs() }
-        require(productJar.exists()) {
-            "[mpmt-realserver] 产品插件 jar 缺失：${productJar.absolutePath}"
-        }
-        purgeStalePluginJars(pluginsDir, productJar.name)
-        deployPluginJarSafely(productJar, File(pluginsDir, productJar.name))
-
-        if (parameters.acceptanceEnabled.getOrElse(false)) {
-            require(acceptanceJar.exists()) {
-                "[mpmt-realserver] 验收驱动 jar 缺失：${acceptanceJar.absolutePath}"
-            }
-            purgeStalePluginJars(pluginsDir, acceptanceJar.name)
-            deployPluginJarSafely(acceptanceJar, File(pluginsDir, acceptanceJar.name))
-            runCatching {
-                parameters.acceptanceReportFile
-                    .get()
-                    .asFile
-                    .delete()
-            }
-            logger.lifecycle("[mpmt-realserver] acceptance 模式：已部署验收驱动 + 启用 -Dmpmt.acceptance")
-        }
-
-        val consoleLog = File(runDir, "logs/real-server-console.log")
+        val consoleLog = File(runDir, CONSOLE_LOG_PATH)
         consoleLog.parentFile.mkdirs()
         consoleLog.delete()
-        val command =
-            buildList {
-                add(parameters.javaExecutable.get())
-                add("-Xmx1G")
-                add("-Xms512M")
-                add("-Dfile.encoding=UTF-8")
-                add("-Dorg.jline.terminal.dumb=true")
-                add("-Dorg.jline.terminal.jansi=false")
-                add("-Dorg.jline.terminal.jna=false")
-                if (parameters.acceptanceEnabled.getOrElse(false)) {
-                    add("-Dmpmt.acceptance=true")
-                    add(
-                        "-Dmpmt.acceptance.report=${parameters.acceptanceReportFile.get().asFile.absolutePath}",
-                    )
-                    parameters.acceptanceOnly.getOrElse("").takeIf { it.isNotBlank() }?.let {
-                        add("-Dmpmt.acceptance.only=$it")
-                    }
-                    parameters.acceptanceMatrix.getOrElse("").takeIf { it.isNotBlank() }?.let {
-                        add("-Dmpmt.acceptance.matrix=$it")
-                    }
-                    parameters.acceptanceRunId.getOrElse("").takeIf { it.isNotBlank() }?.let {
-                        add("-Dmpmt.acceptance.runId=$it")
-                    }
-                    parameters.acceptanceStartEpochMs.getOrElse("").takeIf { it.isNotBlank() }?.let {
-                        add("-Dmpmt.acceptance.startEpochMs=$it")
-                    }
-                    add("-Dmpmt.acceptance.javaExecutable=${parameters.javaExecutable.get()}")
-                    add("-Dmpmt.acceptance.artifact.server-runtime=${paperJar.absolutePath}")
-                    add("-Dmpmt.acceptance.artifact.server-product=${productJar.absolutePath}")
-                    add("-Dmpmt.acceptance.artifact.server-acceptance=${acceptanceJar.absolutePath}")
-                    add("-Dmpmt.acceptance.artifact.client-product=${clientProductJar.absolutePath}")
-                    add("-Dmpmt.acceptance.artifact.client-acceptance=${clientAcceptanceJar.absolutePath}")
-                    // 默认轨权威报告元数据（缺任一项驱动会 ERROR framework/driver-error）
-                    parameters.acceptanceCommit.getOrElse("").takeIf { it.isNotBlank() }?.let {
-                        add("-Dmpmt.acceptance.commit=$it")
-                    }
-                    parameters.acceptanceVersion.getOrElse("").takeIf { it.isNotBlank() }?.let {
-                        add("-Dmpmt.acceptance.version=$it")
-                    }
-                    parameters.acceptanceMcVersion.getOrElse("").takeIf { it.isNotBlank() }?.let {
-                        add("-Dmpmt.acceptance.mcVersion=$it")
-                    }
-                    parameters.acceptanceServerVersion.getOrElse("").takeIf { it.isNotBlank() }?.let {
-                        add("-Dmpmt.acceptance.serverVersion=$it")
-                    }
-                    parameters.acceptanceProductJarSha256.getOrElse("").takeIf { it.isNotBlank() }?.let {
-                        add("-Dmpmt.acceptance.productJarSha256=$it")
-                    }
-                    // 全量 acceptance 放大 runner / 截止（仍小于看门狗）
-                    add("-Dmpmt.acceptance.deadlineMs=1260000")
-                }
-                add("-jar")
-                add(paperJar.absolutePath)
-                add("nogui")
-            }
         logger.lifecycle(
             "[mpmt-realserver] 启动 Paper：端口=$port 运行目录=${runDir.absolutePath}",
         )
         // 绝不用 inheritIO：管道缓冲满会阻塞子进程
         val proc =
-            ProcessBuilder(command)
+            ProcessBuilder(PaperLaunchCommand.build(parameters, artifacts, paperJar))
                 .directory(runDir)
                 .redirectErrorStream(true)
                 .redirectOutput(ProcessBuilder.Redirect.to(consoleLog))
@@ -262,214 +150,72 @@ abstract class PaperHostService :
         startWatchdog(proc)
     }
 
-    private fun purgeStalePluginJars(pluginsDir: File, currentJarName: String) {
-        val withoutExt = currentJarName.removeSuffix(".jar")
-        val lastDash = withoutExt.lastIndexOf('-')
-        if (lastDash <= 0) return
-        val basePrefix = withoutExt.substring(0, lastDash + 1)
-        pluginsDir
-            .listFiles { f ->
-                f.isFile &&
-                    f.name.endsWith(".jar") &&
-                    f.name.startsWith(basePrefix) &&
-                    f.name != currentJarName
-            }?.forEach { stale ->
-                if (runCatching { stale.delete() }.getOrDefault(false)) {
-                    logger.lifecycle(
-                        "[mpmt-realserver] 清理旧版本插件 jar：${stale.name}",
-                    )
-                }
-            }
-    }
-
-    private fun deployPluginJarSafely(source: File, target: File) {
-        val deadline = System.currentTimeMillis() + JAR_DEPLOY_TIMEOUT_MS
-        var lastError = "未知原因"
-        var loggedWaiting = false
-        while (System.currentTimeMillis() < deadline) {
-            val sizeBefore = source.length()
-            if (sizeBefore <= 0L || !isLoadablePluginJar(source)) {
-                lastError = "源 jar 尚未就绪（size=$sizeBefore）"
-                if (!loggedWaiting) {
-                    logger.lifecycle("[mpmt-realserver] 源插件 jar 尚未就绪，等待……")
-                    loggedWaiting = true
-                }
-                Thread.sleep(JAR_DEPLOY_RETRY_MS)
-                continue
-            }
-            val copied = runCatching { source.copyTo(target, overwrite = true) }.isSuccess
-            val sizeAfter = source.length()
-            if (!copied ||
-                sizeAfter != sizeBefore ||
-                target.length() != sizeBefore ||
-                !isLoadablePluginJar(target)
-            ) {
-                lastError =
-                    "部署后校验失败（源拷前=$sizeBefore 源拷后=$sizeAfter 目标=${target.length()}）"
-                Thread.sleep(JAR_DEPLOY_RETRY_MS)
-                continue
-            }
-            logger.lifecycle(
-                "[mpmt-realserver] 已布置插件 jar：${source.name}（${sizeBefore / 1024} KB）",
-            )
+    /** 部署产品插件；验收模式下再部署驱动并清掉上一轮报告。 */
+    private fun deployPlugins(runDir: File, artifacts: PaperArtifacts) {
+        val pluginsDir = File(runDir, PLUGINS_DIR_NAME).apply { mkdirs() }
+        val deployer = PluginJarDeployer(logger)
+        deployer.replace(pluginsDir, artifacts.product, LABEL_PRODUCT_JAR)
+        if (!parameters.acceptanceEnabled.getOrElse(false)) {
             return
         }
-        throw org.gradle.api.GradleException(
-            "[mpmt-realserver] 插件 jar 在 ${JAR_DEPLOY_TIMEOUT_MS / 1000}s 内未能稳定部署：$lastError" +
-                "（源=${source.absolutePath}）",
-        )
-    }
-
-    private fun isLoadablePluginJar(file: File): Boolean =
+        deployer.replace(pluginsDir, artifacts.acceptance, LABEL_ACCEPTANCE_JAR)
         runCatching {
-            ZipFile(file).use { zip ->
-                zip.getEntry("plugin.yml") != null || zip.getEntry("paper-plugin.yml") != null
-            }
-        }.getOrDefault(false)
+            parameters.acceptanceReportFile
+                .get()
+                .asFile
+                .delete()
+        }
+        logger.lifecycle("[mpmt-realserver] acceptance 模式：已部署验收驱动 + 启用 -Dmpmt.acceptance")
+    }
 
     private fun frozenPaperArtifact(): FrozenPaperArtifact? {
         val build = parameters.paperBuild.orNull
         val sizeBytes = parameters.paperJarSizeBytes.orNull
         val sha256 = parameters.paperJarSha256.orNull
         if (build == null && sizeBytes == null && sha256 == null) return null
-        check(build != null && sizeBytes != null && sha256 != null) { "冻结 Paper 输入必须同时提供 build、大小和 SHA-256" }
+        check(build != null && sizeBytes != null && sha256 != null) {
+            "冻结 Paper 输入必须同时提供 build、大小和 SHA-256"
+        }
         return FrozenPaperArtifact(parameters.paperVersion.get(), build, sizeBytes, sha256)
-    }
-
-    private fun resolvePaperJar(
-        cacheDir: File,
-        mcVersion: String,
-        frozen: FrozenPaperArtifact?,
-    ): File = frozen?.let { resolveFrozenPaperJar(cacheDir, it) } ?: resolveLatestPaperJar(cacheDir, mcVersion)
-
-    private fun resolveFrozenPaperJar(cacheDir: File, frozen: FrozenPaperArtifact): File {
-        cacheDir.mkdirs()
-        val target = File(cacheDir, frozen.jarName())
-        if (target.isFile) {
-            frozen.verify(target)
-            logger.lifecycle("[mpmt-realserver] 复用冻结 paperclip jar：${target.name}")
-            return target
-        }
-        val metadataUrl = "${FillV3Downloads.ENDPOINT}projects/paper/versions/${frozen.mcVersion}/builds/${frozen.build}"
-        val json = fetchPaperMetadata(metadataUrl)
-        if (FillV3Downloads.parseLatestBuildId(json) != frozen.build) {
-            throw org.gradle.api.GradleException("[mpmt-realserver] Paper 元数据 build 与冻结值不一致：$metadataUrl")
-        }
-        val downloadUrl = FillV3Downloads.parseDownloadUrl(json, FillV3Downloads.KEY_PRIMARY)
-        if (!FrozenPaperArtifact.isTrustedDownloadUrl(downloadUrl)) {
-            throw org.gradle.api.GradleException("[mpmt-realserver] Paper 下载地址不受信任：$downloadUrl")
-        }
-        val temporary = File(cacheDir, "${frozen.jarName()}.${UUID.randomUUID()}.part")
-        try {
-            logger.lifecycle("[mpmt-realserver] 下载冻结 paperclip jar：${frozen.jarName()}")
-            FillV3Downloads.download(downloadUrl, temporary)
-            frozen.verify(temporary)
-            replaceAtomically(temporary, target)
-        } catch (failure: Throwable) {
-            temporary.delete()
-            throw failure
-        }
-        logger.lifecycle("[mpmt-realserver] 冻结 paperclip jar 就绪：${target.name}")
-        return target
-    }
-
-    private fun fetchPaperMetadata(url: String): String =
-        try {
-            FillV3Downloads.fetchText(url)
-        } catch (failure: Throwable) {
-            throw org.gradle.api.GradleException("[mpmt-realserver] 访问 PaperMC Fill v3 API 失败：$url", failure)
-        }
-
-    private fun replaceAtomically(temporary: File, target: File) {
-        try {
-            Files.move(
-                temporary.toPath(),
-                target.toPath(),
-                StandardCopyOption.ATOMIC_MOVE,
-                StandardCopyOption.REPLACE_EXISTING,
-            )
-        } catch (_: AtomicMoveNotSupportedException) {
-            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
-        }
-    }
-
-    private fun resolveLatestPaperJar(cacheDir: File, mcVersion: String): File {
-        cacheDir.mkdirs()
-        cacheDir
-            .listFiles { f -> f.name.matches(Regex("paper-$mcVersion-\\d+\\.jar")) }
-            ?.maxByOrNull { it.name }
-            ?.let {
-                logger.lifecycle("[mpmt-realserver] 复用缓存 paperclip jar：${it.name}")
-                return it
-            }
-        val latestUrl = "${FillV3Downloads.ENDPOINT}projects/paper/versions/$mcVersion/builds/latest"
-        logger.lifecycle("[mpmt-realserver] 查询 PaperMC 最新构建：$latestUrl")
-        val json =
-            try {
-                FillV3Downloads.fetchText(latestUrl)
-            } catch (t: Throwable) {
-                throw org.gradle.api.GradleException(
-                    "[mpmt-realserver] 访问 PaperMC Fill v3 API 失败：$latestUrl（${t.message}）",
-                    t,
-                )
-            }
-        val build = FillV3Downloads.parseLatestBuildId(json)
-        val downloadUrl = FillV3Downloads.parseDownloadUrl(json, FillV3Downloads.KEY_PRIMARY)
-        val jarName = "paper-$mcVersion-$build.jar"
-        val target = File(cacheDir, jarName)
-        val tmp = File(cacheDir, "$jarName.part")
-        logger.lifecycle("[mpmt-realserver] 下载 paperclip jar：$downloadUrl")
-        try {
-            FillV3Downloads.download(downloadUrl, tmp)
-        } catch (t: Throwable) {
-            tmp.delete()
-            throw org.gradle.api.GradleException(
-                "[mpmt-realserver] 下载 paperclip jar 失败：$downloadUrl（${t.message}）",
-                t,
-            )
-        }
-        tmp.renameTo(target)
-        logger.lifecycle(
-            "[mpmt-realserver] paperclip jar 就绪：${target.name}（${target.length() / 1024 / 1024} MB）",
-        )
-        return target
     }
 
     private fun awaitReady(proc: Process, consoleLog: File, port: Int) {
         val timeoutMin = parameters.readyTimeoutMinutes.get().toLong()
-        val deadline = System.currentTimeMillis() + timeoutMin * 60_000L
+        val deadline = System.currentTimeMillis() + timeoutMin * MILLIS_PER_MINUTE
         while (System.currentTimeMillis() < deadline) {
             if (!proc.isAlive) {
                 throw org.gradle.api.GradleException(
                     "[mpmt-realserver] Paper 进程在就绪前已退出（退出码=${proc.exitValue()}）。\n" +
-                        "完整日志：${consoleLog.absolutePath}\n---- 控制台末尾 80 行 ----\n" +
-                        consoleTail(consoleLog, 80),
+                        "完整日志：${consoleLog.absolutePath}\n---- 控制台末尾 $CONSOLE_TAIL_LINES 行 ----\n" +
+                        consoleTail(consoleLog),
                 )
             }
-            val ready =
-                runCatching {
-                    consoleLog
-                        .takeIf { it.exists() }
-                        ?.useLines { lines -> lines.any { it.contains("Done (") } }
-                        ?: false
-                }.getOrDefault(false)
-            if (ready) {
+            if (isConsoleReady(consoleLog)) {
                 logger.lifecycle("[mpmt-realserver] Paper 已就绪（检测到 `Done (`），端口=$port")
                 return
             }
-            Thread.sleep(1_000)
+            Thread.sleep(READY_POLL_INTERVAL_MS)
         }
         destroyProcessTree(proc)
         throw org.gradle.api.GradleException(
             "[mpmt-realserver] Paper 在 $timeoutMin 分钟内未就绪，已强制终止。\n" +
-                "完整日志：${consoleLog.absolutePath}\n---- 控制台末尾 80 行 ----\n" +
-                consoleTail(consoleLog, 80),
+                "完整日志：${consoleLog.absolutePath}\n---- 控制台末尾 $CONSOLE_TAIL_LINES 行 ----\n" +
+                consoleTail(consoleLog),
         )
     }
 
+    /** 控制台出现 `Done (` 即视为就绪；日志尚未落盘时按未就绪处理。 */
+    private fun isConsoleReady(consoleLog: File): Boolean =
+        runCatching {
+            consoleLog
+                .takeIf { it.exists() }
+                ?.useLines { lines -> lines.any { it.contains("Done (") } }
+                ?: false
+        }.getOrDefault(false)
+
     private fun startWatchdog(proc: Process) {
         val timeoutMin = parameters.globalTimeoutMinutes.get().toLong()
-        val t =
+        val watchdogThread =
             Thread {
                 try {
                     val killed = !proc.waitFor(timeoutMin, TimeUnit.MINUTES)
@@ -483,20 +229,20 @@ abstract class PaperHostService :
                     // 正常清理
                 }
             }
-        t.isDaemon = true
-        t.name = "mpmt-paper-host-watchdog"
-        t.start()
-        watchdog = t
+        watchdogThread.isDaemon = true
+        watchdogThread.name = "mpmt-paper-host-watchdog"
+        watchdogThread.start()
+        watchdog = watchdogThread
     }
 
-    private fun consoleTail(consoleLog: File, lines: Int): String =
-        runCatching { consoleLog.readLines().takeLast(lines).joinToString("\n") }
+    private fun consoleTail(consoleLog: File): String =
+        runCatching { consoleLog.readLines().takeLast(CONSOLE_TAIL_LINES).joinToString("\n") }
             .getOrDefault("（无法读取：${consoleLog.absolutePath}）")
 
     private fun destroyProcessTree(proc: Process) {
         runCatching { proc.descendants().forEach { it.destroyForcibly() } }
         proc.destroyForcibly()
-        runCatching { proc.waitFor(30, TimeUnit.SECONDS) }
+        runCatching { proc.waitFor(PROCESS_EXIT_WAIT_SECONDS, TimeUnit.SECONDS) }
     }
 
     override fun close() {
@@ -512,8 +258,20 @@ abstract class PaperHostService :
         }
     }
 
-    companion object {
-        private const val JAR_DEPLOY_TIMEOUT_MS = 60_000L
-        private const val JAR_DEPLOY_RETRY_MS = 500L
+    private companion object {
+        const val PLUGINS_DIR_NAME = "plugins"
+        const val CONSOLE_LOG_PATH = "logs/real-server-console.log"
+        const val LABEL_PRODUCT_JAR = "产品插件 jar"
+        const val LABEL_ACCEPTANCE_JAR = "验收驱动 jar"
+
+        /** 失败诊断时回显的控制台末尾行数。 */
+        const val CONSOLE_TAIL_LINES = 80
+
+        /** 就绪轮询间隔与分钟换算。 */
+        const val READY_POLL_INTERVAL_MS = 1_000L
+        const val MILLIS_PER_MINUTE = 60_000L
+
+        /** 强杀后等待进程退出的上限。 */
+        const val PROCESS_EXIT_WAIT_SECONDS = 30L
     }
 }

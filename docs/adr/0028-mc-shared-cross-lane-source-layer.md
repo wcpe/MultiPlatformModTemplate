@@ -115,10 +115,12 @@ core/
 
 ### D7 架构规则机械化
 
-> **落地状态**：`build-conventions.architecture` 已实现并接入 `buildAll`（`verifyArchitecture` 任务）。
-> 已实现：三档扫描（STRICT / MC_AWARE / PERMITTED）、`SourceMasker` 脱敏、`mc-shared` 形态校验、
-> 顶层语义校验、孤儿检查（空壳端目录 + 未命中活跃版本的区间目录）。配套 10 个行为测试。
-> 「未登记即报错」一项未单独实现——孤儿检查与形态校验已覆盖其主要风险面。
+> **落地状态（已由 [ADR-0036](0036-architecture-guard-structural-only.md) 收窄）**：D7 的目标「把架构规则变成可失败门禁」不变，
+> 但实现范围已调整——`build-conventions.architecture` 现在只做三项结构性检查：`mc-shared` 形态、顶层语义、
+> 域依赖方向；判据改为文件系统事实、`Project.getPath()` 与 settings 下发的模块级直接依赖。
+> 原有的源码文本扫描（三档 + `SourceMasker`）、孤儿检查及其 `mpmt.laneMcVersions` 属性已删除，
+> 其余分层约束改由依赖声明本身与 ArchUnit（`LayeringArchTest` / `DomainArchTest`）承担。
+> 原因见 ADR-0036。以下为 D7 原始决策正文，保留作历史记录。
 
 新增 `build-conventions.architecture` 插件，把 `.claude/rules/architecture-invariants.md` 的规则变成可失败的门禁：
 

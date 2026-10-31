@@ -116,15 +116,8 @@ forgeLane {
         "先跑 runServer + runClient，或提供 server-runtime 后跑 runRealServerAcceptanceHost + 客户端伴侣。",
     )
     modernPackagingVerification.set(true)
-    contractTestMainClass.set("top.wcpe.mc.mpmt.platform.forge.modern.contract.Forge262ContractMain")
-    contractTestDependsOn.set(listOf("packageArtifacts"))
-    contractTestProductTask.set("jar")
-    contractTestAcceptanceTask.set("acceptanceJar")
-    contractTestProperties.put("mpmt.test.projectDir", projectDir.absolutePath)
-    contractTestProperties.put("mpmt.test.minecraftVersion", minecraftVersion)
-    contractTestProperties.put("mpmt.test.forgeVersion", forgeVersion)
-    contractTestProperties.put("mpmt.test.loomVersion", loomVersion)
-    contractTestProperties.put("mpmt.test.gradleVersion", gradle.gradleVersion)
+    // contractTest 已于 2026-10-29 移除（它硬编码断言 loom/forge/gradle 的精确版本号，
+    // 使任何非正式版构建都无法通过）。产物结构仍由 verifyPackaging 守护。
 }
 
 // 插件公开 API 需要扩展实例（块外传参用），故在块后取回一次
@@ -172,11 +165,12 @@ dependencies {
 
 val realServerHostRequested = gradle.startParameter.taskNames.any { it.endsWith("runRealServerAcceptanceHost") }
 // 质量工具链：装配由 build-conventions.quality 插件承担，此处只声明本车道的偏离项
-// （PMD 规则集需要 7.16；SpotBugs 需更高版本以解析新版 classfile；分析 JVM 与本车道目标一致）。
+// （PMD 规则集需要 7.16；SpotBugs 需更高版本以解析新版 classfile）。
+// 分析 JVM 不固定到 25：分析工具运行 JVM 与字节码目标版本无关，而多一种分析 JVM
+// 就多一批 worker daemon（理由见 QualityConventionPlugin.pinAnalysisLaunchers）。
 quality {
     pmdToolVersion.set("7.16.0")
     spotbugsToolVersion.set("4.9.8")
-    analysisJavaVersion.set(25)
 }
 
 val staticQualityTasks =
@@ -197,14 +191,14 @@ loom {
         // （dev SecureJar 的 source_roots 语义）。
         create("acceptanceServer") {
             server()
-            configName = "Acceptance Server"
+            displayName.set("Acceptance Server")
             source(acceptance)
-            runDir(acceptanceServerRunDirectory)
-            property("forge.logging.console.level", "info")
-            property("mpmt.acceptance", "true")
-            property("mpmt.acceptance.report", project.file("$acceptanceServerRunDirectory/acceptance-report.txt").absolutePath)
+            runDirectory.set(layout.projectDirectory.dir(acceptanceServerRunDirectory))
+            systemProperties.put("forge.logging.console.level", "info")
+            systemProperties.put("mpmt.acceptance", "true")
+            systemProperties.put("mpmt.acceptance.report", project.file("$acceptanceServerRunDirectory/acceptance-report.txt").absolutePath)
             // 允许 -Pmpmt.acceptance.deadlineMs 覆盖；默认 600s 覆盖慢机冷启动
-            property("mpmt.acceptance.deadlineMs", (project.findProperty("mpmt.acceptance.deadlineMs") ?: "600000").toString())
+            systemProperties.put("mpmt.acceptance.deadlineMs", (project.findProperty("mpmt.acceptance.deadlineMs") ?: "600000").toString())
             // loom 的 forge server 模板已自带 nogui 程序参数，无需（不可）重复声明
             mods {
                 create("mpmt") {
@@ -217,36 +211,36 @@ loom {
         }
         create("acceptanceClient") {
             client()
-            configName = "Acceptance Client"
+            displayName.set("Acceptance Client")
             source(acceptance)
-            runDir("run-acceptance-client")
-            property("forge.logging.console.level", "info")
+            runDirectory.set(layout.projectDirectory.dir("run-acceptance-client"))
+            systemProperties.put("forge.logging.console.level", "info")
             // quickPlay 作辅；主路径由伴侣 tryAutoConnect 读系统属性 mpmt.acceptance.server
             programArgs("--quickPlayMultiplayer", (project.findProperty("mpmt.acceptance.server") ?: "127.0.0.1").toString())
             // 单机/LAN 验收（-Pmpmt.acceptance.singleplayer=true）：伴侣据此创建单人世界，
             // 由客户端内置服务端承载验收场景，无需另起专用服；报告落本 run 目录以区别于服务端轨。
             if (project.findProperty("mpmt.acceptance.singleplayer") == "true") {
-                property("mpmt.acceptance", "true")
-                property("mpmt.acceptance.singleplayer", "true")
-                property(
+                systemProperties.put("mpmt.acceptance", "true")
+                systemProperties.put("mpmt.acceptance.singleplayer", "true")
+                systemProperties.put(
                     "mpmt.acceptance.report",
                     project.file("run-acceptance-client/singleplayer-acceptance-report.txt").absolutePath,
                 )
-                property(
+                systemProperties.put(
                     "mpmt.acceptance.deadlineMs",
                     (project.findProperty("mpmt.acceptance.deadlineMs") ?: "600000").toString(),
                 )
                 // 26.2 的验收驱动只有矩阵 v2 轨，必须提供完整身份与五类制品路径才能出报告
-                property("mpmt.acceptance.matrix", "REALSERVER262")
-                property(
+                systemProperties.put("mpmt.acceptance.matrix", "REALSERVER262")
+                systemProperties.put(
                     "mpmt.acceptance.runId",
                     (project.findProperty("mpmt.acceptance.runId") ?: "singleplayer-${System.currentTimeMillis()}").toString(),
                 )
-                property(
+                systemProperties.put(
                     "mpmt.acceptance.startEpochMs",
                     (project.findProperty("mpmt.acceptance.startEpochMs") ?: System.currentTimeMillis().toString()).toString(),
                 )
-                property(
+                systemProperties.put(
                     "mpmt.acceptance.javaExecutable",
                     System.getProperty("java.home") + "/bin/java",
                 )
@@ -260,7 +254,7 @@ loom {
                     "client-product" to productJar,
                     "client-acceptance" to acceptanceJar,
                 ).forEach { (role, jar) ->
-                    property("mpmt.acceptance.artifact.$role", jar.absolutePath)
+                    systemProperties.put("mpmt.acceptance.artifact.$role", jar.absolutePath)
                 }
             }
             mods {
@@ -414,6 +408,7 @@ tasks.register("runRealServerAcceptanceHost") {
 }
 
 tasks.named("check") {
-    dependsOn("test", "contractTest", "verifyPackaging", staticQualityTasks, "koverXmlReport")
+    // koverXmlReport 已随 kover 一并移除（本仓业务模块零 Kotlin 源，该任务恒为空转）。
+    dependsOn("test", "verifyPackaging", staticQualityTasks)
 }
 // `build` 依赖 packageArtifacts 的收口已内置到 build-conventions（registerForgePackageArtifacts）

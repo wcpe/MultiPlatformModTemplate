@@ -1,36 +1,5 @@
 <?xml version="1.0" ?>
 <SmellBaseline>
   <ManuallySuppressedIssues/>
-  <CurrentIssues>
-    <ID>ComplexCondition:PaperHostService.kt:PaperHostService$!copied || sizeAfter != sizeBefore || target.length() != sizeBefore || !isLoadablePluginJar(target)</ID>
-    <ID>CyclomaticComplexMethod:PaperHostService.kt:PaperHostService$private fun startPaper</ID>
-    <ID>LongMethod:MpmtRealServerAcceptancePlugin.kt:MpmtRealServerAcceptancePlugin$private fun configureHostWiring</ID>
-    <ID>LongMethod:PaperHostService.kt:PaperHostService$private fun startPaper</ID>
-    <ID>LoopWithTooManyJumpStatements:PaperHostService.kt:PaperHostService$while</ID>
-    <ID>MagicNumber:FillV3Downloads.kt:FillV3Downloads$200</ID>
-    <ID>MagicNumber:FillV3Downloads.kt:FillV3Downloads$299</ID>
-    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt:MpmtRealServerAcceptancePlugin$17</ID>
-    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt:MpmtRealServerAcceptancePlugin$24</ID>
-    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt:MpmtRealServerAcceptancePlugin$250</ID>
-    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt:MpmtRealServerAcceptancePlugin$25599</ID>
-    <ID>MagicNumber:MpmtRealServerAcceptancePlugin.kt:MpmtRealServerAcceptancePlugin$8</ID>
-    <ID>MagicNumber:PaperHostService.kt:PaperHostService$1000</ID>
-    <ID>MagicNumber:PaperHostService.kt:PaperHostService$1024</ID>
-    <ID>MagicNumber:PaperHostService.kt:PaperHostService$1_000</ID>
-    <ID>MagicNumber:PaperHostService.kt:PaperHostService$30</ID>
-    <ID>MagicNumber:PaperHostService.kt:PaperHostService$80</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt:RealServerReportValidator.ParsedReport$10</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt:RealServerReportValidator.ParsedReport$3</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt:RealServerReportValidator.ParsedReport$5</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt:RealServerReportValidator.ParsedReport$7</ID>
-    <ID>MagicNumber:RealServerReportValidator.kt:RealServerReportValidator.ParsedReport$9</ID>
-    <ID>MaxLineLength:PaperHostService.kt:PaperHostService$val metadataUrl = "${FillV3Downloads.ENDPOINT}projects/paper/versions/${frozen.mcVersion}/builds/${frozen.build}"</ID>
-    <ID>MaxLineLength:RealServerReportValidator.kt:RealServerReportValidator.ParsedReport$line.startsWith("START_EPOCH_MS\t") -&gt; startEpochMs = unique("START_EPOCH_MS", startEpochMs, fields(line, 2)[1].toLong())</ID>
-    <ID>ThrowsCount:AcceptanceReportGate.kt:AcceptanceReportGate$fun verify</ID>
-    <ID>ThrowsCount:PaperHostService.kt:PaperHostService$private fun resolveFrozenPaperJar: File</ID>
-    <ID>ThrowsCount:RealServerReportGatePlugin.kt:RealServerReportGatePlugin$private fun verify</ID>
-    <ID>TooGenericExceptionCaught:PaperHostService.kt:PaperHostService$failure: Throwable</ID>
-    <ID>TooGenericExceptionCaught:PaperHostService.kt:PaperHostService$t: Throwable</ID>
-    <ID>TooManyFunctions:PaperHostService.kt:PaperHostService : BuildServiceAutoCloseable</ID>
-  </CurrentIssues>
+  <CurrentIssues/>
 </SmellBaseline>

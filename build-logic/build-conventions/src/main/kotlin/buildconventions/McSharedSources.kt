@@ -53,7 +53,7 @@ object McSharedSources {
     fun mount(project: Project, java: SourceDirectorySet, sides: List<Side>, mcVersion: String? = null): Int {
         var mounted = 0
         sides.forEach { side ->
-            val dir = project.rootProject.file("$ROOT_DIR/${side.dir}/src/main/java")
+            val dir = project.layout.settingsDirectory.file("$ROOT_DIR/${side.dir}/src/main/java").asFile
             if (dir.isDirectory) {
                 java.srcDir(dir)
                 mounted++
@@ -80,7 +80,7 @@ object McSharedSources {
         sides: List<Side>,
         mcVersion: String,
     ): Int {
-        val gensrc = project.rootProject.file("$ROOT_DIR/gensrc")
+        val gensrc = project.layout.settingsDirectory.file("$ROOT_DIR/gensrc").asFile
         if (!gensrc.isDirectory) {
             return 0
         }
@@ -94,7 +94,7 @@ object McSharedSources {
             .forEach { rangeDir ->
                 sides.forEach { side ->
                     // 必须相对根工程解析：mc-shared 在仓库根，不在车道目录下。
-                    val dir = project.rootProject.file("$ROOT_DIR/gensrc/${rangeDir.name}/${side.dir}/src/main/java")
+                    val dir = project.layout.settingsDirectory.file("$ROOT_DIR/gensrc/${rangeDir.name}/${side.dir}/src/main/java").asFile
                     if (dir.isDirectory) {
                         java.srcDir(dir)
                         mounted++
@@ -112,7 +112,7 @@ object McSharedSources {
      * @return 该端目录下是否存在至少一个文件
      */
     fun hasSources(project: Project, side: Side): Boolean {
-        val dir: File = project.rootProject.file("$ROOT_DIR/${side.dir}/src/main/java")
+        val dir: File = project.layout.settingsDirectory.file("$ROOT_DIR/${side.dir}/src/main/java").asFile
         return dir.isDirectory && dir.walkTopDown().any { it.isFile }
     }
 }

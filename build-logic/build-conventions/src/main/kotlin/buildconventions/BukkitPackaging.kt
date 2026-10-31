@@ -68,6 +68,10 @@ internal fun configureBukkitArchiveTasks(project: Project, lane: BukkitLaneExten
         .set("$BUKKIT_PRODUCT_JAR_BASE_NAME_PREFIX-$mcVersion")
     project.tasks.named("jar", Jar::class.java).configure { archiveClassifier.set("plain") }
     configureBukkitProductArchive(project)
+    // 产品 jar 同时暴露为跨车道可消费产物（outgoing variant）：消费方声明产物依赖即可，
+    // 产物名与「先构建 shadowJar」的任务顺序都由 Gradle 从生产者侧推导，
+    // 消费方不再写死 build/libs/… 路径、也不再手写任务依赖。
+    project.exposeProductJarVariant(project.tasks.named(BUKKIT_PRODUCT_JAR_TASK, Jar::class.java))
     registerBukkitAcceptanceArchive(project, mcVersion, acceptance)
 }
 

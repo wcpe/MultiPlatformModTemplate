@@ -8,8 +8,8 @@ plugins {
     `java-library`
 }
 
-group = "top.wcpe.mc.mpmt"
-version = rootProject.file("VERSION").readText().trim()
+// group / version 由 settings.gradle.kts 的 gradle.lifecycle.beforeProject 统一下发；
+// 此处不再回读根工程（rootProject.file 属于跨工程访问，Isolated Projects 会拒绝）。
 
 val snakeyamlVersion = "2.2"
 val spigot112Api = "org.spigotmc:spigot-api:1.12.2-R0.1-SNAPSHOT"
@@ -41,7 +41,9 @@ dependencies {
     compileOnly(spigot112Api) {
         exclude(group = "net.md-5", module = "bungeecord-chat")
     }
-    compileOnly(files(rootProject.file("platform/bukkit/third-party/bungeecord-chat-1.12-SNAPSHOT.jar")))
+    // 用 layout.settingsDirectory 定位仓内 jar：它是本工程的 ProjectLayout，不读根工程模型，
+    // 因此 Isolated Projects 友好（rootProject.file 会被记为跨工程访问）。
+    compileOnly(files(layout.settingsDirectory.file("platform/bukkit/third-party/bungeecord-chat-1.12-SNAPSHOT.jar")))
     api(project(":platform:bukkit:bukkit-api"))
     api(project(":core:spi"))
     api(project(":core:server"))
