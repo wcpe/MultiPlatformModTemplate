@@ -39,6 +39,8 @@ val spiCoordinate = project(":core:spi")
 val serverCoordinate = project(":core:server")
 // 依赖 core-client（客户端网络装配特性 ClientNetworkFeature + 弱标识提供者）
 val clientCoordinate = project(":core:client")
+// 依赖 core-config（ConfigPort 的文件实现 DirectoryConfigPort，能力装配期注册）
+val configCoordinate = project(":core:config")
 // realserver 验收 harness 平台无关核心（仅 gametest 接入层用，不入产品 jar，ADR-0014）
 val acceptanceCoordinate = project(":modules:acceptance")
 
@@ -118,6 +120,10 @@ dependencies {
     // 客户端公共逻辑（core-client）：客户端网络装配 + 弱标识提供者，shade 进产物、不参与 remap
     implementation(clientCoordinate)
     shadowBundle(clientCoordinate)
+
+    // 配置端口实现（core-config）：能力装配注册 ConfigPort 用，同样纯 Java、shade 进产物、不参与 remap
+    implementation(configCoordinate)
+    shadowBundle(configCoordinate)
 
     // 功能域（L0 玩法逻辑）：经 mpmtDomains() 动态覆盖——新增域无需改本脚本（ADR-0028）。
     // 域经 META-INF/services 声明 Feature，由 core-runtime 启动期自动发现。

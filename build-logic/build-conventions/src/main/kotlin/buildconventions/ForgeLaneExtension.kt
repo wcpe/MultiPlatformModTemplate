@@ -83,8 +83,6 @@ abstract class ForgeLaneExtension {
     /** 单测是否注入 `mpmt.test.*` 版本元数据（现代车道；1.12.2 / 1.20.1 原样不注入）。 */
     abstract val unitTestMetadata: Property<Boolean>
 
-    // contractTest 相关属性已于 2026-10-29 全部移除（硬编码断言精确版本号，非正式版必失败）。
-
     /**
      * 验收伴侣 remap 任务的产物归档名（如 `mpmt-acceptance-forge`）；留空表示本车道无此任务。
      *

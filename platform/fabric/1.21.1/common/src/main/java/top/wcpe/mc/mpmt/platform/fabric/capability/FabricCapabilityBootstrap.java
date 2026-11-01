@@ -7,7 +7,9 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import top.wcpe.mc.mpmt.kernel.event.DomainEvent;
+import top.wcpe.mc.mpmt.config.DirectoryConfigPort;
 import top.wcpe.mc.mpmt.kernel.event.EventBusPort;
+import top.wcpe.mc.mpmt.kernel.port.ConfigPort;
 import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
 import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
 import top.wcpe.mc.mpmt.kernel.port.MessagePort;
@@ -42,6 +44,7 @@ public final class FabricCapabilityBootstrap {
 
         DataDirectoryPort dataDirectory = new FabricDataDirectoryPort();
         PersistencePort persistence = new FabricPersistencePort(dataDirectory);
+        ConfigPort config = new DirectoryConfigPort(dataDirectory);
         MessagePort message = new FabricMessagePort(server);
         ConnectionControlPort connections = new FabricConnectionControlPort(server);
         PlayerPort players = new FabricPlayerPort(server);
@@ -50,6 +53,7 @@ public final class FabricCapabilityBootstrap {
 
         runtime.ports().register(DataDirectoryPort.class, dataDirectory);
         runtime.ports().register(PersistencePort.class, persistence);
+        runtime.ports().register(ConfigPort.class, config);
         runtime.ports().register(MessagePort.class, message);
         runtime.ports().register(ConnectionControlPort.class, connections);
         runtime.ports().register(PlayerPort.class, players);

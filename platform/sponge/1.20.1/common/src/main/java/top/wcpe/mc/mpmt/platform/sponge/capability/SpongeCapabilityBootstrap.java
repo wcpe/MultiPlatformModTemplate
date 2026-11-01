@@ -7,7 +7,9 @@ import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.network.ServerSideConnectionEvent;
 import org.spongepowered.plugin.PluginContainer;
+import top.wcpe.mc.mpmt.config.DirectoryConfigPort;
 import top.wcpe.mc.mpmt.kernel.event.EventBusPort;
+import top.wcpe.mc.mpmt.kernel.port.ConfigPort;
 import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
 import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
 import top.wcpe.mc.mpmt.kernel.port.MessagePort;
@@ -46,6 +48,7 @@ public final class SpongeCapabilityBootstrap {
 
         DataDirectoryPort dataDirectory = new SpongeDataDirectoryPort(configDir);
         PersistencePort persistence = new SpongePersistencePort(dataDirectory);
+        ConfigPort config = new DirectoryConfigPort(dataDirectory);
         MessagePort message = new SpongeMessagePort();
         ConnectionControlPort connections = new SpongeConnectionControlPort(connectionRegistry);
         PlayerPort players = new SpongePlayerPort();
@@ -54,6 +57,7 @@ public final class SpongeCapabilityBootstrap {
 
         runtime.ports().register(DataDirectoryPort.class, dataDirectory);
         runtime.ports().register(PersistencePort.class, persistence);
+        runtime.ports().register(ConfigPort.class, config);
         runtime.ports().register(MessagePort.class, message);
         runtime.ports().register(ConnectionControlPort.class, connections);
         runtime.ports().register(PlayerPort.class, players);

@@ -57,6 +57,34 @@ class CounterServerServiceTest {
         assertEquals(5, service.joinCount(player));
     }
 
+    @Test
+    void 配置的周期时序被传进调度器() {
+        RecordingScheduler scheduler = new RecordingScheduler();
+        CounterConfig config = new CounterConfig(7L, 99L);
+        RecordingEventBus bus = new RecordingEventBus();
+        CounterServerService service =
+                new CounterServerService(new InMemoryPersistence(), scheduler, () -> 0L, config);
+        service.register(bus);
+
+        bus.publish(new CounterJoinEvent(new PlayerRef(UUID.randomUUID(), "Eve"), 1));
+
+        assertEquals(7L, scheduler.lastDelayTicks(), "延迟应取自配置");
+        assertEquals(99L, scheduler.lastPeriodTicks(), "间隔应取自配置");
+    }
+
+    @Test
+    void 未传配置时用缺省时序() {
+        RecordingScheduler scheduler = new RecordingScheduler();
+        RecordingEventBus bus = new RecordingEventBus();
+        CounterServerService service = new CounterServerService(new InMemoryPersistence(), scheduler, () -> 0L);
+        service.register(bus);
+
+        bus.publish(new CounterJoinEvent(new PlayerRef(UUID.randomUUID(), "Frank"), 1));
+
+        assertEquals(CounterConfig.DEFAULT_REMINDER_DELAY_TICKS, scheduler.lastDelayTicks());
+        assertEquals(CounterConfig.DEFAULT_REMINDER_PERIOD_TICKS, scheduler.lastPeriodTicks());
+    }
+
     /** 内存持久化桩。 */
     private static final class InMemoryPersistence implements PersistencePort {
         private final Map<String, String> values = new HashMap<>();
@@ -95,9 +123,19 @@ class CounterServerServiceTest {
     private static final class RecordingScheduler implements SchedulerPort {
         private int timers;
         private int open;
+        private long lastDelayTicks;
+        private long lastPeriodTicks;
 
         int timers() {
             return timers;
+        }
+
+        long lastDelayTicks() {
+            return lastDelayTicks;
+        }
+
+        long lastPeriodTicks() {
+            return lastPeriodTicks;
         }
 
         int openHandles() {
@@ -128,6 +166,8 @@ class CounterServerServiceTest {
         public AutoCloseable runTimer(long delayTicks, long periodTicks, Runnable task) {
             timers++;
             open++;
+            lastDelayTicks = delayTicks;
+            lastPeriodTicks = periodTicks;
             return () -> open--;
         }
     }

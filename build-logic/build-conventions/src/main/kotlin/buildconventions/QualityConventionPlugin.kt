@@ -73,12 +73,12 @@ class QualityConventionPlugin : Plugin<Project> {
             }
             dependencies.add("spotbugsPlugins", "com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0")
 
-            // 只在 main 源集跑 SpotBugs，其余源集（test / acceptance / contractTest）一律跳过。
+            // 只在 main 源集跑 SpotBugs，其余源集（test / acceptance）一律跳过。
             //
             // 依据是 4 核实测的耗时归因（:buildAll --rerun-tasks，总 16.7 分）：
             // 静态分析累计占用 8.6 分（51%），其中单个任务的耗时榜前列几乎全是 SpotBugs——
-            // fabric-1.21.1:spotbugsTest 27.5s、forge-26.2:spotbugsContractTest 19.7s、
-            // neoforge-1.20.2:spotbugsMain 17.2s、forge-1.12.2:spotbugsAcceptance 15.1s…
+            // fabric-1.21.1:spotbugsTest 27.5s、neoforge-1.20.2:spotbugsMain 17.2s、
+            // forge-1.12.2:spotbugsAcceptance 15.1s…
             // 而 PMD / Checkstyle 的单任务普遍只有 1~2s。
             //
             // SpotBugs 需要构建完整字节码类图 + 跑数据流分析，是这几类里最重的一个；
@@ -173,11 +173,7 @@ class QualityConventionPlugin : Plugin<Project> {
     /**
      * Kotlin 工具链：ktlint 检 `.gradle.kts`（含插件工程脚本）、detekt 扫 Kotlin 源。
      *
-     * **不再应用 kover**：全仓业务模块零 Kotlin 源（87 个 `.kt` 全在 `build-logic/` 的两个
-     * Gradle 插件工程里），kover 在 29 个模块上各产生 `koverVerify` / `koverCachedVerify` /
-     * `koverGenerateArtifact` 三个空转任务（CI 实测共 127 个），既无被测 Kotlin 代码，
-     * 覆盖率也无从判定。Java 侧的覆盖率门禁由 JaCoCo 承担且设了 0.70 底线
-     *（.claude/rules/static-analysis.md），不影响质量护栏。
+     * Java 侧的覆盖率门禁由 JaCoCo 承担（`.claude/rules/static-analysis.md` 的 0.70 底线）。
      */
     private fun applyKotlinToolchain(project: Project) {
         project.pluginManager.apply("org.jlleitschuh.gradle.ktlint")
@@ -268,10 +264,12 @@ class QualityConventionPlugin : Plugin<Project> {
                 "top/wcpe/mc/mpmt/core/**",
                 "top/wcpe/mc/mpmt/domain/**",
                 "top/wcpe/mc/mpmt/protocol/**",
-                "top/wcpe/mc/mpmt/paths/**",
-                "top/wcpe/mc/mpmt/config/**",
                 "top/wcpe/mc/mpmt/acceptance/**",
                 "top/wcpe/mc/mpmt/platform/spi/**",
+                // 已 relocate 的第三方（modern forge 车道把 snakeyaml 嵌进 main classes 供 dev SecureJar 用）：
+                // 不是本仓代码，不能计入车道覆盖率。它还是 multi-release jar，同一个类在 root 与
+                // META-INF/versions/9 下各一份，JaCoCo 会报 “Can't add different class with same name”。
+                "top/wcpe/mc/mpmt/libs/**",
             )
     }
 }

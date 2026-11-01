@@ -5,14 +5,14 @@ import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.api.tasks.bundling.Jar
 
 /** 产品 jar 里 snakeyaml 的 relocate 目标（ADR-0012：第三方统一 relocate 到 libs.*，防与宿主冲突）。 */
-private const val FORGE_SNAKEYAML_PACKAGE = "org.yaml.snakeyaml"
-private const val FORGE_SNAKEYAML_RELOCATE_TARGET = "top.wcpe.mc.mpmt.libs.org.yaml.snakeyaml"
+internal const val FORGE_SNAKEYAML_PACKAGE = "org.yaml.snakeyaml"
+internal const val FORGE_SNAKEYAML_RELOCATE_TARGET = "top.wcpe.mc.mpmt.libs.org.yaml.snakeyaml"
 
 /** 产品/验收 jar 均剔除的 Maven 元数据目录（relocate 不改写其原始坐标，留着只是噪声）。 */
 internal const val FORGE_MAVEN_METADATA_EXCLUSION = "META-INF/maven/**"
 
 /** 自包含产品任务名（shadow；loom 车道 remapJar 的输入）。 */
-private const val FORGE_SHADOW_JAR_TASK = "shadowJar"
+internal const val FORGE_SHADOW_JAR_TASK = "shadowJar"
 
 /** 产品 remap 任务名（loom；承担 FG reobf 的生产命名）。 */
 private const val FORGE_REMAP_JAR_TASK = "remapJar"

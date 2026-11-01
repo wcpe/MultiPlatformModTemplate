@@ -276,6 +276,7 @@ include(
     "core:server",
     "core:client",
     "core:protocol",
+    "core:config",
     "core:spi",
 )
 

@@ -18,27 +18,40 @@ import top.wcpe.mc.mpmt.kernel.ref.PlayerRef;
  */
 public final class CounterServerService implements CounterQueryPort, CounterAdminPort, CounterSnapshotReader {
 
-    /** 周期提示首次延迟（tick）。 */
-    static final long REMINDER_DELAY_TICKS = 20L;
-    /** 周期提示间隔（tick）。 */
-    static final long REMINDER_PERIOD_TICKS = 1200L;
-
     private final JoinCounter counter;
     private final SchedulerPort scheduler;
     private final LongSupplier nowMillis;
+    private final CounterConfig config;
     private final Map<UUID, AutoCloseable> reminders = new ConcurrentHashMap<>();
 
     /**
-     * 构造。
+     * 以缺省配置构造。
+     *
+     * <p>周期提示的时序用 {@link CounterConfig} 的缺省值；需要可配置时用
+     * {@link #CounterServerService(PersistencePort, SchedulerPort, LongSupplier, CounterConfig)}。
      *
      * @param persistence 持久化端口，不可为空
      * @param scheduler   调度端口，不可为空
      * @param nowMillis   时钟，不可为空
      */
     public CounterServerService(PersistencePort persistence, SchedulerPort scheduler, LongSupplier nowMillis) {
+        this(persistence, scheduler, nowMillis, new CounterConfig());
+    }
+
+    /**
+     * 以显式配置构造。
+     *
+     * @param persistence 持久化端口，不可为空
+     * @param scheduler   调度端口，不可为空
+     * @param nowMillis   时钟，不可为空
+     * @param config      服务端配置，不可为空；传入前已由加载方归一
+     */
+    public CounterServerService(
+            PersistencePort persistence, SchedulerPort scheduler, LongSupplier nowMillis, CounterConfig config) {
         this.counter = new JoinCounter(Objects.requireNonNull(persistence, "持久化端口不能为空"));
         this.scheduler = Objects.requireNonNull(scheduler, "调度端口不能为空");
         this.nowMillis = Objects.requireNonNull(nowMillis, "时钟不能为空");
+        this.config = Objects.requireNonNull(config, "配置不能为空");
     }
 
     /**
@@ -90,8 +103,8 @@ public final class CounterServerService implements CounterQueryPort, CounterAdmi
         counter.recordFirstJoin(uuid, nowMillis.getAsLong());
         AutoCloseable handle =
                 scheduler.runTimer(
-                        REMINDER_DELAY_TICKS,
-                        REMINDER_PERIOD_TICKS,
+                        config.reminderDelayTicks(),
+                        config.reminderPeriodTicks(),
                         () -> scheduler.runAsync(() -> counter.current(uuid)));
         closeQuietly(reminders.put(player.getUuid(), handle));
     }

@@ -43,11 +43,14 @@ internal fun registerReleaseArtifactAggregation(project: Project, version: Strin
         )
 
         val distRoot = project.layout.buildDirectory.dir("dist")
-        outputs.dir(distRoot)
         // 制品清单与 dist 根在配置期解析成普通值：动作只捕获这些值，不捕获 project（配置缓存要求），
         // 校验顺序、失败文案与 [dist] 日志逐字不变。
         val requiredArtifacts = releaseArtifacts(project, version)
         val distDirectory = distRoot.get().asFile
+        // 必须显式声明输入：本任务只声明了 `outputs.dir` 时，上游产物变了它仍然判 UP-TO-DATE，
+        // dist 会静静留着旧 jar（实测：1.12.2 产品已重建，dist 里仍是上一轮的旧 jar）。
+        inputs.files(requiredArtifacts.map { it.source })
+        outputs.dir(distRoot)
 
         doLast {
             copyReleaseArtifacts(requiredArtifacts, distDirectory, logger)

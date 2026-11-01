@@ -7,7 +7,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
+import top.wcpe.mc.mpmt.config.DirectoryConfigPort;
 import top.wcpe.mc.mpmt.kernel.event.EventBusPort;
+import top.wcpe.mc.mpmt.kernel.port.ConfigPort;
 import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
 import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
 import top.wcpe.mc.mpmt.kernel.port.MessagePort;
@@ -68,6 +70,7 @@ public final class BukkitCapabilityBootstrap {
 
         DataDirectoryPort dataDirectory = new BukkitDataDirectoryPort(plugin);
         PersistencePort persistence = new BukkitPersistencePort(dataDirectory);
+        ConfigPort config = new DirectoryConfigPort(dataDirectory);
         MessagePort message = new BukkitMessagePort();
         ConnectionControlPort connections =
                 new BukkitConnectionControlPort(plugin, connectionRegistry);
@@ -77,6 +80,7 @@ public final class BukkitCapabilityBootstrap {
 
         runtime.ports().register(DataDirectoryPort.class, dataDirectory);
         runtime.ports().register(PersistencePort.class, persistence);
+        runtime.ports().register(ConfigPort.class, config);
         runtime.ports().register(MessagePort.class, message);
         runtime.ports().register(ConnectionControlPort.class, connections);
         runtime.ports().register(PlayerPort.class, players);

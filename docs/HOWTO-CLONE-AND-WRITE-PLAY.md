@@ -48,116 +48,206 @@ cd mygame
 
 > 换名完成后可删除 `init.sh`（它已完成使命）。
 
-## 3. 在 L0 写一个最小玩法域——以 Counter 为参照
+## 3. 写一个玩法域——以 Counter 为范本
 
-### 3.1 L0 是什么
+`examples/counter` 是官方范本域，按 [ADR-0030](adr/0030-domain-module-layout.md) 的八模块标准组织。
+它只演示「玩家加入时计数并提示」这一条规则，但已经完整跑通了从领域算法到平台装配的整条链路。
 
-- **L0（`core-domain`）**：纯 Java 8、零平台依赖的功能域。玩法规则、领域模型、端口接口都写在这里。
-- **端口（Port）**：L0 声明、L3 实现的能力抽象。Counter 用三个：
-  - `PersistencePort`：读写字符串键值（具体存储由平台决定）
-  - `MessagePort`：向玩家发一条聊天文本
-  - `SchedulerPort`：把阻塞的持久化放到异步线程，并按玩家归属发消息或运行周期任务。
-- **EventBus**：域间协作总线。平台 L3 把原生玩家进、退事件分别适配为 `PlayerJoinedEvent` 与 `PlayerLeftEvent` 投递到总线，L0 订阅即可。
+### 3.1 域的模块布局
 
-### 3.2 Counter 做了什么
+八模块是标准天花板，**按需长出**：真的没有客户端差异的域就不建 `client-api` / `client-internal`。
+counter 当前长到全量八模块，因为它真的要跑客户端显示：
 
-[`PlayerJoinCounterService`](../examples/counter/src/main/java/top/wcpe/mc/mpmt/examples/counter/PlayerJoinCounterService.java)：
+| 模块 | 内容 | counter 里的实例 |
+|---|---|---|
+| `common-api` | 对客户端与服务端都暴露的契约 | `CounterKeys`（持久化键常量）、`CounterQueryPort`、`CounterJoinEvent` |
+| `client-api` | 仅客户端可见的契约 | `CounterDisplayPort` |
+| `server-api` | 仅服务端可见的契约 | `CounterAdminPort`（重置计数） |
+| `core` | 纯算法，零平台、不碰端口实现 | `JoinCounter`（计数与首次加入时间） |
+| `server-internal` | 服务端内部接口与 DTO | `CounterServerInstallPoint`、`CounterSnapshotReader`、`CounterSnapshot` |
+| `client-internal` | 客户端内部接口与 DTO | `CounterClientInstallPoint`、`CounterHudPayload`、`CounterHudRenderer` |
+| `server` | 服务端实现 | `CounterServerService`、`CounterServerInstaller` |
+| `client` | 客户端实现 | `ChatCounterInstaller`、`ChatCounterDisplay` |
 
-1. 玩家加入 → 异步读写 `counter/first-join:<uuid>`；仅首次加入时写入毫秒时间。
-2. 读 `counter/join-count:<uuid>` → 计数 +1 → 写回。
-3. 按玩家归属发消息「你已加入 N 次」，并登记一个周期提示句柄。
-4. 玩家离开 → 关闭其句柄，不留后台任务。
+依赖方向（[ADR-0030](adr/0030-domain-module-layout.md) 决策 5）：
 
-这个示例只保留一个独立的玩家计数规则；完整平台能力组合见下文的 `PlatformCapabilityExample` 装配路径。
+```
+common-api  ←─ client-api ──→ client-internal ──→ client ──┐
+     ↑      ←─ server-api ──→ server-internal ──→ server ──┤
+     └────────────── core ──────────────────────┘
+```
 
-### 3.3 核心代码骨架
+两条铁律：`-client-api` / `-server-api` **不得被对端引用**；`client` 与 `server` **禁止横向互依**（架构守卫机检）。
+两端要协作只能经 `common-api` / `core` / 各自的 `-internal` 抽象，或在平台装配处（组合根）同时持有两侧实现。
+
+### 3.2 先写 core：纯算法，零依赖
+
+[`JoinCounter`](../examples/counter/core/src/main/java/top/wcpe/mc/mpmt/examples/counter/JoinCounter.java)
+只管两件事：累计次数、记录首次加入时间。它不碰事件、不碰调度，也不知道自己跑在客户端还是服务端：
 
 ```java
-public final class PlayerJoinCounterService {
-    static final String NAMESPACE = "counter";
-    static final String JOIN_COUNT_KEY_PREFIX = "join-count:";
-    static final String FIRST_JOIN_KEY_PREFIX = "first-join:";
-
+public final class JoinCounter {
     private final PersistencePort persistence;
-    private final MessagePort message;
-    private final SchedulerPort scheduler;
 
-    public PlayerJoinCounterService(
-            PersistencePort persistence, MessagePort message, SchedulerPort scheduler, LongSupplier clock) {
-        this.persistence = Objects.requireNonNull(persistence, "持久化端口不能为空");
-        this.message = Objects.requireNonNull(message, "消息端口不能为空");
-        this.scheduler = Objects.requireNonNull(scheduler, "调度端口不能为空");
+    public JoinCounter(PersistencePort persistence) { … }
+
+    public int current(String uuid) { … }
+
+    public int increment(String uuid) { … }
+
+    public boolean recordFirstJoin(String uuid, long nowMillis) { … }
+
+    public long firstJoinMillis(String uuid) { … }
+
+    public void resetCount(String uuid) { … }
+}
+```
+
+键名不散落在算法里，而是收在 `common-api` 的 `CounterKeys`（`namespace = "counter"`、
+`join-count:<uuid>`、`first-join:<uuid>`）——因为客户端也要用同一套键去读。
+
+### 3.3 再写 server：把算法接上事件与调度
+
+[`CounterServerService`](../examples/counter/server/src/main/java/top/wcpe/mc/mpmt/examples/counter/CounterServerService.java)
+是**实现模块**，它把契约、算法、端口三者拼起来：
+
+```java
+public final class CounterServerService
+        implements CounterQueryPort, CounterAdminPort, CounterSnapshotReader {
+
+    public CounterServerService(PersistencePort persistence, SchedulerPort scheduler, LongSupplier nowMillis) {
+        this.counter = new JoinCounter(persistence);
+        this.scheduler = scheduler;
+        this.nowMillis = nowMillis;
     }
 
+    /** 订阅共用加入事件（经 EventBus 协作，ADR-0011）。 */
     public void register(EventBusPort eventBus) {
-        eventBus.subscribe(PlayerJoinedEvent.class, e -> onPlayerJoined(e.getPlayer()));
-        eventBus.subscribe(PlayerLeftEvent.class, e -> onPlayerLeft(e.getPlayer()));
+        eventBus.subscribe(CounterJoinEvent.class, event -> startReminder(event.getPlayer()));
     }
 
-    void onPlayerJoined(PlayerRef player) {
-        startReminder(player); // 留住句柄，以便离开时释放
-        scheduler.runAsync(() -> persistJoinAndNotify(player));
+    private void startReminder(PlayerRef player) {
+        String uuid = player.getUuid().toString();
+        counter.recordFirstJoin(uuid, nowMillis.getAsLong());
+        AutoCloseable handle = scheduler.runTimer(
+                REMINDER_DELAY_TICKS, REMINDER_PERIOD_TICKS,
+                () -> scheduler.runAsync(() -> counter.current(uuid)));
+        closeQuietly(reminders.put(player.getUuid(), handle));
     }
 
-    void onPlayerLeft(PlayerRef player) {
-        closeReminder(player);
+    /** 玩家离开时关闭周期句柄，防止调度任务泄漏。 */
+    public void onPlayerLeft(PlayerRef player) { … }
+}
+```
+
+> 两个线程约束：**阻塞的持久化一定经 `SchedulerPort.runAsync`**，**面向玩家的动作一定经
+> `SchedulerPort.runForEntity`**。Folia 没有全局主线程，按实体归属调度才能不抛线程错误（ADR-0013）。
+
+### 3.4 让域支持配置（可选）
+
+域要读自己的配置，**只经 L0 端口 `ConfigPort`**——不接 snakeyaml、不知道文件在哪，也不需要依赖
+`:core:config`（域外依赖仍然只有 `:core:kernel`，ADR-0030 决策 5）。「从哪个目录读、用什么格式」
+是平台的事：各平台在能力装配时注册 `DirectoryConfigPort`（`core-config` 提供的实现，读
+`<基目录>/config/<文件名>`），域只管要数据。counter 的提醒间隔就是这么做的，三步：
+
+**① 配置模型放 `-internal`**（[`CounterConfig`](../examples/counter/server-internal/src/main/java/top/wcpe/mc/mpmt/examples/counter/CounterConfig.java)）：
+
+```java
+public final class CounterConfig {
+    public static final long DEFAULT_REMINDER_DELAY_TICKS = 20L;
+    public static final long DEFAULT_REMINDER_PERIOD_TICKS = 1200L;
+
+    private long reminderDelayTicks = DEFAULT_REMINDER_DELAY_TICKS;
+    private long reminderPeriodTicks = DEFAULT_REMINDER_PERIOD_TICKS;
+
+    public CounterConfig() { }                  // 供 snakeyaml 实例化
+    public long reminderDelayTicks() { … }
+    public long reminderPeriodTicks() { … }
+    public CounterConfig normalized() { … }     // 非正数回落缺省
+}
+```
+
+字段**私有 + 访问器**：snakeyaml 以 `BeanAccess.FIELD` 按字段名反射写入，不需要 setter；
+公开可变原始类型字段会被 SpotBugs 判为 `PA_PUBLIC_PRIMITIVE_ATTRIBUTE`。
+
+**② 域内加载器收 `ConfigPort`**（[`CounterConfigs`](../examples/counter/server/src/main/java/top/wcpe/mc/mpmt/examples/counter/CounterConfigs.java)）：
+
+```java
+public final class CounterConfigs {
+    public static final String FILE_NAME = "counter.yml";
+
+    private final ConfigPort configPort;   // top.wcpe.mc.mpmt.kernel.port.ConfigPort
+
+    public CounterConfig loadOrDefault() {
+        // 文件不存在 → empty → 缺省值；存在但内容非法 → ConfigLoadException 直接抛出，不静默回落
+        return configPort.read(FILE_NAME, CounterConfig.class)
+                .map(CounterConfig::normalized)
+                .orElseGet(CounterConfig::new);
     }
 }
 ```
 
-> 上面只展示流程骨架；完整可编译实现以 [`PlayerJoinCounterService`](../examples/counter/src/main/java/top/wcpe/mc/mpmt/examples/counter/PlayerJoinCounterService.java) 为准。持久化一定经 `SchedulerPort.runAsync`，发消息一定经 `SchedulerPort.runForEntity`，以兼容 Folia 的实体归属线程。
+**③ 服务消费配置值**：`CounterServerService` 的 4 参构造收 `CounterConfig`，
+`startReminder` 用 `config.reminderDelayTicks()` / `config.reminderPeriodTicks()` 而非硬编码常量。
 
-## 4. 编译与测试
+配置文件落在平台配置目录（`<基目录>/config/counter.yml`），扩展名决定格式（`.yml` / `.yaml` / `.json`）：
 
-```bash
-# 编译 core + examples（快）
-./gradlew --no-daemon :core:kernel:compileJava :examples:counter:compileJava
-
-# 跑 examples 单测（纯 JVM，无需起服）
-./gradlew --no-daemon :examples:counter:test
-
-# 聚合全部平台产物 → build/dist/{bukkit,fabric,forge,neoforge,sponge}/
-./gradlew --no-daemon :collectReleaseArtifacts
+```yaml
+reminderDelayTicks: 20
+reminderPeriodTicks: 1200
 ```
 
-## 5. 在平台入口接入域
+> **域外依赖仍然只有 `:core:kernel`**：`ConfigPort` 就定义在那里。`:core:config` 是 L1 实现，
+> 只出现在平台车道的依赖里（各平台 bootstrap 注册 `new DirectoryConfigPort(dataDirectory)`），
+> 域既不需要也不允许依赖它——那会把 snakeyaml 与文件 I/O 拖进 L0（ADR-0030 决策 5）。
+> snakeyaml 已由各车道的 shade 链 relocate 到 `libs.*`，不会与其它 mod 冲突（ADR-0012）。
 
-Counter 本身**没有已落地的跨平台 L3 装配**：示例故意保持为纯 L0，不应把它伪装成已经部署到所有 loader。
+### 3.5 最后接上平台
 
-要把它用在自己的产品域中，复用已完整接线的 `PlatformCapabilityExample` 路径：各平台 capability bootstrap 先注册 `PersistencePort`、`MessagePort`、`SchedulerPort`，然后在同一个 `MpmtRuntime` 中实例化服务并注册至 `runtime.eventBus()`；最后把原生进、退事件分别发布为 `PlayerJoinedEvent` / `PlayerLeftEvent`。
+域自己不负责「怎么装到服上」。各平台车道在 capability bootstrap 里注册
+`PersistencePort` / `ConfigPort` / `MessagePort` / `SchedulerPort`，然后调 domain 提供的 `*Installer`：
 
-| 平台 | 已完整的 L3 装配范本 |
+| 平台 | L3 装配范本 |
 |---|---|
 | Bukkit/Paper/Folia | [`BukkitCapabilityBootstrap`](../platform/bukkit/common/src/main/java/top/wcpe/mc/mpmt/platform/bukkit/capability/BukkitCapabilityBootstrap.java) |
 | Fabric 26.2 | [`FabricCapabilityBootstrap`](../platform/fabric/26.2/common/src/main/java/top/wcpe/mc/mpmt/platform/fabric/capability/FabricCapabilityBootstrap.java) |
 | Forge 26.2 | [`ForgeCapabilityBootstrap`](../platform/forge/26.2/common/src/main/java/top/wcpe/mc/mpmt/platform/forge/modern/capability/ForgeCapabilityBootstrap.java) |
 
-把范本中的 `PlatformCapabilityExample` 替换为 `PlayerJoinCounterService(persistence, message, scheduler, System::currentTimeMillis)`，并保留同样的 EventBus 和进退事件桥接，即可完成一次真实的平台装配。下方仅为上述装配的核心替换段，不是已经写入平台模块的代码：
+counter 本身**没有已落地的跨平台 L3 装配**——它故意停在域内，不伪装成已部署到所有 loader。
+要把自己的域接上去，按上面的范本把 `PlatformCapabilityExample` 换成你的 `*Installer`，
+保留同样的 EventBus 订阅与进退事件桥接即可。
 
-```java
-// 伪代码：在平台 onEnable / SERVER_STARTED 阶段
-PersistencePort persistence = /* 平台提供的文件/DB 实现 */;
-MessagePort message = /* 平台提供的聊天实现 */;
-SchedulerPort scheduler = /* 平台提供的归属/异步调度实现 */;
-EventBusPort eventBus = /* 运行时装配的自有 EventBus */;
+## 4. 编译与测试
 
-PlayerJoinCounterService counter =
-    new PlayerJoinCounterService(persistence, message, scheduler, System::currentTimeMillis);
-counter.register(eventBus);
+域是多个模块，所以命令按模块给（没有 `:examples:counter:test` 这种聚合任务）：
 
-// 平台把原生进、退事件适配后投递：
-// eventBus.publish(new PlayerJoinedEvent(playerRef));
-// eventBus.publish(new PlayerLeftEvent(playerRef));
+```bash
+# 只跑算法的纯 JVM 单测（最快，无需任何平台依赖）
+./gradlew :examples:counter:core:test
+
+# 跑实现模块的单测
+./gradlew :examples:counter:server:test :examples:counter:client:test
+
+# 全部模块一起
+./gradlew :examples:counter:common-api:test :examples:counter:core:test \
+           :examples:counter:server:test :examples:counter:client:test
+
+# 聚合全部平台产物 → build/dist/{bukkit,fabric,forge,neoforge,sponge}/
+./gradlew :collectReleaseArtifacts
 ```
 
-## 6. 真服验证
+自己新建域时，记得在 `settings.gradle.kts` 的域清单里登记模块——没登记就不会参与构建，
+而架构守卫的顶层语义校验会把它当成漏网项报错。
+
+
+## 5. 真服验证
 
 1. 用 `:collectReleaseArtifacts` 拿到目标平台 jar。
 2. 部署到真实 Paper / Fabric / Forge 服（产品 jar；验收场景另加验收 jar）。
 3. 进服观察「你已加入 N 次」是否按预期递增。
 4. 个人开发验证可用对应 lane 的 `:runRealServerAcceptance*`；P2 矩阵门是 `./gradlew :runVersionMatrixGate`（与上手示例无关）。
 
-## 7. 下一步
+## 6. 下一步
 
 | 想了解… | 去看 |
 |---|---|

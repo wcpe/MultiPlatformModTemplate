@@ -47,6 +47,9 @@ dependencies {
     api(project(":platform:bukkit:bukkit-api"))
     api(project(":core:spi"))
     api(project(":core:server"))
+    // 配置端口实现（DirectoryConfigPort）：能力装配在此注册 ConfigPort；
+    // 域本身只依赖 :core:kernel 的端口，不背 snakeyaml 与文件 I/O（ADR-0030 决策 5）。
+    api(project(":core:config"))
     // 功能域（L0 玩法逻辑）：本模块是 bukkit 各版本车道的公共依赖源，
     // 故域在此统一接入；新增域无需改本行——mpmtDomains() 自动覆盖（ADR-0028）。
     mpmtDomains().forEach { api(it) }

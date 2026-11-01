@@ -59,11 +59,12 @@ val runtimeJar = moduleJar(":core:runtime")
 val protocolJar = moduleJar(":core:protocol")
 val spiJar = moduleJar(":core:spi")
 val serverJar = moduleJar(":core:server")
+val configJar = moduleJar(":core:config")
 val clientJar = moduleJar(":core:client")
 val fabricApiJar = moduleJar(":platform:fabric:fabric-api")
 val acceptanceJar = moduleJar(":modules:acceptance")
 val productInternalJars: List<ProjectDependency> =
-    listOf(domainJar, runtimeJar, protocolJar, spiJar, serverJar, clientJar, fabricApiJar)
+    listOf(domainJar, runtimeJar, protocolJar, spiJar, serverJar, clientJar, configJar, fabricApiJar)
 
 base {
     // 最终产物名同时标识平台与 MC 目标，避免跨车道串扰

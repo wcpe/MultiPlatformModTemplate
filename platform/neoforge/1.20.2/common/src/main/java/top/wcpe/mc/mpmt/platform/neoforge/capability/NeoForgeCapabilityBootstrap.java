@@ -6,7 +6,9 @@ import net.minecraft.world.entity.player.Player;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import top.wcpe.mc.mpmt.config.DirectoryConfigPort;
 import top.wcpe.mc.mpmt.kernel.event.EventBusPort;
+import top.wcpe.mc.mpmt.kernel.port.ConfigPort;
 import top.wcpe.mc.mpmt.kernel.port.ConnectionControlPort;
 import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
 import top.wcpe.mc.mpmt.kernel.port.MessagePort;
@@ -33,6 +35,7 @@ public final class NeoForgeCapabilityBootstrap {
 
         DataDirectoryPort dataDirectory = new NeoForgeDataDirectoryPort();
         PersistencePort persistence = new NeoForgePersistencePort(dataDirectory);
+        ConfigPort config = new DirectoryConfigPort(dataDirectory);
         MessagePort message = new NeoForgeMessagePort(server);
         ConnectionControlPort connections = new NeoForgeConnectionControlPort(server);
         PlayerPort players = new NeoForgePlayerPort(server);
@@ -41,6 +44,7 @@ public final class NeoForgeCapabilityBootstrap {
 
         runtime.ports().register(DataDirectoryPort.class, dataDirectory);
         runtime.ports().register(PersistencePort.class, persistence);
+        runtime.ports().register(ConfigPort.class, config);
         runtime.ports().register(MessagePort.class, message);
         runtime.ports().register(ConnectionControlPort.class, connections);
         runtime.ports().register(PlayerPort.class, players);
