@@ -5,6 +5,7 @@ import org.gradle.api.Project
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.api.tasks.bundling.Jar
 import java.io.File
 
 /** dev 输出任务名（run 任务与隐式依赖接线都按它取任务）。 */
@@ -23,17 +24,17 @@ internal fun registerForgeDevModOutputs(project: Project, lane: ForgeLaneExtensi
     val sourceSets = project.extensions.getByType(SourceSetContainer::class.java)
     val main = sourceSets.getByName("main")
     val acceptance = sourceSets.getByName("acceptance")
+    // 产品内容的唯一装配口：现代车道的产品内容由 relocatedProductBundle 合成（含第三方 relocate），
+    // dev 嵌入必须与产品 jar 吃同一份内容。若这里改回直接解包 productBundle，第三方会以原包名
+    // 落进 dev classes，再被产品薄包带进产物（实测：`org/yaml/snakeyaml/` 261 条残留）。
+    val productContent = project.tasks.named(FORGE_MODERN_BUNDLE_TASK, Jar::class.java)
+    val productContentJar = productContent.flatMap { it.archiveFile }
     val embedProduct =
         project.tasks.register("embedProductSharedIntoMain", Copy::class.java) {
             group = "build"
-            description = "将产品共享 JAR 嵌入 main classes，供 dev SecureJar 发现 @Mod 与依赖类"
-            dependsOn(project.tasks.named("classes"), project.tasks.named("processResources"))
-            dependsOn(project.configurations.named(FORGE_PRODUCT_BUNDLE))
-            from(
-                project.provider {
-                    project.configurations.getByName(FORGE_PRODUCT_BUNDLE).map { project.zipTree(it) }
-                },
-            )
+            description = "将产品内容中间包嵌入 main classes，供 dev SecureJar 发现 @Mod 与依赖类"
+            dependsOn(project.tasks.named("classes"), project.tasks.named("processResources"), productContent)
+            from(project.provider { project.zipTree(productContentJar.get().asFile) })
             into(main.java.destinationDirectory)
             duplicatesStrategy = DuplicatesStrategy.EXCLUDE
             lane.archiveExcludes.get().forEach { exclude(it) }
@@ -76,7 +77,6 @@ private fun wireForgeDevModOutputDependencies(
     listOf("checkstyleAcceptance", "pmdAcceptance", "spotbugsAcceptance").forEach { name ->
         project.tasks.named(name).configure { dependsOn(embedAcceptanceTask) }
     }
-    // compileContractTestJava 已不存在（contractTest 源集属2026-10-29 移除）
     listOf("test").forEach { name ->
         project.tasks.named(name).configure { dependsOn(FORGE_PREPARE_DEV_MOD_OUTPUTS_TASK) }
     }

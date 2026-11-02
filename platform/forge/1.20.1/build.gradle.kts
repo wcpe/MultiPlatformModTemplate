@@ -50,6 +50,8 @@ val spiProject = project(":core:spi")
 val serverProject = project(":core:server")
 // 客户端公共网络特性（握手、心跳与重同步），仅复用仓库现有第一方模块
 val clientProject = project(":core:client")
+// 配置端口实现（ConfigPort → DirectoryConfigPort），能力装配期注册
+val configProject = project(":core:config")
 
 base {
     archivesName.set("mpmt-forge-1.20.1")
@@ -233,6 +235,9 @@ dependencies {
     // 客户端公共网络特性（FR-22/FR-28）：纯 Java、shade 进同一产品 jar
     implementation(clientProject)
     shadowBundle(clientProject)
+    // 配置端口实现（core-config）：能力装配注册 ConfigPort 用，纯 Java、shade 进同一产品 jar
+    implementation(configProject)
+    shadowBundle(configProject)
     // 功能域（L0 玩法逻辑）：mpmtDomains() 动态覆盖——新增域无需改本脚本（ADR-0028）。
     // 域经 META-INF/services 声明 Feature，由 core-runtime 启动期自动发现；与其它核心产物同样 shade。
     mpmtDomains().forEach { domain ->

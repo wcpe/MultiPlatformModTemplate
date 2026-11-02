@@ -1,11 +1,11 @@
 [
   {
     "modid": "mpmt",
-    "name": "MultiPlatformModTemplate Legacy Client",
-    "description": "MPMT Forge 1.12.2 客户端产品通道",
+    "name": "MultiPlatformModTemplate Legacy",
+    "description": "MPMT Forge 1.12.2 产品：客户端产品通道 + 服务端能力端口 / 功能域装配",
     "version": "${version}",
     "mcversion": "1.12.2",
-    "clientSideOnly": true,
+    "clientSideOnly": false,
     "acceptableRemoteVersions": "*",
     "url": "",
     "updateUrl": "",

@@ -14,6 +14,7 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.common.network.FMLNetworkEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import top.wcpe.mc.mpmt.platform.forge.client.ForgeClientSession;
@@ -33,8 +34,16 @@ class MpmtForgeModTest {
     private ForgeTestSupport.FakeClientTransport transport;
     private ForgeTestSupport.FakeHud hud;
 
+    @BeforeEach
+    void 标记客户端侧() throws Exception {
+        // 入口现在双端加载：客户端专属入口（连接 / tick / 断线）以 side 短路，
+        // 而本类覆盖的是客户端路径，故先置位（服务端路径由 Forge112CapabilityBootstrapTest 覆盖）。
+        设静态("clientSide", Boolean.TRUE);
+    }
+
     @AfterEach
     void 复位静态状态() throws Exception {
+        设静态("clientSide", Boolean.FALSE);
         设静态("activeSession", null);
         设静态("connected", Boolean.FALSE);
         设静态("optionalCheckAccepted", Boolean.FALSE);
@@ -49,14 +58,14 @@ class MpmtForgeModTest {
     }
 
     @Test
-    @DisplayName("入口注解：@Mod 声明 client-only、可acceptedremoteVersions与元数据来源")
-    void 入口注解声明clientOnly() {
+    @DisplayName("入口注解：@Mod 双端加载、可acceptedremoteVersions与元数据来源")
+    void 入口注解声明双端加载() {
         net.minecraftforge.fml.common.Mod annotation =
                 MpmtForgeMod.class.getAnnotation(net.minecraftforge.fml.common.Mod.class);
 
         assertNotNull(annotation, "入口必须带 @Mod");
         assertEquals(MpmtForgeMod.MOD_ID, annotation.modid());
-        assertTrue(annotation.clientSideOnly(), "1.12.2 产品为 client-only");
+        assertFalse(annotation.clientSideOnly(), "服务端也要加载：否则没有端口 / 功能域装配点");
         assertEquals("*", annotation.acceptableRemoteVersions(), "应允许连接未装 mod 的服务端");
         assertEquals("[1.12.2]", annotation.acceptedMinecraftVersions());
         assertTrue(annotation.useMetadata(), "版本取自 mcmod.info 元数据");

@@ -56,7 +56,7 @@ Forge 跨代（目录在 `platform/forge/`；全部车道为根构建子模块�
 |---|---|---|
 | 1.20.1 | `platform/forge/1.20.1/` | `:platform:forge:forge-1.20.1`：根 Gradle 9.6.1（守护 JVM ≥25）构建，任务 `./gradlew :platform:forge:forge-1.20.1:reobfShadowJar`；编译工具链 Java 17 |
 | 1.21.1 | `platform/forge/1.21.1/` | `:platform:forge:forge-1.21.1`：同一根 Gradle 9.6.1（守护 JVM ≥25）；编译工具链 Java 21 |
-| 1.12.2 | `platform/forge/1.12.2/` | `:platform:forge:forge-1.12.2`：同一根 Gradle 9.6.1（守护 JVM ≥25）；编译工具链 Java 8（**client-only**，任务 `./gradlew :platform:forge:forge-1.12.2:prepareClientCompanionArtifacts`） |
+| 1.12.2 | `platform/forge/1.12.2/` | `:platform:forge:forge-1.12.2`：同一根 Gradle 9.6.1（守护 JVM ≥25）；编译工具链 Java 8（双端加载：客户端握手 + 服务端能力装配）；dev 运行 `runClient` / `runServer`（首次启动服务端需 `run-server/eula.txt` 写 `eula=true`）；客户端伴侣导出任务 `./gradlew :platform:forge:forge-1.12.2:prepareClientCompanionArtifacts`） |
 | 26.2 | `platform/forge/26.2/` | `:platform:forge:forge-26.2`：同一根 Gradle 9.6.1（守护 JVM 必须 ≥25），`top.wcpe.loom-no-remap` + `loom.platform=forge` 无混淆管线（ADR-0025） |
 
 ### A 车道（真实 Paper / Folia smoke）

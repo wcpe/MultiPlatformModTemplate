@@ -163,4 +163,12 @@
         <Method name="productChannel"/>
         <Bug pattern="MS_EXPOSE_REP"/>
     </Match>
+
+    <!-- 已 relocate 的第三方库（top.wcpe.mc.mpmt.libs.*）：modern forge 车道把第三方嵌进 main classes
+         供 dev SecureJar 使用，而缺陷检测只针对本仓代码。对第三方代码跑 SpotBugs 既无收益，也会因缺其
+         可选依赖而让分析直接报错（实测 exit code 3）。与 JaCoCo 侧 SHARED_PACKAGES_EXCLUDED_FROM_PLATFORM_LANES
+         的 libs/** 排除同源。 -->
+    <Match>
+        <Class name="~top\.wcpe\.mc\.mpmt\.libs\..*"/>
+    </Match>
 </FindBugsFilter>

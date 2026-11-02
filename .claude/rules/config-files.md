@@ -1,17 +1,18 @@
 # 配置文件规范
 
-> 适用于面向运行期的 YAML 配置文件（`*.yml` / `*.yaml`），如本项目自身的 `config.yaml`、`docker-compose.yml` 等。
+> 适用于面向运行期的 YAML 配置文件（`*.yml` / `*.yaml`），如各车道的 `src/main/resources/plugin.yml`、`e2e/harness/src/main/resources/config.yml` 等。
 
 ## 1. 文件命名（强制）
 
 - 文件名用 **kebab-case**：全小写字母 + 数字，多词用 `-` 连接。
-- 扩展名统一 `.yml`（除非上游框架强制 `.yaml`，如 `docker-compose.yml`）。
+- 扩展名统一 `.yml`（除非上游框架强制 `.yaml`）。
 - 禁止 `snake_case` / `camelCase` / `PascalCase` / 空格 / 中文做分隔。
 
 ## 2. 字段命名（强制）
 
 - 所有 YAML 字段名用 **kebab-case**，每层嵌套都遵守。
 - 例外：第三方框架强制字段（如 compose 的 `depends_on`、env 变量名）按上游约定。
+- 例外：由 `core-config` 经 snakeyaml 按 **Java 字段名**映射的域配置（如 `counter.yml`）跟随字段名（camelCase）——键名就是代码里的字段名，改名会让两者脱钩。
 - 字段值（枚举、ID、字符串）保留业务约定，不受约束。
 
 ## 3. 字段中文注释（强制）

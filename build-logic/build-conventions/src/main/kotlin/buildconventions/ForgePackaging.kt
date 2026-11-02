@@ -26,6 +26,9 @@ private const val FORGE_PACKAGE_ARTIFACTS_TASK = "packageArtifacts"
 /** 产品 jar 打入的共享模块配置名（车道按此名声明并加依赖）。 */
 internal const val FORGE_PRODUCT_BUNDLE = "productBundle"
 
+/** 现代 forge 车道的产品内容中间包任务名（shadow：把 productBundle 合成并 relocate 第三方）。 */
+internal const val FORGE_MODERN_BUNDLE_TASK = "relocatedProductBundle"
+
 /** 验收 jar 打入的共享模块配置名。 */
 internal const val FORGE_ACCEPTANCE_BUNDLE = "acceptanceBundle"
 
@@ -69,8 +72,6 @@ object ForgeModules {
 /**
  * 现代 forge 车道（1.21.1 / 26.2）的源集形状：common / server / client 分目录 + acceptance。
  *
- * （contractTest 源集已于 2026-10-29 移除。）
- *
  * 必须在车道脚本的 `loom { runs { … } }` 与依赖声明之前完成（run 的 `source(acceptance)` 直接取源集对象）。
  *
  * `resources` 输出合并进 `classes` 目录：FML 会把每个源集的 resourcesDir 与 classesDirs 拼成两条 SecureJar
@@ -93,7 +94,6 @@ fun registerForgeModernSourceSets(project: Project) {
             compileClasspath += main.output + main.compileClasspath
             runtimeClasspath = output + main.output + main.runtimeClasspath
         }
-    // contractTest 源集已于 2026-10-29 移除（硬编码断言精确版本号，非正式版必失败）。
     listOf(main, acceptance).forEach { sourceSet ->
         sourceSet.output.setResourcesDir(
             sourceSet.java.destinationDirectory
@@ -108,16 +108,41 @@ fun registerForgeModernSourceSets(project: Project) {
 }
 
 /**
- * 现代 forge 车道的产品薄包：并入共享模块、剔除验收内容与归档噪声。
+ * 现代 forge 车道的产品薄包：并入共享模块（经 shadow 中间产物）、剔除验收内容与归档噪声。
  *
  * 产品正式产物由 `remapJar`（1.21.1）或 `jar`（26.2 无混淆）以生产命名输出；本任务只负责内容装配。
+ *
+ * <h2>为什么先过一道 shadow</h2>
+ * 这两个车道的产品内容原本直接 zipTree `productBundle`，**没有任何 shade 步骤**——共享模块都是
+ * 纯 Java、零第三方，故不需要。而 `core-config` 带 snakeyaml，原样打进去会以未 relocate 的原包名
+ * 与其它 mod 冲突（ADR-0012）。于是先把 `productBundle` 合成一个 jar 并把第三方 relocate 到
+ * `top.wcpe.mc.mpmt.libs.*`，薄包再解包它：配置类的字节码引用与 snakeyaml 的包名在同一步里一起改写，
+ * 不会出现“类在 libs.*、引用还在 org.yaml”的错位。
  */
 fun configureForgeModernProductJar(project: Project, lane: ForgeLaneExtension) {
+    // 插件默认的 shadowJar 不用：它把 `sourceSets.main.output` 与整条 runtimeClasspath 当源，
+    // 而本车道的产品内容只是 `productBundle`（本车道自己的类由薄包自己装）。
+    project.tasks.named(FORGE_SHADOW_JAR_TASK, Jar::class.java).configure { enabled = false }
+    val bundle =
+        project.tasks.register(FORGE_MODERN_BUNDLE_TASK, forgeShadowJarTaskClass(project)) {
+            archiveClassifier.set("relocated-bundle")
+            isPreserveFileTimestamps = false
+            isReproducibleFileOrder = true
+            // shadow 的 configurations / relocate 只能写在它自己的类型上（插件工程不编译依赖 shadow）
+            invokeGroovy("setConfigurations", listOf(project.configurations.getByName(FORGE_PRODUCT_BUNDLE)))
+            invokeGroovy("relocate", FORGE_SNAKEYAML_PACKAGE, FORGE_SNAKEYAML_RELOCATE_TARGET)
+            exclude(FORGE_MAVEN_METADATA_EXCLUSION)
+            dependsOn(project.configurations.named(FORGE_PRODUCT_BUNDLE))
+            // shadow 改配置不刷新缓存指纹，故每次重跑、不参与构建缓存（同 1.20.1 链路）
+            outputs.upToDateWhen { false }
+            outputs.cacheIf { false }
+        }
+    val bundleJar = bundle.flatMap { it.archiveFile }
     project.tasks.named("jar", Jar::class.java).configure {
-        from(project.provider { project.configurations.getByName(FORGE_PRODUCT_BUNDLE).map { project.zipTree(it) } })
-        // provider 内解包会让 Gradle 看不到产物来源，须显式声明配置级任务依赖，
-        // 否则下游 jar 可能先于各 core 模块的 jar 执行并读到陈旧产物。
-        dependsOn(project.configurations.named(FORGE_PRODUCT_BUNDLE))
+        from(project.provider { project.zipTree(bundleJar.get().asFile) })
+        // provider 内解包会让 Gradle 看不到产物来源，须显式声明依赖，
+        // 否则下游 jar 可能先于中间产物 / 各 core 模块的 jar 执行并读到陈旧产物。
+        dependsOn(bundle, project.configurations.named(FORGE_PRODUCT_BUNDLE))
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         lane.archiveExcludes.get().forEach { exclude(it) }
         exclude("$FORGE_ACCEPTANCE_PACKAGE_PREFIX**")
@@ -130,6 +155,20 @@ fun configureForgeModernProductJar(project: Project, lane: ForgeLaneExtension) {
             )
         }
     }
+}
+
+/**
+ * shadow 任务类型：插件工程不编译依赖 shadow，故取插件默认 `shadowJar` 任务的未装饰类型
+ * （装饰类的父类即原始 `ShadowJar`，注册新任务时由 Gradle 实例化该类型）。
+ */
+@Suppress("UNCHECKED_CAST")
+private fun forgeShadowJarTaskClass(project: Project): Class<Jar> {
+    val decorated =
+        project.tasks
+            .named(FORGE_SHADOW_JAR_TASK, Jar::class.java)
+            .get()
+            .javaClass
+    return decorated.superclass as Class<Jar>
 }
 
 /**
@@ -293,6 +332,10 @@ internal fun registerForgeModernPackagingVerification(project: Project, lane: Fo
             mustContain(product, "top/wcpe/mc/mpmt/core/server/ServerNetworkFeature.class", "产品未 shade core-server")
             mustContain(product, "top/wcpe/mc/mpmt/core/client/ClientNetworkFeature.class", "产品未 shade core-client")
             mustContain(product, "top/wcpe/mc/mpmt/protocol/PacketCodec.class", "产品未 shade protocol")
+            // core-config 与其第三方 snakeyaml：经中间包 relocate 后进产物（ADR-0012），原包名不得残留
+            mustContain(product, "top/wcpe/mc/mpmt/config/DirectoryConfigPort.class", "产品未 shade core-config")
+            mustContainPrefix(product, "top/wcpe/mc/mpmt/libs/org/yaml/snakeyaml/", "产品 snakeyaml 未 relocate")
+            mustNotBundle(product, listOf("org/yaml/snakeyaml/"), "产品残留未 relocate 的 snakeyaml")
             mustNotBundle(product, listOf(FORGE_ACCEPTANCE_PACKAGE_PREFIX), "产品误包含 acceptance 核心")
             mustContain(acceptanceJar, acceptanceModClass, "验收 JAR 缺少入口")
             mustContain(

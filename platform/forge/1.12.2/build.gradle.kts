@@ -9,7 +9,7 @@ import dev.architectury.pack200.java.Pack200Adapter
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.jvm.toolchain.JavaToolchainService
 
-// Forge 1.12.2 车道（根构建子模块）：client-only，legacy 链路经 top.wcpe.loom（ADR-0025）→
+// Forge 1.12.2 车道（根构建子模块）：双端加载（客户端握手 + 服务端能力装配），legacy 链路经 top.wcpe.loom（ADR-0025）→
 // mpmt-forge-1.12.2-<version>.jar 与验收伴侣 mpmt-forge-acceptance-1.12.2-<version>.jar。
 // 不可变契约：产物名与路径（含 reobfJar / reobfAcceptanceJar 兼容路径）、MCP snapshot 映射与 SRG 重映射链路、
 // mcmod.info 元数据、验收伴侣判定（ADR-0014）；质量门禁真源在 build-conventions.quality（ADR-0027）。
@@ -47,8 +47,38 @@ java {
 val minecraftVersion = "1.12.2"
 val forgeVersion = "1.12.2-14.23.5.2860"
 val mappingsVersion = "20171003-1.12"
+// 第三方运行期依赖版本（与其它车道一致，避免分叉）
+val snakeyamlVersion = "2.2"
 
-// forge 车道参数：本车道为 client-only + reobf 兼容任务映射（无 dev SecureJar 嵌入、无报告门）
+// snakeyaml 2.2 是 multi-release jar：`META-INF/versions/9/**` 与 `module-info.class` 是 Java 9 字节码，
+// 而 FML 1.12.2 的旧 ASM 读不了它们（实测：`Unable to read a class file correctly` → LoaderException，
+// 在 dev 服启动日志里就能看到）。故先重打成只含 Java 8 条目的 jar，dev 类路径 / 产品 jar / 单测都用它。
+val snakeyamlJava8Configuration =
+    configurations.create("snakeyamlJava8") {
+        isCanBeConsumed = false
+        isCanBeResolved = true
+    }
+val snakeyamlJava8Jar =
+    tasks.register<Jar>("snakeyamlJava8Jar") {
+        val source = snakeyamlJava8Configuration
+        from({ source.map { zipTree(it) } }) {
+            // 目录条目（以 / 结尾）与文件条目都要排掉，否则会留下空的 META-INF/versions/
+            exclude("META-INF/versions", "META-INF/versions/**")
+            exclude("module-info.class", "META-INF/MANIFEST.MF", "META-INF/maven/**")
+        }
+        archiveBaseName.set("snakeyaml-java8")
+        archiveVersion.set(snakeyamlVersion)
+        archiveClassifier.set("")
+        destinationDirectory.set(layout.buildDirectory.dir("libs/snakeyaml"))
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+    }
+
+dependencies {
+    add("snakeyamlJava8", "org.yaml:snakeyaml:$snakeyamlVersion")
+}
+
+// forge 车道参数：本车道双端加载（客户端握手 + 服务端能力装配）+ reobf 兼容任务映射（无 dev SecureJar 嵌入、无报告门）
 val laneAliasMinecraftVersion = minecraftVersion
 forgeLane {
     mcVersion.set(laneAliasMinecraftVersion)
@@ -74,13 +104,13 @@ forgeLane {
     reobfCopyTasks.put("reobfAcceptanceJar", "remapAcceptanceJar")
     remapAcceptanceJarName.set("mpmt-forge-acceptance-1.12.2")
     remapAcceptanceJarVersioned.set(true)
-    // contractTest 已于 2026-10-29 移除（硬编码断言精确版本号，非正式版必失败）。
 }
 
 // 插件公开 API 需要扩展实例（块外传参用），故在块后取回一次
 val forge = extensions.getByType(buildconventions.ForgeLaneExtension::class.java)
 // 共享模块（L0-L2）项目路径；acceptance 仅进验收伴侣，不进产品
-val productSharedProjects = listOf(":core:kernel", ":core:runtime", ":core:client", ":core:protocol")
+val productSharedProjects =
+    listOf(":core:kernel", ":core:runtime", ":core:client", ":core:protocol", ":core:spi", ":core:config")
 val acceptanceSharedProjects = productSharedProjects + listOf(":modules:acceptance")
 // 功能域（L0 玩法逻辑）：动态发现，新增域无需改上面的字面量清单（ADR-0028）
 val domainProjects = mpmtDomains().map { it.path }
@@ -136,6 +166,12 @@ dependencies {
         add("productBundle", ForgeModules.moduleJar(project, it))
     }
 
+    // 第三方运行期依赖（core-config 的 YAML 解析）：本车道没有 shade / relocate 链，
+    // 故直接把 snakeyaml 原样打进产品 jar（不 relocate）。dev 类路径、产品 jar、单测都用下面重打过的 jar。
+    add("implementation", files(snakeyamlJava8Jar))
+    add("productBundle", files(snakeyamlJava8Jar))
+    add("testImplementation", files(snakeyamlJava8Jar))
+
     // 纯 JVM 单元测试：JUnit 5（BOM 统一版本，与其它车道同源）。
     // 被测类为 Java 8 字节码，测试同样以 Java 8 语法编译 / 运行（toolchain 已固定 8）。
     add("testImplementation", platform("org.junit:junit-bom:5.14.4"))
@@ -152,7 +188,8 @@ dependencies {
 // 它同时满足「类名 unmap 恒等」与「成员名 srg→MCP 可翻译」两个约束，缺一即分别导致
 // tweaker 阶段 defineClass(null) NPE 或 ForgeHooks.initTools 的 NoSuchFieldException。
 // 该任务由 loom 延迟注册、类型也不在本次编译类路径内，故只在执行期按名解析并注入。
-tasks.matching { it.name == "runClient" }.configureEach {
+// 客户端与服务端都要它：ForgeHooks.initTools 在两侧都会跑。
+tasks.matching { it.name == "runClient" || it.name == "runServer" }.configureEach {
     dependsOn("generateSrgNamedMappings")
     // 显式给堆上限。不设时 Java 8 按物理内存自动推算：本机 251 GB 内存下实测拿到 27 GB
     // （崩溃报告里 JVM Flags 只有 -XX:StackShadowPages=32，没有 -Xmx，上限 27305 MB）。而一个
@@ -165,21 +202,19 @@ tasks.matching { it.name == "runClient" }.configureEach {
     // 这里按 JavaExec 判断后设置：configureEach 的接收者是 Task，不加判断就取不到 jvmArgs。
     if (this is JavaExec) {
         jvmArgs("-Xmx2G", "-Xms512M")
-    }
-    doFirst {
+        // srg 产物路径在配置期就绑成 provider：动作里不再碰 project / tasks，
+        // 否则配置缓存会报 "cannot serialize object of type DefaultProject"（实测 runServer 首跑即失败）。
         val srgFile =
-            tasks
-                .named("generateSrgNamedMappings")
-                .get()
-                .property("srgFile")
-                .let { p ->
-                    @Suppress("UNCHECKED_CAST")
-                    (p as Provider<RegularFile>).get().asFile
-                }
-        (this as JavaExec).systemProperty(
-            "net.minecraftforge.gradle.GradleStart.srg.srg-mcp",
-            srgFile.absolutePath,
-        )
+            project.tasks.named("generateSrgNamedMappings").flatMap { generated ->
+                @Suppress("UNCHECKED_CAST")
+                (generated.property("srgFile") as Provider<RegularFile>)
+            }
+        doFirst {
+            systemProperty(
+                "net.minecraftforge.gradle.GradleStart.srg.srg-mcp",
+                srgFile.get().asFile.absolutePath,
+            )
+        }
     }
 }
 
@@ -223,6 +258,18 @@ loom {
             mods {
                 maybeCreate("mpmt").apply { sourceSet(sourceSets["main"]) }
                 maybeCreate("mpmt_acceptance").apply { sourceSet(sourceSets["acceptance"]) }
+            }
+        }
+
+        // runs.server 的取值：专用服 dev 运行，用于验证服务端能力装配（端口 + 功能域）是否真的起来。
+        // legacy forge 的启动装配（LaunchWrapper tweakClass / --nogui）由 arch-loom 运行模板承担；
+        // mods 只声明产品源集——验收伴侣是客户端口径，装进专用服没有意义。
+        // 首次启动需在 run-server/eula.txt 写 eula=true（服务端本体要求）。
+        maybeCreate("server").apply {
+            runDirectory.set(project.file("run-server"))
+            systemProperties.put("forge.logging.console.level", "info")
+            mods {
+                maybeCreate("mpmt").apply { sourceSet(sourceSets["main"]) }
             }
         }
     }
@@ -285,13 +332,13 @@ val acceptanceJar = registerForgeAcceptanceJar(project, forge)
 // 根 realserver 说明沿用 `gradlew reobfJar reobfAcceptanceJar` 命令与产物路径。
 
 /**
- * 将 client-only 产品 + 验收伴侣拷到 build/client-companion/，供 CatServer（HYBRID 矩阵）手工/编排消费。
- * 禁止作为服务端 mods 装入 CatServer。
+ * 将产品 + 验收伴侣拷到 build/client-companion/，供 CatServer（HYBRID 矩阵）的**客户端侧**手工/编排消费。
+ * 服务端侧即使装入也会主动让位给 Bukkit（ADR-0008 / ADR-0021 决策 8），不再靠 client-only 拦截。
  */
 val prepareClientCompanionArtifacts =
     tasks.register("prepareClientCompanionArtifacts") {
         group = "build"
-        description = "拷贝 Forge 1.12.2 client-only 产品/验收 jar 到 build/client-companion/（供 CatServer（HYBRID 矩阵））"
+        description = "拷贝 Forge 1.12.2 产品/验收 jar 到 build/client-companion/（供 CatServer（HYBRID 矩阵）客户端侧）"
         dependsOn("reobfJar", "reobfAcceptanceJar")
         doLast {
             val outDir =
@@ -332,7 +379,7 @@ val prepareClientCompanionArtifacts =
                 rename { "mpmt-forge-acceptance-1.12.2-${project.version}.jar" }
             }
             logger.lifecycle("[client-companion] ${outDir.absolutePath}")
-            logger.lifecycle("[client-companion] 注意：client-only，禁止装入 CatServer mods/；HYBRID 客户端伴侣用")
+            logger.lifecycle("[client-companion] 注意：供 CatServer 的客户端 mods/ 使用；服务端侧即使装了也会主动让位给 Bukkit（ADR-0008）")
         }
     }
 
@@ -344,30 +391,31 @@ val java8Launcher =
         languageVersion.set(JavaLanguageVersion.of(8))
     }
 
-// runClient 的取值：除 runDir / 系统属性外，1.12.2 客户端本体只能在 Java 8 上启动
-tasks.matching { it.name == "runClient" }.configureEach {
-    val runClientTask = this
-    if (runClientTask is JavaExec) {
-        runClientTask.javaLauncher.set(java8Launcher)
-        runClientTask.doFirst {
-            runClientTask.systemProperty(
-                "mpmt.acceptance.javaExecutable",
-                java8Launcher
-                    .get()
-                    .executablePath.asFile.absolutePath,
-            )
+// 1.12.2 本体（客户端与服务端）只能在 Java 8 上启动；守护 JVM（≥21）与之解耦
+tasks.matching { it.name == "runClient" || it.name == "runServer" }.configureEach {
+    val runTask = this
+    if (runTask is JavaExec) {
+        runTask.javaLauncher.set(java8Launcher)
+        if (runTask.name == "runClient") {
+            runTask.doFirst {
+                runTask.systemProperty(
+                    "mpmt.acceptance.javaExecutable",
+                    java8Launcher
+                        .get()
+                        .executablePath.asFile.absolutePath,
+                )
+            }
         }
     }
 }
 
-// contractTest 已移除（2026-10-29）
 // build 须同时产出生产验收 jar 与根门禁/文档既有的 reobf* 兼容路径（产品 remapJar 由 assemble 链触发）
 tasks.named("build") { dependsOn("remapAcceptanceJar", "reobfJar", "reobfAcceptanceJar") }
 
 tasks.named<Delete>("clean") {
     // 待删目录在配置期取出：动作只捕获 File，不访问 project（配置缓存要求），删除目标不变。
-    val runClientDirectory = project.file("run-client")
+    val runDirectories = listOf(project.file("run-client"), project.file("run-server"))
     doFirst {
-        delete(runClientDirectory)
+        delete(runDirectories)
     }
 }

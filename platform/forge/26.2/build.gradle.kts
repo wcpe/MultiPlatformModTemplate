@@ -34,6 +34,9 @@ plugins {
     // Forge 26.2 用 WCPE loom 的无混淆变体（architectury-loom 系，为无混淆 Forge 补齐 mcp merge 预补丁管线）；
     // 版本由根 settings 的 pluginManagement 单点 pin。
     id("top.wcpe.loom-no-remap")
+    // 8.3.11：产品内容需把第三方（core-config 的 snakeyaml）relocate 到 libs.*（ADR-0012）；
+    // 本车道的 shade 只产出“产品内容中间包”，最终产品仍是下面的 jar
+    id("com.gradleup.shadow") version "8.3.11"
     id("build-conventions.forge")
 }
 
@@ -46,6 +49,8 @@ if (JavaVersion.current().majorVersion.toInt() < 25) {
 
 val minecraftVersion = "26.2"
 val forgeVersion = "26.2-65.0.9"
+// 第三方运行期依赖版本（与其它车道一致，避免分叉）
+val snakeyamlVersion = "2.2"
 // 取自全仓单一真源（gradle.properties 的 mpmt.loomVersion），车道不再写版本字面量
 val loomVersion = providers.gradleProperty("mpmt.loomVersion").get()
 
@@ -58,6 +63,7 @@ val productSharedProjects =
         ":core:server",
         ":core:protocol",
         ":core:spi",
+        ":core:config",
     )
 val acceptanceSharedProjects = productSharedProjects + listOf(":modules:acceptance")
 // 功能域（L0 玩法逻辑）：动态发现，新增域无需改上面的字面量清单（ADR-0028）
@@ -116,13 +122,11 @@ forgeLane {
         "先跑 runServer + runClient，或提供 server-runtime 后跑 runRealServerAcceptanceHost + 客户端伴侣。",
     )
     modernPackagingVerification.set(true)
-    // contractTest 已于 2026-10-29 移除（它硬编码断言 loom/forge/gradle 的精确版本号，
-    // 使任何非正式版构建都无法通过）。产物结构仍由 verifyPackaging 守护。
 }
 
 // 插件公开 API 需要扩展实例（块外传参用），故在块后取回一次
 val forge = extensions.getByType(buildconventions.ForgeLaneExtension::class.java)
-// 源集形状（common/server/client 分目录 + acceptance/contractTest）与打包内容装配由插件承担：
+// 源集形状（common/server/client 分目录 + acceptance）与打包内容装配由插件承担：
 // resources 输出并入 classes 目录，使 dev MOD_CLASSES 每 mod 只剩一条 SecureJar 路径
 registerForgeModernSourceSets(project)
 configureForgeModernProductJar(project, forge)
@@ -158,6 +162,11 @@ dependencies {
         add("testImplementation", ForgeModules.moduleJar(project, it))
     }
     add("acceptanceBundle", ForgeModules.moduleJar(project, ":modules:acceptance"))
+
+    // 第三方运行期依赖（core-config 的 YAML 解析）：进 productBundle 由 shadow 中间包 relocate 到 libs.*；
+    // 测试类路径用未 relocate 的原包名（单测直接跑在配置 jar 上）
+    add("productBundle", "org.yaml:snakeyaml:$snakeyamlVersion")
+    add("testImplementation", "org.yaml:snakeyaml:$snakeyamlVersion")
     add("testImplementation", platform("org.junit:junit-bom:5.14.4"))
     add("testImplementation", "org.junit.jupiter:junit-jupiter")
     add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
@@ -408,7 +417,6 @@ tasks.register("runRealServerAcceptanceHost") {
 }
 
 tasks.named("check") {
-    // koverXmlReport 已随 kover 一并移除（本仓业务模块零 Kotlin 源，该任务恒为空转）。
     dependsOn("test", "verifyPackaging", staticQualityTasks)
 }
 // `build` 依赖 packageArtifacts 的收口已内置到 build-conventions（registerForgePackageArtifacts）
