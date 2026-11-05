@@ -44,7 +44,7 @@
 | MC 26.2 · Forge | 服务端 mod | Forge 客户端产品 mod + 验收伴侣 | 根子模块（工程路径 `:platform:forge:forge-26.2`，目录 `platform/forge/26.2`）；`top.wcpe.loom-no-remap` 无混淆链路 |
 | MC 26.2 · NeoForge / Sponge | **不属于本期**：NeoForge 仅锚 1.20.2、Sponge 与 26.2 当前不同步 | — | 见 §2.2 |
 
-工具链冻结值：全部平台车道为**单一根构建的子模块**（ADR-0026）、Gradle 统一 **9.6.1**（ADR-0025）；26.2 两车道以 **JDK 25** 运行根构建（26.2 车道的 loom 与车道脚本在配置期硬校验），构建插件统一 `top.wcpe.loom` 1.17.1；具体坐标、哈希与命名策略以 [`fr-26_2-adapter.md`](fr-26_2-adapter.md) 为唯一权威位置。
+工具链冻结值：全部平台车道为**单一根构建的子模块**（ADR-0026）、Gradle 统一 **9.6.1**（ADR-0025）；26.2 两车道以 **JDK 25** 运行根构建（26.2 车道的 loom 与车道脚本在配置期硬校验），构建插件统一 `top.wcpe.loom`（版本见 `gradle.properties` 的 `mpmt.loomVersion`）；具体坐标、哈希与命名策略以 [`fr-26_2-adapter.md`](fr-26_2-adapter.md) 为唯一权威位置。
 
 复用现有 Gradle 入口：`:runVersionMatrixRealServerAcceptance` 不扩张 26.2，**26.2 走全 lane 的 `:runRealServerAcceptance`**（NeoForge/Sponge 不阻断的同款聚合），与 ADR-0021 / 操作手册 §3 不冲突。
 

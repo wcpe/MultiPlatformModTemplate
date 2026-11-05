@@ -47,6 +47,7 @@ MultiPlatformModTemplate（下称 **MPMT**）是一套**多平台 Minecraft mod 
 | L1 | `core-client` | 客户端公共逻辑（跨所有客户端加载器一致的部分：输入意图、HUD 模型、客户端状态；不含具体渲染调用） | → `core-kernel`、`core-runtime` |
 | L1 | `protocol` | 跨端协议的**单一真源**：包定义、版本号与协商、编解码（经 `TransportPort` 收发，不绑定具体网络栈） | → `core-kernel` |
 | L1 | `core-config` | 平台无关配置加载：**实现 L0 `ConfigPort`**（`DirectoryConfigPort` 把 `<基目录>/config/<文件名>` 按扩展名读成 YAML / JSON 类型化模型；只依赖 snakeyaml——JSON 是 YAML 的子集，两种格式共用同一 loader），平台能力装配期注册该端口。域只声明「要一份类型化配置」，看不到文件路径、也背不动 snakeyaml（ADR-0030 决策 5） | → `core-kernel` |
+| L1 | `core-paths` | 平台无关路径预设：**实现 ADR-0010 决策 2**。`Paths.of(dataDirectory)` 给出 `config/` / `data/` / `resources/` 三个预设目录及对应文件定位；只定位不创建（读路径无副作用），需要时用 `ensureParent(file)`；拒绝含目录分隔符/`.`/`..` 的文件名（基目录即边界）；零第三方依赖。被 `core-config` 与全部平台的 `*PersistencePort` 消费 | → `core-kernel` |
 | L2 | `platform-spi` | 平台抽象层：所有需由平台实现的 SPI 接口（`PlatformBootstrap`/`ServerAdapter`/`ClientAdapter` 及各端口工厂）、`PlatformProvider`（Holder 单例）、`ServiceLoader` 发现约定、`FeatureGate`/能力探测（承载"特判"） | → `core-kernel`、`core-runtime`、`protocol` |
 | L3 | `platform-bukkit`（根构建常规模块·普通 Java+shadow） | **Bukkit 家族单一插件构建**：覆盖 Bukkit/Spigot/Paper/Folia 一个系列；编译针对 Bukkit 基线、Paper/Folia 增强 API 用 `compileOnly`；运行期经 `FeatureGate` 适配（Folia 区域调度 vs 全局主线程），单个 jar 通用 | → L0/L1/L2 |
 | L3 | `platform-sponge`（根构建子模块·SpongeGradle） | Sponge 胶水；车道为根子模块，SpongeGradle 与 loom 同构建共存（ADR-0026） | → L0/L1/L2（项目依赖） |
@@ -59,7 +60,7 @@ MultiPlatformModTemplate（下称 **MPMT**）是一套**多平台 Minecraft mod 
 
 > **依赖单向校验**：L0 不得 `import` 任何 Bukkit/Minecraft/Fabric/Forge 类；L1 不得 `import` 平台原生类（只认端口与 SPI）；平台细节只允许出现在 L3/L4。这条由 [`architecture-invariants`](../.claude/rules/architecture-invariants.md) 红线守护。
 
-> **尚未落地的 ADR 模块**：[ADR-0010](adr/0010-config-and-resource-paths.md) 规划了两个 L1 模块，其中 `core-config` 已落地（实现 L0 `ConfigPort`，各平台能力装配期注册；`examples/counter` 经端口读提醒间隔）；`core-paths`（预设目录 / 资源位置）**仍不存在**——各平台 `*PersistencePort` 自己拼路径，目前零消费方。需要时按 ADR-0010 重建，或另立 ADR 显式废除。
+> **ADR-0010 的两个 L1 模块均已落地**：`core-config` 实现 L0 `ConfigPort`（`DirectoryConfigPort`，各平台能力装配期注册；`examples/counter` 经端口读提醒间隔）；`core-paths` 提供路径预设（`Paths.of(dataDirectory)` → `configFile` / `dataFile` / `resourceFile`，只定位不创建、拒绝越界文件名），被 `core-config` 与全部平台的 `*PersistencePort` 实际消费（共 11 处，不再有自拼 `"data"` / `"config"` 的地方）。
 
 > **根包**：Java 包根与 Gradle group 均为 `top.wcpe.mc.mpmt`（含项目名段 `mpmt`，不可漏）；各模块按 `top.wcpe.mc.mpmt.<层>.<模块>` 组织，例如 `top.wcpe.mc.mpmt.kernel`、`top.wcpe.mc.mpmt.protocol`、`top.wcpe.mc.mpmt.platform.spi`、`top.wcpe.mc.mpmt.platform.fabric`、`top.wcpe.mc.mpmt.platform.fabric.version.v1_20`、功能域 `top.wcpe.mc.mpmt.domain.<名>`。
 
@@ -194,7 +195,7 @@ flowchart TB
     ROOT -. pluginManagement includeBuild .-> CONV
 ```
 
-> 关键：全部平台车道都是**同一个根构建的普通子模块**，由根 `settings.gradle.kts` 直接 `include`，不再有复合构建隔离——加载器插件冲突的前提已由 [ADR-0025](adr/0025-wcpe-loom-toolchain-unification.md)（mod 平台构建插件统一为 `top.wcpe.loom` 1.17.19）消除，故 [ADR-0026](adr/0026-single-build-subproject-unification.md) 取消车道级独立构建。车道消费核心一律用 `project(":core:kernel")` 这类**项目依赖**（原经复合构建依赖替换 / 受控内部 JAR）；车道不再有 `settings.gradle.kts`、自有 wrapper、反向 `includeBuild`。保留的 `includeBuild` 只有两个 **Gradle 插件工程**（经 `pluginManagement` 引入，属构建基础设施，不属平台隔离）：`build-logic/realserver-acceptance`（真服验收编排）与 `build-logic/build-conventions`（构建约定插件）。Bukkit 家族无专属冲突插件，作根构建常规模块；SpongeGradle 与 loom 同处一个构建已实测共存。
+> 关键：全部平台车道都是**同一个根构建的普通子模块**，由根 `settings.gradle.kts` 直接 `include`，不再有复合构建隔离——加载器插件冲突的前提已由 [ADR-0025](adr/0025-wcpe-loom-toolchain-unification.md)（mod 平台构建插件统一为 `top.wcpe.loom`，具体版本见 `gradle.properties` 的 `mpmt.loomVersion`）消除，故 [ADR-0026](adr/0026-single-build-subproject-unification.md) 取消车道级独立构建。车道消费核心一律用 `project(":core:kernel")` 这类**项目依赖**（原经复合构建依赖替换 / 受控内部 JAR）；车道不再有 `settings.gradle.kts`、自有 wrapper、反向 `includeBuild`。保留的 `includeBuild` 只有两个 **Gradle 插件工程**（经 `pluginManagement` 引入，属构建基础设施，不属平台隔离）：`build-logic/realserver-acceptance`（真服验收编排）与 `build-logic/build-conventions`（构建约定插件）。Bukkit 家族无专属冲突插件，作根构建常规模块；SpongeGradle 与 loom 同处一个构建已实测共存。
 >
 > **构建逻辑分层**（[ADR-0027](adr/0027-build-convention-plugins.md)）：车道的公共流程不再写在各车道脚本里，而是集中在 `build-conventions` 的分层插件中——`build-conventions.quality`（静态分析与覆盖率门禁）、`build-conventions.platform`（平台公共层）、`build-conventions.<loader>`（fabric / bukkit / forge / neoforge / sponge 五层 loader 流程）、`build-conventions.release`（根侧发布聚合与真服/版本矩阵门禁编排）。插件 id 用功能语义、不含项目身份。**车道脚本只留"本车道是什么"的参数与偏离项**：MC / loader 版本、目标 JDK、L4 选择、报告路径、确有差异的依赖与断言；重复出现的 loader 流程性代码即为设计异味。任务名与路径、13 个发布 jar 的名称与字节、报告路径与 `SERVER-GAMETEST-REPORT v2` 格式、`-Pmpmt.acceptance.*` 属性名与默认值、门禁判定强度与失败文案属**不可变契约**，抽取只搬实现、不动契约。
 
@@ -204,7 +205,7 @@ flowchart TB
 
 P2 采用非笛卡尔积版本矩阵、按版本隔离的 Forge 工具链、L4 裸 payload golden vectors，以及绑定本轮 JVM/制品/场景的 realserver v2 权威报告。唯一聚合入口为 **Gradle** `./gradlew :runVersionMatrixGate`（`build-logic/realserver-acceptance` 约定插件 + 根薄包装；可选 mc-testkit 辅车道），**禁止** shell 剧本；串行验证版本矩阵核心与受影响的 1.20.1 基线。Sponge、NeoForge、**26.2 / REALSERVER262** 不属于版本矩阵门；全 lane 另用 `:runRealServerAcceptance`，26.2 REALSERVER262 真服专用聚合为 `:runRealServerGate262`。完整冻结事实见 [`specs/p2-version-matrix.md`](specs/p2-version-matrix.md)，长期裁决见本仓 [ADR-0021](adr/0021-p2-version-matrix-toolchain-isolation.md)（已接受；勿与 AllinCore-New ADR-0020 混淆）。
 
-> 历史注记：本节的"按版本隔离的 Forge 工具链"是 P2 交付时的事实；自 [ADR-0025](adr/0025-wcpe-loom-toolchain-unification.md) 起，Forge 1.20.1 / 1.21.1 / 1.12.2 / 26.2 与 NeoForge 车道已并入统一 `top.wcpe.loom` 1.17.19 + Gradle 9.6.1 车道，版本隔离不再成立；自 [ADR-0026](adr/0026-single-build-subproject-unification.md) 起这些车道更进一步统一为根构建子模块。本段其余语义不变。
+> 历史注记：本节的"按版本隔离的 Forge 工具链"是 P2 交付时的事实；自 [ADR-0025](adr/0025-wcpe-loom-toolchain-unification.md) 起，Forge 1.20.1 / 1.21.1 / 1.12.2 / 26.2 与 NeoForge 车道已并入统一 `top.wcpe.loom`（版本见 `gradle.properties` 的 `mpmt.loomVersion`）+ Gradle 9.6.1 车道，版本隔离不再成立；自 [ADR-0026](adr/0026-single-build-subproject-unification.md) 起这些车道更进一步统一为根构建子模块。本段其余语义不变。
 
 **验收编排两车道（Gradle only）**：
 - **B 主车道**：全服务端 lane + 各 loader **自有 gametest/acceptance 客户端**进服 + 权威报告 `RESULT PASS`；约定插件 `top.wcpe.mc.mpmt.realserver-acceptance`。**B 增强**：`PaperHostService` BuildService 按目标工程隔离，可用目标 Java、REALSERVER262 轮次与制品元数据后台起 Paper、部署产品/验收 jar（`-P mpmt.realserver.autoHost=true` / `ensurePaperRealServerHost`）；跨 loader 的 Fabric 客户端伴侣仍作为独立 Gradle 进程接入。
@@ -237,7 +238,7 @@ P2 采用非笛卡尔积版本矩阵、按版本隔离的 Forge 工具链、L4 �
 - **"特判"承载（FeatureGate）**：`FeatureGate` 是运行期的**能力探测**——平台无关代码问"当前平台 / 版本是否具备某能力"（如"是否 Folia 区域调度可用""该版本是否有某 API"），据此分流，而非在公共层硬编码平台 / 版本 if-else。它探测"能干什么"而非"你是谁"（capability detection，非平台嗅探）。**与端口分工**：端口（Port）是"要某能力"的统一调用面，FeatureGate 是"当前环境有没有该能力"的判定；二者配合让同一份 L0 逻辑跑遍异构平台。接口定义在 L2 `platform-spi`、各平台 L3 实现。**典型例**：探测到 Folia 时 `SchedulerPort` 实现选用 `RegionScheduler`，否则用全局调度——L0 只调 `SchedulerPort`，对底层差异无感。符合"禁止散落 if-else/switch 堆砌可变逻辑"的反模式禁令。
 - **跨端通信**：客户端 ↔ 服务端经 `protocol` 自定义协议通信，握手时做版本协商（`MIN_SUPPORTED` 兼容判断）；底层传输经 `TransportPort` 适配到各平台的网络通道。详见 [ADR-0006](adr/0006-cross-end-protocol.md)。
 - **命令模型**：命令入口在 L3 平台胶水，各平台用**原生命令框架**（Bukkit/Paper/Sponge 原生、Fabric/Forge/NeoForge Brigadier；**不引入 TabooLib**），执行逻辑在共享 L0/L1，L3 不写执行逻辑；L2 仅提供薄 `CommandRegistrar` 接缝（注册 + 转发，非命令框架）。详见 [ADR-0009](adr/0009-command-config-framework.md)。
-- **配置与资源路径**：配置经 L0 端口 `ConfigPort` 读取，实现方为平台无关 `core-config`（YAML/JSON，把文件解析到 `<基目录>/config/` 下）；基目录经 `DataDirectoryPort` 平台提供，域与共享层都不自算绝对路径。目录 / 资源预设位置原定由 `core-paths` 提供（仍未落地）。详见 [ADR-0010](adr/0010-config-and-resource-paths.md)。
+- **配置与资源路径**：配置经 L0 端口 `ConfigPort` 读取，实现方为平台无关 `core-config`（YAML/JSON）；基目录经 `DataDirectoryPort` 平台提供，所有落地位置由 L1 `core-paths` 的预设给出（`config/` / `data/` / `resources/`），域与共享层都不自算路径。详见 [ADR-0010](adr/0010-config-and-resource-paths.md)。
 - **事件驱动与域间解耦**：自有 EventBus（L0 内核，平台无关；其订阅/发布接口为 `EventBusPort`，默认实现在 L0 内核、非平台端口）承载发布 / 订阅 + **域间事件转发**；功能域只经事件协作、**不直接依赖兄弟域**；平台事件经 L3 适配器桥接入总线。详见 [ADR-0011](adr/0011-eventbus-domain-decoupling.md)。
 - **线程模型与线程安全**：涉及**服务端主线程**（命令 / 监听器 / tick）、**netty 网络线程**（包收发）、**客户端渲染线程**（HUD / 消息渲染）。**Folia 无单一主线程**——网络接收 / 命令处理碰游戏 / 领域状态前经 `SchedulerPort` 按**归属**切到正确线程（`runForEntity`/`runForLocation`/`runGlobal`，而非笼统"主线程"）；客户端渲染只在渲染线程读不可变快照（volatile 引用交换）、**不在渲染线程改共享状态**；共享可变状态（封禁表 / 会话表）须线程安全。详见 [ADR-0013](adr/0013-threading-and-scheduling.md)。
 - **Java 版本策略**：L0–L2（平台无关核心）严格编译为 **Java 8** 字节码以最大化兼容（连 1.12 Forge 都能加载）；现代版本的平台胶水（Fabric 1.18+ / NeoForge 等）受 Mojang 强制按各 loader 最低 JDK 编译，但仍依赖 Java 8 核心。**L0–L2 须以 `javac --release 8` 或 animal-sniffer 强制只用 JDK 8 API**（仅锁 `sourceCompatibility` 不够，否则误用 9+ API 在 1.12.2 运行期 NoSuchMethod）。详见 [ADR-0004](adr/0004-java8-core-lombok.md)。
@@ -245,8 +246,8 @@ P2 采用非笛卡尔积版本矩阵、按版本隔离的 Forge 工具链、L4 �
 ## 6. 部署
 
 - **构建产物**：每个目标平台产出各自的可加载件——Bukkit 家族为插件 jar（含 `plugin.yml`），Fabric 的旧混淆版本为 Loom 重映射 mod jar、26.1+ 为无混淆链路产物（`fabric.mod.json`），Forge/NeoForge 为对应 mod jar（`mods.toml` / `neoforge.mods.toml`）。各产物内打包 L0–L2 核心 + 对应 L3/L4 胶水。
-- **构建工具**：Gradle **9.6.1** 单一根构建（Kotlin DSL，平台车道为根构建子模块）；L0–L2、Bukkit 家族（`platform-bukkit`）与全部平台车道（fabric / forge / neoforge / sponge）同处一个根构建 —— mod 平台构建插件统一为 WCPE Loom（`top.wcpe.loom` 1.17.19，26.2 两车道用 no-remap 变体），Sponge 车道用 SpongeGradle，加载器插件由根 `pluginManagement` 单点 pin，见 [ADR-0025](adr/0025-wcpe-loom-toolchain-unification.md) / [ADR-0026](adr/0026-single-build-subproject-unification.md)。车道消费核心经 `project(":core:kernel")` 项目依赖（无依赖替换 / 无受控内部 JAR）；根构建**硬要求守护 JVM ≥ 25**（26.2 两车道在配置期硬校验）。**构建逻辑分层**：静态分析 / 平台公共层 / 各 loader 流程 / 根侧发布编排集中在 `build-logic/build-conventions` 的分层约定插件（`quality` / `platform` / `<loader>` / `release`），**车道脚本只做配置**（参数与偏离项），见 [ADR-0027](adr/0027-build-convention-plugins.md)。第三方依赖统一 relocate、core 打进各产物的方式见 [ADR-0012](adr/0012-packaging-and-dependency-isolation.md)。Minecraft 26.1+ 使用无混淆原始命名和加载器构建链路，见 [ADR-0022](adr/0022-unobfuscated-minecraft-naming-policy.md)（已取代 ADR-0016；旧版本继续按其规则）。平台车道隔离的旧方案见 [ADR-0007](adr/0007-composite-build-loader-isolation.md) 决策 2（已被 ADR-0026 取代；ADR-0007 取代 [ADR-0005](adr/0005-build-toolchain.md)）。
-  - **当前落地**（进度以 PRD §4 FR 状态为权威）：根 Gradle wrapper 为 **9.6.1**（全车道统一），mod 平台构建插件统一为 `top.wcpe.loom` 1.17.19（ADR-0025），全部平台车道为根构建子模块（ADR-0026）；L0–L2 仍是 Java 8 的平台无关核心，P1 与 P2（FR-12）分别已在 v0.1.0、v0.2.0 交付。P3 的 26.2 仅有 Bukkit、Fabric、Forge 三条在制车道，均为根构建子模块（工程路径 `:platform:fabric:fabric-26.2`、`:platform:forge:forge-26.2`）。26.1+ 的无混淆命名策略由 ADR-0022 裁决；REALSERVER262 只覆盖三个公共场景，且 ADR-0023 将该严格门定为 FR-16 的最终自动化验收；FR-17 的远端发布尚未执行，故三项仍保持开发中。
+- **构建工具**：Gradle **9.6.1** 单一根构建（Kotlin DSL，平台车道为根构建子模块）；L0–L2、Bukkit 家族（`platform-bukkit`）与全部平台车道（fabric / forge / neoforge / sponge）同处一个根构建 —— mod 平台构建插件统一为 WCPE Loom（`top.wcpe.loom`，版本见 `gradle.properties` 的 `mpmt.loomVersion`；26.2 两车道用 no-remap 变体），Sponge 车道用 SpongeGradle，加载器插件由根 `pluginManagement` 单点 pin，见 [ADR-0025](adr/0025-wcpe-loom-toolchain-unification.md) / [ADR-0026](adr/0026-single-build-subproject-unification.md)。车道消费核心经 `project(":core:kernel")` 项目依赖（无依赖替换 / 无受控内部 JAR）；根构建**硬要求守护 JVM ≥ 25**（26.2 两车道在配置期硬校验）。**构建逻辑分层**：静态分析 / 平台公共层 / 各 loader 流程 / 根侧发布编排集中在 `build-logic/build-conventions` 的分层约定插件（`quality` / `platform` / `<loader>` / `release`），**车道脚本只做配置**（参数与偏离项），见 [ADR-0027](adr/0027-build-convention-plugins.md)。第三方依赖统一 relocate、core 打进各产物的方式见 [ADR-0012](adr/0012-packaging-and-dependency-isolation.md)。Minecraft 26.1+ 使用无混淆原始命名和加载器构建链路，见 [ADR-0022](adr/0022-unobfuscated-minecraft-naming-policy.md)（已取代 ADR-0016；旧版本继续按其规则）。平台车道隔离的旧方案见 [ADR-0007](adr/0007-composite-build-loader-isolation.md) 决策 2（已被 ADR-0026 取代；ADR-0007 取代 [ADR-0005](adr/0005-build-toolchain.md)）。
+  - **当前落地**（进度以 PRD §4 FR 状态为权威）：根 Gradle wrapper 为 **9.6.1**（全车道统一），mod 平台构建插件统一为 `top.wcpe.loom`（版本见 `gradle.properties` 的 `mpmt.loomVersion`，ADR-0025），全部平台车道为根构建子模块（ADR-0026）；L0–L2 仍是 Java 8 的平台无关核心，P1 与 P2（FR-12）分别已在 v0.1.0、v0.2.0 交付。P3 的 26.2 仅有 Bukkit、Fabric、Forge 三条在制车道，均为根构建子模块（工程路径 `:platform:fabric:fabric-26.2`、`:platform:forge:forge-26.2`）。26.1+ 的无混淆命名策略由 ADR-0022 裁决；REALSERVER262 只覆盖三个公共场景，且 ADR-0023 将该严格门定为 FR-16 的最终自动化验收；FR-17 的远端发布尚未执行，故三项仍保持开发中。
 - **P3 当前边界**：26.2 仅有 `platform/bukkit/26.2`、`platform/fabric/26.2` 与 `platform/forge/26.2` 三条有效车道，三者均为根构建子模块、均在开发中。REALSERVER262 只要求 `product-handshake`、`product-roundtrip` 与 `client-hud` 三个公共场景；同轮 REALSERVER262 报告经严格门验证是 FR-16 交付前置条件。版本矩阵（STANDARD/HYBRID/SCHEDULER）不覆盖 26.2。
 - **远端交付治理**：GitHub Actions（FR-32）在 Hosted Runner 固定 mc-testkit 本地 Maven 回退后，以 **JDK 25 守护**运行单一根构建的 `:buildAll`（Java 8/17/21/25 均显式安装，8/17/21 仅供 toolchain 解析），并提供手动 Release、依赖审查和 CodeQL。它属于交付治理层，不加入产品依赖图；CI 构建结果不能替代 ADR-0014 / ADR-0023 的本机 realserver/REALSERVER262 证据，详见 ADR-0024。
 - **运行拓扑**：服务端进程（Paper/Folia/Sponge/Fabric-server/Forge-server）+ 客户端进程（Fabric/Forge/NeoForge 客户端），二者经协议通信；亦支持单机（客户端内置服务端）。
@@ -263,7 +264,7 @@ P2 采用非笛卡尔积版本矩阵、按版本隔离的 Forge 工具链、L4 �
 - [ADR-0006] 跨端通信协议：自定义协议 + 版本协商。
 - [ADR-0008] 融合服支持与活跃平台语义细化：区分"平台存在 vs 活跃绑定"，支持 CatServer。
 - [ADR-0009] 命令框架策略：各平台用各自原生命令框架（不引入 TabooLib），入口 L3、执行抽到共享。
-- [ADR-0010] 配置与资源路径：平台无关共享模块（YAML/JSON 加载 + 预设目录/资源位置）。`core-config` 已落地（实现 L0 `ConfigPort`，平台装配期注册，`examples/counter` 经端口真实使用）；**`core-paths` 仍未落地**（见 §2.2 末注）。
+- [ADR-0010] 配置与资源路径：平台无关共享模块（YAML/JSON 加载 + 预设目录/资源位置）。`core-config` 与 `core-paths` 均已落地：前者实现 L0 `ConfigPort`（平台装配期注册，`examples/counter` 经端口真实使用），后者提供路径预设并被 `core-config` 与全部平台的 `*PersistencePort` 消费。
 - [ADR-0011] 功能域事件驱动解耦：自有 EventBus 作域间转发，域间禁止直接 / 循环依赖。
 - [ADR-0012] 打包与依赖隔离：第三方依赖 relocate、core 进各平台产物（M0 spike 先行）。
 - [ADR-0013] 线程模型与归属调度：Folia 无主线程，SchedulerPort 按归属调度。
@@ -276,7 +277,7 @@ P2 采用非笛卡尔积版本矩阵、按版本隔离的 Forge 工具链、L4 �
 - [ADR-0022] Minecraft 26.1+ 无混淆命名与加载器构建策略，取代 ADR-0016。
 - [ADR-0023] P3 R7 严格自动化验收作为 FR-16 的最终发布权威，仅限其真实进程 Gradle 证据。
 - [ADR-0024] GitHub Actions 远端质量门与真服验收分离。
-- [ADR-0025] 构建插件统一 WCPE Loom（`top.wcpe.loom` 1.17.19）并收敛 Gradle 车道至 9.6.1；部分取代 ADR-0021 的工具链隔离。
+- [ADR-0025] 构建插件统一 WCPE Loom（`top.wcpe.loom`，当前版本见 `gradle.properties` 的 `mpmt.loomVersion`）并收敛 Gradle 车道至 9.6.1；部分取代 ADR-0021 的工具链隔离。
 - [ADR-0026] 平台车道统一为根构建子模块（取消加载器插件隔离）；取代 ADR-0007 决策 2，部分取代 ADR-0021 决策 2，并规定根构建硬要求守护 JVM ≥ 25。
 - [ADR-0027] 构建约定插件分层：公共构建流程进插件工程（`build-conventions.quality` / `.platform` / `.<loader>` / `.release`）、车道脚本只做配置、插件 id 不含项目身份。
 - [ADR-0028] mc-shared 跨 lane MC 源码共享层 + 功能域模块化（取代 ADR-0015 决策 1 / 4）。
