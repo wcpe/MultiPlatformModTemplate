@@ -14,6 +14,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
 import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
+import top.wcpe.mc.mpmt.paths.Paths;
 
 /**
  * Bukkit 文件持久化端口（L3，FR-26）：每个命名空间一份 properties 文件，存于
@@ -74,6 +75,6 @@ public final class BukkitPersistencePort implements PersistencePort {
     }
 
     private Path file(String namespace) {
-        return dataDirectory.baseDirectory().resolve("data").resolve(namespace + ".properties");
+        return Paths.of(dataDirectory).dataFile(namespace + ".properties");
     }
 }

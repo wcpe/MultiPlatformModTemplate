@@ -22,7 +22,7 @@ buildscript {
     dependencies {
         // legacy forge 的 binpatches.pack.lzma 解包需要 Pack200 实现（JDK 14+ 已移除 java.util.jar.Pack200）；
         // 必须进 buildscript classpath，供下方 loom.forge.pack200Provider 实例化
-        classpath("dev.architectury:architectury-pack200:0.1.3")
+        classpath(libs.architectury.pack200)
     }
 }
 
@@ -48,7 +48,6 @@ val minecraftVersion = "1.12.2"
 val forgeVersion = "1.12.2-14.23.5.2860"
 val mappingsVersion = "20171003-1.12"
 // 第三方运行期依赖版本（与其它车道一致，避免分叉）
-val snakeyamlVersion = "2.2"
 
 // snakeyaml 2.2 是 multi-release jar：`META-INF/versions/9/**` 与 `module-info.class` 是 Java 9 字节码，
 // 而 FML 1.12.2 的旧 ASM 读不了它们（实测：`Unable to read a class file correctly` → LoaderException，
@@ -67,7 +66,7 @@ val snakeyamlJava8Jar =
             exclude("module-info.class", "META-INF/MANIFEST.MF", "META-INF/maven/**")
         }
         archiveBaseName.set("snakeyaml-java8")
-        archiveVersion.set(snakeyamlVersion)
+        archiveVersion.set(libs.versions.snakeyaml.get())
         archiveClassifier.set("")
         destinationDirectory.set(layout.buildDirectory.dir("libs/snakeyaml"))
         isPreserveFileTimestamps = false
@@ -75,7 +74,7 @@ val snakeyamlJava8Jar =
     }
 
 dependencies {
-    add("snakeyamlJava8", "org.yaml:snakeyaml:$snakeyamlVersion")
+    add("snakeyamlJava8", libs.snakeyaml)
 }
 
 // forge 车道参数：本车道双端加载（客户端握手 + 服务端能力装配）+ reobf 兼容任务映射（无 dev SecureJar 嵌入、无报告门）
@@ -110,7 +109,7 @@ forgeLane {
 val forge = extensions.getByType(buildconventions.ForgeLaneExtension::class.java)
 // 共享模块（L0-L2）项目路径；acceptance 仅进验收伴侣，不进产品
 val productSharedProjects =
-    listOf(":core:kernel", ":core:runtime", ":core:client", ":core:protocol", ":core:spi", ":core:config")
+    listOf(":core:kernel", ":core:runtime", ":core:client", ":core:protocol", ":core:spi", ":core:config", ":core:paths")
 val acceptanceSharedProjects = productSharedProjects + listOf(":modules:acceptance")
 // 功能域（L0 玩法逻辑）：动态发现，新增域无需改上面的字面量清单（ADR-0028）
 val domainProjects = mpmtDomains().map { it.path }
@@ -156,8 +155,8 @@ dependencies {
     // vecmath：Forge 1.12.2 userdev config.json 的 libraries 清单要求 java3d:vecmath:1.5.2，
     // 但 loom 未把它带进运行期类路径。Minecraft.<init> 用 javax.vecmath.Tuple4f 时缺类即崩，
     // 故在此显式补齐；该制品仅存在于 Forge 官方 maven（见下方 repositories 段）。
-    add("minecraftLibraries", "java3d:vecmath:1.5.2")
-    add("implementation", "java3d:vecmath:1.5.2")
+    add("minecraftLibraries", libs.vecmath)
+    add("implementation", libs.vecmath)
 
     // 域与共享核心同一批非传递项目依赖：既有条目顺序不变，域追加在末尾（ADR-0028）。
     val allProductProjects = productSharedProjects + domainProjects
@@ -174,9 +173,9 @@ dependencies {
 
     // 纯 JVM 单元测试：JUnit 5（BOM 统一版本，与其它车道同源）。
     // 被测类为 Java 8 字节码，测试同样以 Java 8 语法编译 / 运行（toolchain 已固定 8）。
-    add("testImplementation", platform("org.junit:junit-bom:5.14.4"))
-    add("testImplementation", "org.junit.jupiter:junit-jupiter")
-    add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
+    add("testImplementation", platform(libs.junit.bom))
+    add("testImplementation", libs.junit.jupiter)
+    add("testRuntimeOnly", libs.junit.platform.launcher)
 
     acceptanceSharedProjects.forEach {
         add("acceptanceImplementation", ForgeModules.moduleJar(project, it))

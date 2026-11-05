@@ -21,7 +21,7 @@ plugins {
     java
     id("top.wcpe.loom")
     // 8.3.11：修复 RelocatorRemapper.mapValue 与 loom 依赖树上新 ASM（visitLdcInsn 传 Type）的不兼容
-    id("com.gradleup.shadow") version "8.3.11"
+    alias(libs.plugins.shadow)
     // 静态分析插件（checkstyle / pmd / spotbugs+findsecbugs / jacoco / ktlint / detekt）一律由
     // build-conventions.quality 应用：版本与类路径由根 plugins{} 单点 pin，车道内重复声明会分裂插件类加载器
     // 并破坏 loom 的清单服务。
@@ -42,7 +42,6 @@ forgeLane {
 
 // 插件公开 API 需要扩展实例（块外传参用），故在块后取回一次
 val forge = extensions.getByType(buildconventions.ForgeLaneExtension::class.java)
-val snakeyamlVersion = "2.2"
 // 依赖 platform-spi（经 api 传递 core-runtime + core-kernel），经项目依赖消费
 val platformApiProject = project(":platform:forge:forge-api")
 val spiProject = project(":core:spi")
@@ -52,6 +51,8 @@ val serverProject = project(":core:server")
 val clientProject = project(":core:client")
 // 配置端口实现（ConfigPort → DirectoryConfigPort），能力装配期注册
 val configProject = project(":core:config")
+// 路径预设（ADR-0010 决策 2）
+val pathsProject = project(":core:paths")
 
 base {
     archivesName.set("mpmt-forge-1.20.1")
@@ -238,6 +239,8 @@ dependencies {
     // 配置端口实现（core-config）：能力装配注册 ConfigPort 用，纯 Java、shade 进同一产品 jar
     implementation(configProject)
     shadowBundle(configProject)
+    implementation(pathsProject)
+    shadowBundle(pathsProject)
     // 功能域（L0 玩法逻辑）：mpmtDomains() 动态覆盖——新增域无需改本脚本（ADR-0028）。
     // 域经 META-INF/services 声明 Feature，由 core-runtime 启动期自动发现；与其它核心产物同样 shade。
     mpmtDomains().forEach { domain ->
@@ -245,14 +248,14 @@ dependencies {
         shadowBundle(domain)
     }
     // 第三方运行期依赖：shade 并 relocate（ADR-0012）
-    implementation("org.yaml:snakeyaml:$snakeyamlVersion")
-    shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
+    implementation(libs.snakeyaml)
+    shadowBundle(libs.snakeyaml)
     // Mixin 注解处理器由 arch-loom 内建提供（loom.mixin.useLegacyMixinAp），无需再声明 processor 依赖
 
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
     testImplementation(project(":modules:acceptance"))
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 // 打包链路：shadowJar（shade core/spi + relocate snakeyaml，产物名 -dev-shadow）→ remapJar（named → SRG，

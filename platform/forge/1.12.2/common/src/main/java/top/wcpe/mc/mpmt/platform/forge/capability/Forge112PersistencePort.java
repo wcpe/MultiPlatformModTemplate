@@ -14,6 +14,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
 import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
+import top.wcpe.mc.mpmt.paths.Paths;
 
 /**
  * Forge 1.12.2 文件持久化端口：每个命名空间保存为数据目录下的一份 properties 文件。
@@ -79,6 +80,6 @@ public final class Forge112PersistencePort implements PersistencePort {
     }
 
     private Path file(String namespace) {
-        return dataDirectory.baseDirectory().resolve("data").resolve(namespace + ".properties");
+        return Paths.of(dataDirectory).dataFile(namespace + ".properties");
     }
 }

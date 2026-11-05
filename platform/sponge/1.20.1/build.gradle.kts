@@ -15,14 +15,13 @@ plugins {
     // 车道约定插件须晚于 java-library：验收源集与测试依赖挂在 java 插件之上
     id("build-conventions.sponge")
     id("org.spongepowered.gradle.plugin")
-    id("com.gradleup.shadow") version "8.3.11"
+    alias(libs.plugins.shadow)
     // 分析类插件（spotbugs / ktlint / detekt）不在车道内声明：由 build-conventions.quality 应用，
     // 版本与类路径由根 plugins{} 单点 pin，重复声明会分裂插件类加载器并破坏 loom 的清单服务。
 }
 
 group = "top.wcpe.mc.mpmt"
 
-val snakeyamlVersion = "2.2"
 // 插件元数据保持与 RC1365 清单一致，编译类路径固定到同源旧 API 制品。
 val spongeMetadataVersion = "11.0.0-SNAPSHOT"
 val spongeCompileVersion = "11.0.0-20230826.165715-4"
@@ -36,6 +35,8 @@ val serverCoordinate = project(":core:server")
 val clientCoordinate = project(":core:client")
 // 配置端口实现（ConfigPort → DirectoryConfigPort），能力装配期注册
 val configCoordinate = project(":core:config")
+// 依赖 core-paths（路径预设，ADR-0010 决策 2）
+val pathsCoordinate = project(":core:paths")
 // realserver 验收 harness 核心与协议（shade 进验收驱动插件 jar，不入产品 jar，ADR-0014）
 val acceptanceCoordinate = project(":modules:acceptance")
 val protocolCoordinate = project(":core:protocol")
@@ -94,6 +95,8 @@ dependencies {
     // 配置端口实现（core-config）：能力装配注册 ConfigPort 用，纯 Java、shade 进插件 jar
     implementation(configCoordinate)
     shadowBundle(configCoordinate)
+    implementation(pathsCoordinate)
+    shadowBundle(pathsCoordinate)
     // 功能域（L0 玩法逻辑）：mpmtDomains() 动态覆盖——新增域无需改本脚本（ADR-0028）。
     // 域经 META-INF/services 声明 Feature，由 core-runtime 启动期自动发现；与其它核心产物同样 shade。
     mpmtDomains().forEach { domain ->
@@ -101,8 +104,8 @@ dependencies {
         shadowBundle(domain)
     }
     // 第三方运行期依赖：shade 并 relocate（ADR-0012）
-    implementation("org.yaml:snakeyaml:$snakeyamlVersion")
-    shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
+    implementation(libs.snakeyaml)
+    shadowBundle(libs.snakeyaml)
     // 注：spongeapi 由 sponge{} apiVersion 自动接入（compileOnly），不在此手动声明、不 shade
 
     "acceptanceImplementation"(acceptanceCoordinate)

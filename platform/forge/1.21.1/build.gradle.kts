@@ -28,14 +28,13 @@ plugins {
     id("top.wcpe.loom")
     // 8.3.11：产品内容需把第三方（core-config 的 snakeyaml）relocate 到 libs.*（ADR-0012）；
     // 本车道的 shade 只产出“产品内容中间包”，最终产品仍是下面的 remapJar
-    id("com.gradleup.shadow") version "8.3.11"
+    alias(libs.plugins.shadow)
     id("build-conventions.forge")
 }
 
 val minecraftVersion = "1.21.1"
 val forgeVersion = "1.21.1-52.1.0"
 // 第三方运行期依赖版本（与其它车道一致，避免分叉）
-val snakeyamlVersion = "2.2"
 // 取自全仓单一真源（gradle.properties 的 mpmt.loomVersion），车道不再写版本字面量
 val loomVersion = providers.gradleProperty("mpmt.loomVersion").get()
 
@@ -49,6 +48,7 @@ val productSharedProjects =
         ":core:protocol",
         ":core:spi",
         ":core:config",
+        ":core:paths",
     )
 val acceptanceSharedProjects = productSharedProjects + listOf(":modules:acceptance")
 // 功能域（L0 玩法逻辑）：动态发现，新增域无需改上面的字面量清单（ADR-0028）
@@ -154,12 +154,12 @@ dependencies {
 
     // 第三方运行期依赖（core-config 的 YAML 解析）：进 productBundle 由 shadow 中间包 relocate 到 libs.*；
     // 测试类路径用未 relocate 的原包名（单测直接跑在配置 jar 上）
-    add("productBundle", "org.yaml:snakeyaml:$snakeyamlVersion")
-    add("testImplementation", "org.yaml:snakeyaml:$snakeyamlVersion")
+    add("productBundle", libs.snakeyaml)
+    add("testImplementation", libs.snakeyaml)
 
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 loom {
