@@ -1,0 +1,4 @@
+# 本域自带的缺省配置文件清单（每行一个文件名）。
+# 启动时 core-config 的 ConfigDefaults 会扫描所有 jar 里的本文件，
+# 把 mpmt-defaults/<文件名> 的模板拷到 <基目录>/config/<文件名>（已存在则不改）。
+counter.yml

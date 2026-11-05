@@ -266,6 +266,11 @@ class QualityConventionPlugin : Plugin<Project> {
                 "top/wcpe/mc/mpmt/protocol/**",
                 "top/wcpe/mc/mpmt/acceptance/**",
                 "top/wcpe/mc/mpmt/platform/spi/**",
+                // L1 配置与路径：车道 shade 进产物后供域经端口使用，但它们的测试在本模块（core:config / core:paths）。
+                // 不计入车道覆盖率——否则车道的分母里凭空多出几十行它从不直接调用的基础设施代码，
+                // 真实后果：forge 1.21.1 / 26.2 从 0.70 以上跌到 0.66，而平台侧一行逻辑也没变。
+                "top/wcpe/mc/mpmt/config/**",
+                "top/wcpe/mc/mpmt/paths/**",
                 // 已 relocate 的第三方（modern forge 车道把 snakeyaml 嵌进 main classes 供 dev SecureJar 用）：
                 // 不是本仓代码，不能计入车道覆盖率。它还是 multi-release jar，同一个类在 root 与
                 // META-INF/versions/9 下各一份，JaCoCo 会报 “Can't add different class with same name”。

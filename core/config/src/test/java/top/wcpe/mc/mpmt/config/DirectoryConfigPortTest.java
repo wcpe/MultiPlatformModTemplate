@@ -58,6 +58,58 @@ class DirectoryConfigPortTest {
         assertThrows(ConfigLoadException.class, () -> port(base).read("counter.properties", SampleConfig.class));
     }
 
+    // ── writeDefault：首次新建、已存在不改、无模板则失败 ──────────────────────
+
+    @Test
+    void writeDefault_首次新建并带上模板内容(@TempDir Path base) {
+        DirectoryConfigPort port = port(base);
+
+        assertTrue(port.writeDefault("test-default.yml"));
+
+        assertEquals(TEMPLATE_BODY, readRaw(base, "test-default.yml"));
+    }
+
+    @Test
+    void writeDefault_已存在时一字不改(@TempDir Path base) throws IOException {
+        write(base, "test-default.yml", "reminderDelayTicks: 5\n");
+
+        assertFalse(port(base).writeDefault("test-default.yml"));
+
+        assertEquals("reminderDelayTicks: 5\n", readRaw(base, "test-default.yml"));
+    }
+
+    @Test
+    void writeDefault_缺模板时报错而不是写空文件(@TempDir Path base) {
+        DirectoryConfigPort port = port(base);
+
+        assertThrows(java.io.UncheckedIOException.class, () -> port.writeDefault("no-such-template.yml"));
+        assertFalse(Files.exists(base.resolve("config").resolve("no-such-template.yml")), "失败不应留下空文件");
+    }
+
+    @Test
+    void writeDefault_写出的内容能被自己读回(@TempDir Path base) {
+        DirectoryConfigPort port = port(base);
+        port.writeDefault("test-default.yml");
+
+        Optional<SampleConfig> loaded = port.read("test-default.yml", SampleConfig.class);
+
+        assertTrue(loaded.isPresent());
+        assertEquals(7L, loaded.get().reminderDelayTicks);
+        assertEquals(99L, loaded.get().reminderPeriodTicks);
+    }
+
+    /** 测试类路径里的缺省模板内容（对应 src/test/resources/mpmt-defaults/test-default.yml）。 */
+    private static final String TEMPLATE_BODY =
+            "# 测试用缺省模板\nreminderDelayTicks: 7\nreminderPeriodTicks: 99\n";
+
+    private static String readRaw(Path base, String name) {
+        try {
+            return new String(Files.readAllBytes(base.resolve("config").resolve(name)), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
     private static DirectoryConfigPort port(Path base) {
         DataDirectoryPort directory = () -> base;
         return new DirectoryConfigPort(directory);

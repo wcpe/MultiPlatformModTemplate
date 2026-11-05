@@ -44,14 +44,29 @@ class CounterConfigsTest {
 
     @Test
     void 端口抛错时不静默吞() {
-        ConfigPort broken = new ConfigPort() {
-            @Override
-            public <T> Optional<T> read(String fileName, Class<T> type) {
-                throw new IllegalStateException("配置文件写坏了");
-            }
-        };
+        ConfigPort broken =
+                new ConfigPort() {
+                    @Override
+                    public <T> Optional<T> read(String fileName, Class<T> type) {
+                        throw new IllegalStateException("配置文件写坏了");
+                    }
+
+                    @Override
+                    public boolean writeDefault(String fileName) {
+                        return false;
+                    }
+                };
 
         assertThrows(IllegalStateException.class, () -> new CounterConfigs(broken).loadOrDefault());
+    }
+
+    @Test
+    void 写缺省配置时传给端口的是约定文件名() {
+        StubConfigPort port = new StubConfigPort();
+
+        new CounterConfigs(port).writeDefaultIfAbsent();
+
+        assertEquals(java.util.Collections.singletonList(CounterConfigs.FILE_NAME), port.written);
     }
 
     @Test
@@ -65,9 +80,10 @@ class CounterConfigsTest {
         assertEquals(4L, config.reminderPeriodTicks());
     }
 
-    /** 内存配置端口桩：按文件名返回预设值。 */
+    /** 内存配置端口桩：按文件名返回预设值，并记录写缺省配置的调用。 */
     private static final class StubConfigPort implements ConfigPort {
         private final Map<String, Object> values = new HashMap<>();
+        private final java.util.List<String> written = new java.util.ArrayList<>();
 
         void put(String fileName, Object value) {
             values.put(fileName, value);
@@ -77,6 +93,15 @@ class CounterConfigsTest {
         @SuppressWarnings("unchecked")
         public <T> Optional<T> read(String fileName, Class<T> type) {
             return Optional.ofNullable((T) values.get(fileName));
+        }
+
+        @Override
+        public boolean writeDefault(String fileName) {
+            if (values.containsKey(fileName)) {
+                return false;
+            }
+            written.add(fileName);
+            return true;
         }
     }
 }

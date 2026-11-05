@@ -14,6 +14,7 @@ private val NEOFORGE_PRODUCT_INTERNAL_PROJECTS =
         ":core:server",
         ":core:client",
         ":core:config",
+        ":core:paths",
     )
 
 /** 平台无关验收核心（控制协议 / 协调 / GameTest 框架 / 报告）：验收 jar 独有，shade 进去。 */
@@ -21,11 +22,6 @@ private const val NEOFORGE_ACCEPTANCE_CORE_PROJECT: String = ":modules:acceptanc
 
 /** protocol（编 HUD 包用）：仅验收编译期可见，运行期由产品 mod 提供，绝不打进验收 jar（防 split package）。 */
 private const val NEOFORGE_PROTOCOL_PROJECT: String = ":core:protocol"
-
-/** 单测 JUnit 版本（与其它车道同一套）。 */
-private const val NEOFORGE_JUNIT_BOM: String = "org.junit:junit-bom:5.10.3"
-private const val NEOFORGE_JUNIT_JUPITER: String = "org.junit.jupiter:junit-jupiter"
-private const val NEOFORGE_JUNIT_LAUNCHER: String = "org.junit.platform:junit-platform-launcher"
 
 /** 需 shade 并 relocate 的第三方运行期依赖（版本由车道参数给出，ADR-0012）。 */
 private const val NEOFORGE_SNAKEYAML_MODULE: String = "org.yaml:snakeyaml"
@@ -76,13 +72,19 @@ private fun registerNeoForgeProductDependencies(project: Project, lane: NeoForge
     dependencies.add(NEOFORGE_SHADOW_BUNDLE_CONFIGURATION, snakeyaml)
 }
 
-/** 单测依赖：JUnit 5 一套 + 验收核心（契约复用），与其它车道同构。 */
+/**
+ * 单测依赖：JUnit 5 一套 + 验收核心（契约复用），与其它车道同构。
+ *
+ * 版本从本插件工程的版本目录取（不在此写死）：原先这里写着 5.10.3，
+ * 与其余车道的 5.14.4 不一致，同一构建里两个 junit 版本靠“各车道互不相干”掩着，升级必漏改。
+ */
 private fun registerNeoForgeTestDependencies(project: Project) {
     val dependencies = project.dependencies
-    dependencies.add("testImplementation", dependencies.platform(NEOFORGE_JUNIT_BOM))
-    dependencies.add("testImplementation", NEOFORGE_JUNIT_JUPITER)
+    val junitVersion = project.versionsCatalogVersion("junit")
+    dependencies.add("testImplementation", dependencies.platform("org.junit:junit-bom:$junitVersion"))
+    dependencies.add("testImplementation", "org.junit.jupiter:junit-jupiter")
     dependencies.add("testImplementation", neoforgeModuleJar(project, NEOFORGE_ACCEPTANCE_CORE_PROJECT))
-    dependencies.add("testRuntimeOnly", NEOFORGE_JUNIT_LAUNCHER)
+    dependencies.add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
 }
 
 /**
