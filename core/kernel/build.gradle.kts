@@ -19,17 +19,17 @@ repositories {
 
 dependencies {
     // 领域值对象用 Lombok 减样板（ADR-0004：Lombok 仅用于 Java 模块；编译期注解，运行期无依赖）。
-    compileOnly("org.projectlombok:lombok:1.18.48")
-    annotationProcessor("org.projectlombok:lombok:1.18.48")
-    testCompileOnly("org.projectlombok:lombok:1.18.48")
-    testAnnotationProcessor("org.projectlombok:lombok:1.18.48")
+    compileOnly(libs.lombok)
+    annotationProcessor(libs.lombok)
+    testCompileOnly(libs.lombok)
+    testAnnotationProcessor(libs.lombok)
 
     // L0 不引入任何第三方运行期依赖（保持纯功能域）。
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
     // 分离度回归断言：ArchUnit 自动校验 L0 无平台原生依赖、功能域互不依赖且无环（仅测试期）
-    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.1")
+    testImplementation(libs.archunit.junit5)
 }
 
 tasks.test {

@@ -15,7 +15,7 @@ plugins {
     id("build-conventions.quality")
     id("build-conventions.platform")
     java
-    id("com.gradleup.shadow") version "8.3.11"
+    alias(libs.plugins.shadow)
     // 车道约定插件须晚于 shadow（打包链路按名取 jar/shadowJar），早于 realserver 门禁（验收扩展取值先落地）
     id("build-conventions.bukkit")
     id("top.wcpe.mc.mpmt.realserver-acceptance")
@@ -81,30 +81,24 @@ val bukkit = extensions.getByType(buildconventions.BukkitLaneExtension::class.ja
 val acceptance = sourceSets.getByName("acceptance")
 
 dependencies {
-    compileOnly(platform("net.kyori:adventure-bom:5.2.0"))
-    compileOnly("net.kyori:adventure-api")
-    compileOnly("net.kyori:adventure-key")
-    compileOnly("net.kyori:adventure-text-minimessage")
-    compileOnly("net.kyori:adventure-text-serializer-gson")
-    compileOnly("net.kyori:adventure-text-serializer-legacy")
-    compileOnly("net.kyori:adventure-text-serializer-plain")
-    compileOnly("net.kyori:adventure-text-logger-slf4j")
-    compileOnly("com.google.guava:guava:33.7.1-jre")
-    compileOnly("com.google.code.gson:gson:2.14.0")
-    compileOnly("org.jetbrains:annotations:26.1.0")
-    testImplementation(platform("net.kyori:adventure-bom:5.2.0"))
-    testImplementation("net.kyori:adventure-api")
+    compileOnly(platform(libs.adventure.bom))
+    compileOnly(libs.bundles.adventure.compile)
+    compileOnly(libs.guava)
+    compileOnly(libs.gson)
+    compileOnly(libs.jetbrains.annotations)
+    testImplementation(platform(libs.adventure.bom))
+    testImplementation(libs.adventure.api)
 
-    add(acceptance.compileOnlyConfigurationName, platform("net.kyori:adventure-bom:5.2.0"))
-    add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-api")
-    add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-key")
-    add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-minimessage")
-    add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-serializer-gson")
-    add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-serializer-legacy")
-    add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-serializer-plain")
-    add(acceptance.compileOnlyConfigurationName, "net.kyori:adventure-text-logger-slf4j")
-    add(acceptance.compileOnlyConfigurationName, "com.google.guava:guava:33.7.1-jre")
-    add(acceptance.compileOnlyConfigurationName, "org.jetbrains:annotations:26.1.0")
+    add(acceptance.compileOnlyConfigurationName, platform(libs.adventure.bom))
+    add(acceptance.compileOnlyConfigurationName, libs.adventure.api)
+    add(acceptance.compileOnlyConfigurationName, libs.adventure.key)
+    add(acceptance.compileOnlyConfigurationName, libs.adventure.text.minimessage)
+    add(acceptance.compileOnlyConfigurationName, libs.adventure.text.serializer.gson)
+    add(acceptance.compileOnlyConfigurationName, libs.adventure.text.serializer.legacy)
+    add(acceptance.compileOnlyConfigurationName, libs.adventure.text.serializer.plain)
+    add(acceptance.compileOnlyConfigurationName, libs.adventure.text.logger.slf4j)
+    add(acceptance.compileOnlyConfigurationName, libs.guava)
+    add(acceptance.compileOnlyConfigurationName, libs.jetbrains.annotations)
 }
 
 // 冻结 API 快照（本车道为 paper-api）：插件解析坐标与 SHA-256，并把校验挂到编译任务之前

@@ -2,8 +2,8 @@
 // 不可变契约：插件 id 与实现类清单、各车道可见的任务名/属性名/报告路径；插件产物须可被根构建的守护进程加载。
 plugins {
     `kotlin-dsl`
-    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
-    id("dev.detekt") version "2.0.0-alpha.6"
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
 }
 
 repositories {
@@ -70,11 +70,11 @@ dependencies {
 
     // 仅编译期引用 SpotBugs 类型：运行期由消费方根构建 `plugins { id("com.github.spotbugs") apply false }`
     // 提供同一份插件类路径，避免插件类加载器分裂。
-    compileOnly("com.github.spotbugs.snom:spotbugs-gradle-plugin:6.0.26")
+    compileOnly(libs.spotbugs.gradle.plugin)
 
     // 版本区间匹配（McSharedRanges）是新逻辑，按 ADR-0029 需要有行为断言。
-    testImplementation("org.junit.jupiter:junit-jupiter:5.14.4")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.withType<Test>().configureEach {

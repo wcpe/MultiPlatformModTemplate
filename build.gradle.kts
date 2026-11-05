@@ -6,10 +6,10 @@
 // 外部分析插件以 apply false 声明：由 build-conventions.quality 在运行期按 id 应用，
 // 在根声明可保证全构建只有一份插件类路径（避免按子树分裂类加载器）。
 plugins {
-    id("com.github.spotbugs") version "6.0.26" apply false
+    alias(libs.plugins.spotbugs) apply false
     // Kotlin 工具链（现接、前瞻就绪；当前仅 .gradle.kts 为 Kotlin，第二期引入 Kotlin 源即生效）
-    id("org.jlleitschuh.gradle.ktlint") version "14.2.0" apply false
-    id("dev.detekt") version "2.0.0-alpha.6" apply false
+    alias(libs.plugins.ktlint) apply false
+    alias(libs.plugins.detekt) apply false
     // WCPE Loom（ADR-0025）：必须在根以 apply false 声明，让插件类路径在全构建只加载一次。
     // 若只由各车道在自己的 plugins {} 里请求，Gradle 会按子树各建一份插件类加载器，
     // loom 跨工程迭代（MixinAPMappingService → GradleUtils.allLoomProjects →
@@ -21,7 +21,7 @@ plugins {
     // A 车道：mc-testkit（Bukkit/Folia smoke；与 B 真 mod 客户端分 lane）
     // 仅经 repo.wcpe.top 解析插件坐标；禁止 sibling includeBuild 联调。
     // 只应用在 :e2e:harness（拓扑 / 场景 / 依赖注入随桩同处该子模块），根侧只留入口别名任务。
-    id("top.wcpe.mc-testkit") version "0.16.0" apply false
+    alias(libs.plugins.mc.testkit) apply false
     id("top.wcpe.mc.mpmt.realserver-report-gate")
     // 根侧编排（发布聚合 + 真服/版本矩阵门禁注册）。须声明在上述报告门插件之后：
     // 该插件注册 verifyRealServerReportsStrict，编排插件为它接线 mustRunAfter。

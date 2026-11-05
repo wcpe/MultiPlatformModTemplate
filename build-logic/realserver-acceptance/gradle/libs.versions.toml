@@ -1,0 +1,14 @@
+# 本插件工程的版本目录（独立 included build，理由同 build-logic/build-conventions/gradle/libs.versions.toml）。
+
+[versions]
+ktlint-gradle = "14.2.0"
+detekt = "2.0.0-alpha.6"
+junit = "5.14.4"
+
+[libraries]
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit" }
+
+[plugins]
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint-gradle" }
+detekt = { id = "dev.detekt", version.ref = "detekt" }

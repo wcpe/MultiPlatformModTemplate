@@ -22,15 +22,15 @@ dependencies {
     api(project(":core:kernel"))
 
     // 值对象（协议包 DTO）用 Lombok 减样板（ADR-0004：Lombok 仅用于 Java 模块）
-    compileOnly("org.projectlombok:lombok:1.18.48")
-    annotationProcessor("org.projectlombok:lombok:1.18.48")
+    compileOnly(libs.lombok)
+    annotationProcessor(libs.lombok)
 
-    testCompileOnly("org.projectlombok:lombok:1.18.48")
-    testAnnotationProcessor("org.projectlombok:lombok:1.18.48")
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
+    testCompileOnly(libs.lombok)
+    testAnnotationProcessor(libs.lombok)
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
     testImplementation("org.junit.jupiter:junit-jupiter-params")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.test {
