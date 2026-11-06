@@ -11,7 +11,6 @@ plugins {
 // group / version 由 settings.gradle.kts 的 gradle.lifecycle.beforeProject 统一下发；
 // 此处不再回读根工程（rootProject.file 属于跨工程访问，Isolated Projects 会拒绝）。
 
-val snakeyamlVersion = "2.2"
 val spigot112Api = "org.spigotmc:spigot-api:1.12.2-R0.1-SNAPSHOT"
 
 java {
@@ -50,10 +49,12 @@ dependencies {
     // 配置端口实现（DirectoryConfigPort）：能力装配在此注册 ConfigPort；
     // 域本身只依赖 :core:kernel 的端口，不背 snakeyaml 与文件 I/O（ADR-0030 决策 5）。
     api(project(":core:config"))
+    // 路径预设（ADR-0010 决策 2）：持久化与配置落地位置都经它取，不自拼 "data"/"config"。
+    api(project(":core:paths"))
     // 功能域（L0 玩法逻辑）：本模块是 bukkit 各版本车道的公共依赖源，
     // 故域在此统一接入；新增域无需改本行——mpmtDomains() 自动覆盖（ADR-0028）。
     mpmtDomains().forEach { api(it) }
-    api("org.yaml:snakeyaml:$snakeyamlVersion")
+    api(libs.snakeyaml)
 }
 
 tasks.withType<JavaCompile>().configureEach {

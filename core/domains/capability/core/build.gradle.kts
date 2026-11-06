@@ -19,16 +19,16 @@ repositories {
 dependencies {
     api(project(":core:domains:capability:common-api"))
 
-    compileOnly("org.projectlombok:lombok:1.18.48")
-    annotationProcessor("org.projectlombok:lombok:1.18.48")
-    testCompileOnly("org.projectlombok:lombok:1.18.48")
-    testAnnotationProcessor("org.projectlombok:lombok:1.18.48")
+    compileOnly(libs.lombok)
+    annotationProcessor(libs.lombok)
+    testCompileOnly(libs.lombok)
+    testAnnotationProcessor(libs.lombok)
 
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
     // 域间依赖约束（不互依赖 / 无环）的机检落点：ArchUnit 只在测试期使用（ADR-0011）。
-    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.1")
+    testImplementation(libs.archunit.junit5)
 }
 
 tasks.test {

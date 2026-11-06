@@ -21,9 +21,9 @@ dependencies {
     // 运行时上下文对外暴露 core-kernel 的 EventBusPort 等类型，故用 api 传递
     api(project(":core:kernel"))
 
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.test {

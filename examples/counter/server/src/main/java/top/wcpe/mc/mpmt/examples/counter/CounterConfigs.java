@@ -28,6 +28,20 @@ public final class CounterConfigs {
     }
 
     /**
+     * 首次启动时把带中文注释的缺省配置落在用户面前（幂等，已存在则一字不改）。
+     *
+     * <p>为什么要在读取前先写：只读不写的话，用户拿到的是一份“什么都没有”的目录，
+     * 想知道默认值就得去翻代码。落一份带注释的文件，改配置就不再需要读源码。
+     *
+     * <p>模板来自本域自己的 jar（{@code mpmt-defaults/counter.yml}），不属于基础设施模块。
+     *
+     * @return 本次是否新建了文件（已存在为 {@code false}）
+     */
+    public boolean writeDefaultIfAbsent() {
+        return configPort.writeDefault(FILE_NAME);
+    }
+
+    /**
      * 读取约定文件名的配置；不存在时返回缺省配置。
      *
      * @return 已归一的配置，不为空

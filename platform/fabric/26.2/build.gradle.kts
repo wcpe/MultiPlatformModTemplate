@@ -29,7 +29,7 @@ plugins {
     id("top.wcpe.loom-no-remap")
     // 车道约定插件须在 loom 之后应用：gametest 源集要晚于 loom 按现有源集注册 migrate*Mappings 任务的时机创建
     id("build-conventions.fabric")
-    id("com.gradleup.shadow") version "8.3.11"
+    alias(libs.plugins.shadow)
     // 分析类插件（spotbugs / ktlint / detekt）不在车道内声明：由 build-conventions.quality 应用，
     // 版本与类路径由根 plugins{} 单点 pin，重复声明会分裂插件类加载器并破坏 loom 的清单服务。
 }
@@ -44,7 +44,6 @@ val targetJavaVersion = 25
 
 val selectedL4Name = "v26_2"
 val unselectedL4Name = "v1_21"
-val snakeyamlVersion = "2.2"
 
 // 受控内部 JAR 一律只取各子模块产物、不引入其 POM 传递依赖（ADR-0026）。
 // 必须用「非传递项目依赖」而非 files(任务集合)：文件集合会在本项目配置期就快照求值，
@@ -60,11 +59,13 @@ val protocolJar = moduleJar(":core:protocol")
 val spiJar = moduleJar(":core:spi")
 val serverJar = moduleJar(":core:server")
 val configJar = moduleJar(":core:config")
+// 路径预设（ADR-0010 决策 2）
+val pathsJar = moduleJar(":core:paths")
 val clientJar = moduleJar(":core:client")
 val fabricApiJar = moduleJar(":platform:fabric:fabric-api")
 val acceptanceJar = moduleJar(":modules:acceptance")
 val productInternalJars: List<ProjectDependency> =
-    listOf(domainJar, runtimeJar, protocolJar, spiJar, serverJar, clientJar, configJar, fabricApiJar)
+    listOf(domainJar, runtimeJar, protocolJar, spiJar, serverJar, clientJar, configJar, pathsJar, fabricApiJar)
 
 base {
     // 最终产物名同时标识平台与 MC 目标，避免跨车道串扰
@@ -155,17 +156,17 @@ dependencies {
     }
 
     // 第三方运行期依赖：shade 进产物并 relocate 到 top.wcpe.mc.mpmt.libs.*（ADR-0012，防类冲突的统一约定）
-    implementation("org.yaml:snakeyaml:$snakeyamlVersion")
-    shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
+    implementation(libs.snakeyaml)
+    shadowBundle(libs.snakeyaml)
 
     // gametest 接入层依赖 realserver 验收平台无关核心（控制协议 / 协调 / 报告 / GameTest 框架）
     "gametestImplementation"(acceptanceJar)
 
     // 跨栈字节对齐 spike 的纯 JVM 测试
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
     testImplementation("org.junit.jupiter:junit-jupiter-params")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 // 打包链路：jar（仅本模块类）→ shadowJar（+core+snakeyaml，relocate，权威产品 jar）

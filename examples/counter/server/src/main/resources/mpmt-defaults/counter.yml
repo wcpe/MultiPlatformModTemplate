@@ -1,0 +1,15 @@
+# mpmt 计数器示例域的配置。首次启动时自动生成，之后自便修改。
+#
+# 本文件由 core-config 的 DirectoryConfigPort 读取（YAML，键名 = 代码里的字段名）。
+# 字段名用 camelCase 而非 kebab-case：snakeyaml 按 Java 字段名映射，改名会让两者脱钩（config-files 规则 §2 的显式例外）。
+# 删掉本文件或在缺省值上改都不会导致启动失败；写错值会被归一为缺省值。
+
+# 周期提示首次延迟，单位 tick（20 tick = 1 秒）。
+# 必须 > 0；小于等于 0 会被回落为 20。
+# 默认：20（开服 1 秒后第一次提醒）。
+reminderDelayTicks: 20
+
+# 周期提示间隔，单位 tick（20 tick = 1 秒）。
+# 必须 > 0；小于等于 0 会被回落为 1200。
+# 默认：1200（每 60 秒提醒一次）。
+reminderPeriodTicks: 1200

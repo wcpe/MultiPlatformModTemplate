@@ -40,11 +40,14 @@ class MpmtForgeModServerLifecycleTest {
     }
 
     @Test
-    void 未装配时停服是空操作() {
+    void 未装配时停服是空操作() throws Exception {
         MpmtForgeMod mod = new MpmtForgeMod();
 
-        // 服务端没启动过（runtime 为 null）时不得抛
+        // 服务端没启动过（runtime 为 null）时不得抛，且停服后仍为 null。
+        // 断言「停服后未凭空造出一个运行时」——这才是空操作的实际含义，只调不断言等于没测。
         mod.onServerStopping(未初始化(FMLServerStoppingEvent.class));
+
+        assertNull(取字段(mod, "runtime"), "未装配时停服不得凭空造出运行时");
     }
 
     private static MinecraftServer 服务端() {

@@ -133,10 +133,22 @@ class SpongeCapabilityPortsTest {
         try (SpongeTestRuntime sponge = SpongeTestRuntime.install()) {
             UUID onlineId = UUID.randomUUID();
             sponge.addPlayer(onlineId, "乙");
+            UUID absentId = UUID.randomUUID();
             SpongeMessagePort port = new SpongeMessagePort();
 
             port.send(new PlayerRef(onlineId, "乙"), "你好");
-            port.send(new PlayerRef(UUID.randomUUID(), "丙"), "不应抛出");
+            port.send(new PlayerRef(absentId, "丙"), "不应投递");
+
+            // 在线玩家确实收到一次，且内容包含发送的文本。
+            // playerMessages 收集的是 Component 的 toString（带 style 等元数据），故按"包含"而不是相等断言——
+            // 我们感兴趣的是「投递到了且文本对」，不是组件渲染样式。
+            List<String> delivered = sponge.playerMessages.get(onlineId);
+            assertEquals(1, delivered.size(), "在线玩家应恰好收到一次消息");
+            assertTrue(delivered.get(0).contains("你好"), "投递内容应包含发送的文本，实际：" + delivered.get(0));
+            // 离线玩家根本未被 find 到，不应在收集表里留下任何痕迹
+            assertFalse(
+                    sponge.playerMessages.containsKey(absentId),
+                    "离线玩家不应收到投递，连空记录也不该产生");
         }
     }
 

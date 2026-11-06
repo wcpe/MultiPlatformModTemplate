@@ -3,6 +3,7 @@ package top.wcpe.mc.mpmt.platform.bukkit.net;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -73,9 +74,15 @@ class BukkitServerTransportTest {
         ServerMock server = MockBukkit.mock();
         MockPlugin plugin = MockBukkit.createMockPlugin();
         V1_20BukkitServerNetwork network = network(plugin, new BukkitConnectionRegistry());
-        new BukkitServerTransport(network);
+        BukkitServerTransport transport = new BukkitServerTransport(network);
+        // 收包回调未设、但完成通知已设：完成通知必须也不被触发。
+        // handle() 里 receiveHandler == null 时直接 return，不会走到 handledCallback。
+        AtomicReference<ConnectionHandle> handled = new AtomicReference<>();
+        transport.onHandled(handled::set);
 
         network.onPluginMessageReceived(CHANNEL, server.addPlayer(), new byte[] {9});
+
+        assertNull(handled.get(), "未设收包回调时包应被丢弃，不应触发任何上层处理");
     }
 
     @Test
@@ -100,7 +107,35 @@ class BukkitServerTransportTest {
         BukkitServerTransport transport = create(plugin, connections);
         PlayerMock player = server.addPlayer();
 
-        transport.send(connections.connected(player), new byte[] {7, 7});
+        BukkitConnectionHandle handle = connections.connected(player);
+        transport.send(handle, new byte[] {7, 7});
+
+        // MockBukkit 不记录 sendPluginMessage，所以正向「确实发出」不可直接观察；
+        // 但 send() 的守卫链是「handle 仍是该玩家的当前连接」，这个前提可以断言——
+        // 它如果为假，上面的发送就是被静默丢弃的，测试却依然会绿。
+        assertTrue(
+                connections.isCurrent(handle, player),
+                "句柄应仍是该玩家的当前连接，否则发送路径实际走的是丢弃分支");
+    }
+
+    @Test
+    void 连接被替换后旧句柄发送被丢弃() {
+        ServerMock server = MockBukkit.mock();
+        MockPlugin plugin = MockBukkit.createMockPlugin();
+        BukkitConnectionRegistry connections = new BukkitConnectionRegistry();
+        BukkitServerTransport transport = create(plugin, connections);
+        PlayerMock player = server.addPlayer();
+
+        BukkitConnectionHandle stale = connections.connected(player);
+        // 重新登录 → 生成新句柄，旧句柄失效
+        BukkitConnectionHandle current = connections.connected(player);
+
+        assertFalse(connections.isCurrent(stale, player), "旧句柄应已失效");
+        assertTrue(connections.isCurrent(current, player), "新句柄应生效");
+
+        // 用失效句柄发送：不得影响新连接（这正是 send() 里 isCurrent 守卫的意义）
+        transport.send(stale, new byte[] {7, 7});
+        assertTrue(connections.isCurrent(current, player), "失效句柄发送不应改动当前连接");
     }
 
     @Test

@@ -30,6 +30,10 @@ crash-reports/
 .fabric/
 .architectury-transformer/
 
+# 运行时自动生成的缺省配置（首次启动由 ConfigDefaults 落盘，不入库）
+# 模板在 core/domains/<域>/server/src/main/resources/mpmt-defaults/ 下，那份才入库。
+/platform/sponge/*/config/
+
 # 过程性文档与临时文件（不入库）
 /.tmp/
 

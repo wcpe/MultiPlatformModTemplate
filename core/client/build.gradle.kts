@@ -21,9 +21,9 @@ dependencies {
     // 客户端网络装配特性实现 core-runtime 的 Feature，经运行时编排（ARCHITECTURE §2.2：core-client → core-runtime）
     api(project(":core:runtime"))
 
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.test {

@@ -1,0 +1,109 @@
+# Gradle 版本目录（Version Catalog）——第三方依赖与构建插件的**唯一版本来源**。
+#
+# 为什么要有这个文件（docs/adr/0029-contract-tests-assert-artifacts-not-source-text.md）：
+# 同一个库的版本原先散落在各模块脚本里（lombok 出现在 8 个模块 24 处、junit-bom 出现在 29 个模块），
+# 升级时靠 grep 手改，漏一处就会出现“同一个构建里两个 junit 版本”这类静默不一致。
+# 集中到此处后，模块脚本只写库名不写版本。
+#
+# 边界：
+#   · **车道自己的锚点版本不进本文件**——MC / loader / mappings / fabric-api / forge /
+#     sponge-plugin / paper-api / spigot-api 的版本是“该车道是什么”的一部分
+#     （ADR-0027：车道脚本只留参数与偏离项），各车道仍各自定义 val。
+#     本文件只管**跨车道复用**的第三方库与构建插件。
+#   · 根目录 VERSION 仍是**工程版本号**的唯一来源（testing-and-quality §3），不经本文件。
+#   · loom 版本仍由 gradle.properties 的 mpmt.loomVersion 单一真源提供
+#     （见 settings.gradle.kts 的 pluginManagement），本文件不重复声明。
+
+[versions]
+# ── 编译期注解：Lombok 仅用于 L0/L1 的 Java 模块（ADR-0004）────────────────
+lombok = "1.18.48"
+
+# ── 测试栈：JUnit 5 平台与扩展 ──────────────────────────────────────────────
+junit = "5.14.4"
+archunit = "1.5.1"
+mockbukkit = "3.88.1"
+
+# ── 构建期质量工具（作为 Gradle 插件应用，不进产物）────────────────────────────
+spotbugs-gradle-plugin = "6.0.26"
+ktlint-gradle = "14.2.0"
+detekt = "2.0.0-alpha.6"
+shadow = "8.3.11"
+sponge-gradle = "2.3.0"
+foojay-resolver = "0.10.0"
+mc-testkit = "0.16.0"
+
+# ── 运行期第三方库（需 relocate，ADR-0012）────────────────────────────────────
+snakeyaml = "2.2"
+
+# ── 仅 Bukkit 26.2 车道用作编译期基线的库（不写入产物，见该车道脚本注释）──────────
+# 放在这里是因为它们与车道 MC 版本无关，纯粹是 Paper API 的传递依赖基线。
+adventure-bom = "5.2.0"
+guava = "33.7.1-jre"
+gson = "2.14.0"
+jetbrains-annotations = "26.1.0"
+
+# ── legacy Forge 1.12.2 的打包/编译期辅助依赖 ─────────────────────────────────
+architectury-pack200 = "0.1.3"
+vecmath = "1.5.2"
+
+# ── 验收 harness 坐标（私有发布组，本机/CI 经 repo.wcpe.top 解析）──────────────
+harness-core = "0.1.1"
+
+[libraries]
+# 编译期注解
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+
+# 测试栈
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-jupiter-params = { module = "org.junit.jupiter:junit-jupiter-params" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+mockbukkit = { module = "com.github.seeseemelk:MockBukkit-v1.20", version.ref = "mockbukkit" }
+
+# 构建期：仅编译期引用 SpotBugs 类型（运行期由根构建的插件类路径提供）
+spotbugs-gradle-plugin = { module = "com.github.spotbugs.snom:spotbugs-gradle-plugin", version.ref = "spotbugs-gradle-plugin" }
+
+# 运行期第三方库
+snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
+
+# Bukkit 26.2 的编译期基线（Paper API 的传递依赖，避免解析漂移）
+adventure-bom = { module = "net.kyori:adventure-bom", version.ref = "adventure-bom" }
+adventure-api = { module = "net.kyori:adventure-api" }
+adventure-key = { module = "net.kyori:adventure-key" }
+adventure-text-minimessage = { module = "net.kyori:adventure-text-minimessage" }
+adventure-text-serializer-gson = { module = "net.kyori:adventure-text-serializer-gson" }
+adventure-text-serializer-legacy = { module = "net.kyori:adventure-text-serializer-legacy" }
+adventure-text-serializer-plain = { module = "net.kyori:adventure-text-serializer-plain" }
+adventure-text-logger-slf4j = { module = "net.kyori:adventure-text-logger-slf4j" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrains-annotations" }
+
+# legacy Forge 1.12.2 辅助
+architectury-pack200 = { module = "dev.architectury:architectury-pack200", version.ref = "architectury-pack200" }
+vecmath = { module = "java3d:vecmath", version.ref = "vecmath" }
+
+# 验收 harness
+harness-core = { module = "top.wcpe.mc:harness-core", version.ref = "harness-core" }
+
+[bundles]
+# Bukkit 26.2 车道一次声明全套 adventure 模块，避免十行重复
+adventure-compile = [
+    "adventure-api",
+    "adventure-key",
+    "adventure-text-minimessage",
+    "adventure-text-serializer-gson",
+    "adventure-text-serializer-legacy",
+    "adventure-text-serializer-plain",
+    "adventure-text-logger-slf4j",
+]
+
+[plugins]
+spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugs-gradle-plugin" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint-gradle" }
+detekt = { id = "dev.detekt", version.ref = "detekt" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+sponge = { id = "org.spongepowered.gradle.plugin", version.ref = "sponge-gradle" }
+foojay-resolver = { id = "org.gradle.toolchains.foojay-resolver-convention", version.ref = "foojay-resolver" }
+mc-testkit = { id = "top.wcpe.mc-testkit", version.ref = "mc-testkit" }

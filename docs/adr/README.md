@@ -28,7 +28,7 @@
 | [0022](0022-unobfuscated-minecraft-naming-policy.md) | Minecraft 26.1+ 使用无混淆原始命名，并按加载器采用非映射构建链路（取代 0016） | 已接受 |
 | [0023](0023-p3-r7-automated-release-authority.md) | P3 R7 严格自动化验收作为 FR-16 的最终发布权威（细化 0014） | 已接受 |
 | [0024](0024-github-actions-remote-gate-separation.md) | GitHub Actions 远端质量门与真服验收分离 | 已接受 |
-| [0025](0025-wcpe-loom-toolchain-unification.md) | 构建插件统一 WCPE Loom（`top.wcpe.loom` 1.17.1）并收敛 Gradle 车道至 9.6.1（部分取代 0021 的工具链隔离） | 已接受 |
+| [0025](0025-wcpe-loom-toolchain-unification.md) | 构建插件统一 WCPE Loom（`top.wcpe.loom`，版本见 `gradle.properties` 的 `mpmt.loomVersion`）并收敛 Gradle 车道至 9.6.1（部分取代 0021 的工具链隔离） | 已接受 |
 | [0026](0026-single-build-subproject-unification.md) | 平台车道统一为根构建子模块（取消加载器插件隔离，取代 0007 决策 2、0021 决策 2） | 已接受 |
 | [0027](0027-build-convention-plugins.md) | 构建约定插件分层：公共流程进插件、车道只做配置（细化 0026） | 已接受 |
 | [0028](0028-mc-shared-cross-lane-source-layer.md) | mc-shared 跨 lane MC 源码共享层 + 功能域模块化（取代 0015 决策 1 / 4） | 提议中（待审批） |

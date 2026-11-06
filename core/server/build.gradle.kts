@@ -23,12 +23,12 @@ dependencies {
     api(project(":core:runtime"))
 
     // 会话值对象用 Lombok（ADR-0004）
-    compileOnly("org.projectlombok:lombok:1.18.48")
-    annotationProcessor("org.projectlombok:lombok:1.18.48")
+    compileOnly(libs.lombok)
+    annotationProcessor(libs.lombok)
 
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.test {

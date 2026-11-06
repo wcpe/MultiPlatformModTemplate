@@ -7,6 +7,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent;
+import top.wcpe.mc.mpmt.config.ConfigDefaults;
 import top.wcpe.mc.mpmt.config.DirectoryConfigPort;
 import top.wcpe.mc.mpmt.core.runtime.MpmtRuntime;
 import top.wcpe.mc.mpmt.domain.capability.PlayerJoinedEvent;
@@ -71,6 +72,10 @@ public final class Forge112CapabilityBootstrap {
         // 功能域经 META-INF/services 自动发现装配（ADR-0028）：车道不认识任何具体域，
         // 新增域不需要改这里。discover 只是登记，真正的 onEnable（取端口、订阅）发生在
         // runtime.enable()，故此刻端口已全部注册完毕。
+        // 首次启动把各域声明的缺省配置落到 config/ 下（幂等：已存在的文件一字不改）。
+        // 放在域装配之前：域 onEnable 读配置时文件已在，读到的就是用户看到的那份。
+        ConfigDefaults.writeAll(config, Forge112CapabilityBootstrap.class.getClassLoader());
+
         runtime.features().discover(Forge112CapabilityBootstrap.class.getClassLoader());
         MinecraftForge.EVENT_BUS.register(new PlayerConnectionBridge(eventBus));
     }

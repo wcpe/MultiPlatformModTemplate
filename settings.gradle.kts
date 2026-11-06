@@ -71,13 +71,59 @@ pluginManagement {
     val loomVersion =
         providers.gradleProperty("mpmt.loomVersion").orNull
             ?: error("gradle.properties 缺少 mpmt.loomVersion：loom 版本必须有单一真源")
+
+    // pluginManagement 块运行时版本目录尚未建立，`libs` 在这里不可用；
+    // 而本块又必须给出插件版本。故直接从 gradle/libs.versions.toml 读 [versions]，保持单一真源。
+    // 匹配行形如 `shadow = "8.3.11"`；key 一律小写连字符，按 key 取值。
+    val catalogVersions: Map<String, String> =
+        run {
+            val toml = file("gradle/libs.versions.toml")
+
+            if (!toml.isFile) {
+                emptyMap()
+            } else {
+                val inVersions = booleanArrayOf(false)
+                toml
+                    .readLines()
+                    .mapNotNull { rawLine ->
+                        val line = rawLine.trim()
+
+                        when {
+                            line.startsWith("[") -> {
+                                inVersions[0] = line == "[versions]"
+                                null
+                            }
+
+                            !inVersions[0] || line.isEmpty() || line.startsWith("#") -> null
+                            else -> {
+                                val eq = line.indexOf('=')
+
+                                if (eq <= 0) {
+                                    null
+                                } else {
+                                    val key = line.substring(0, eq).trim()
+                                    val value = line.substring(eq + 1).trim().trim('"')
+                                    key to value
+                                }
+                            }
+                        }
+                    }.toMap()
+            }
+        }
+
+    fun catalogVersion(key: String): String =
+        catalogVersions[key]
+            ?: error("gradle/libs.versions.toml 的 [versions] 缺少 `$key`：构建插件版本必须单一真源")
+
     plugins {
         id("top.wcpe.loom") version loomVersion
         // 无混淆变体：loom 的 MixinAPMappingService 遍历全构建 loom 工程，
         // 仅跳过 LoomNoRemapGradlePlugin.isApplied() 的工程；仅靠 fabric.loom.disableObfuscation=true
         // 会让该服务对无 mappings 的工程调用 getMappingConfiguration() 而抛错。
         id("top.wcpe.loom-no-remap") version loomVersion
-        id("org.spongepowered.gradle.plugin") version "2.3.0"
+        // 其余构建插件同样只在本处给版本（车道脚本写 `alias(libs.plugins.xxx)` 直接用）。
+        id("org.spongepowered.gradle.plugin") version catalogVersion("sponge-gradle")
+        id("com.gradleup.shadow") version catalogVersion("shadow")
     }
     // 真服验收编排约定插件（Gradle 插件工程，必须经 includeBuild 引入；ADR-0026 决策 2）
     includeBuild("build-logic/realserver-acceptance")
@@ -277,6 +323,7 @@ include(
     "core:client",
     "core:protocol",
     "core:config",
+    "core:paths",
     "core:spi",
 )
 

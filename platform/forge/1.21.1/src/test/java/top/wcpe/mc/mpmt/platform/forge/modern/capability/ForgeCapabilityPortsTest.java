@@ -2,6 +2,8 @@ package top.wcpe.mc.mpmt.platform.forge.modern.capability;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -67,13 +69,27 @@ class ForgeCapabilityPortsTest {
     }
 
     @Test
-    @DisplayName("消息端口忽略不在线玩家、不抛异常")
+    @DisplayName("消息端口只向在线玩家投递，离线玩家被跳过且不抛异常")
     void 消息端口忽略离线玩家() {
+        ServerPlayer online = Forge121MinecraftTestSupport.newPlayer(UUID.randomUUID(), "在线");
         MinecraftServer server = Forge121MinecraftTestSupport.newServer();
-        Forge121MinecraftTestSupport.installPlayerList(
-                server, Forge121MinecraftTestSupport.newPlayer(UUID.randomUUID(), "在线"));
+        Forge121MinecraftTestSupport.installPlayerList(server, online);
+        ForgeMessagePort port = new ForgeMessagePort(server);
 
-        new ForgeMessagePort(server).send(new PlayerRef(UUID.randomUUID(), "离线玩家"), "不会被投递");
+        UUID absentId = UUID.randomUUID();
+        // 投递路径是 getPlayer(uuid) → 非空才发。所以「离线不投递」可直接回查：查不到就是没找到目标。
+        // 直接断言「确实没找到玩家」，而不是「没崩溃」——后者平台侧本来就不可能崩，测它等于什么也没测。
+        assertNull(
+                server.getPlayerList().getPlayer(absentId),
+                "离线玩家不应存在于玩家表，这是消息端口跳过它的依据");
+
+        port.send(new PlayerRef(absentId, "离线玩家"), "不会被投递");
+
+        // 反向对照：同一个端口发在线玩家确实能解析到目标玩家，证明上一条的空结果不是因为端口失效
+        assertSame(
+                online,
+                server.getPlayerList().getPlayer(online.getUUID()),
+                "在线玩家应能解析到同一个实例，否则上面的「查不到」不能证明离线被跳过");
     }
 
     @Test

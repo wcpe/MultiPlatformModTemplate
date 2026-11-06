@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.wcpe.mc.mpmt.kernel.port.DataDirectoryPort;
 import top.wcpe.mc.mpmt.kernel.port.PersistencePort;
+import top.wcpe.mc.mpmt.paths.Paths;
 
 /** Forge 文件持久化端口：每个命名空间保存为数据目录下的一份 properties 文件。 */
 public final class ForgePersistencePort implements PersistencePort {
@@ -69,6 +70,6 @@ public final class ForgePersistencePort implements PersistencePort {
     }
 
     private Path file(String namespace) {
-        return dataDirectory.baseDirectory().resolve("data").resolve(namespace + ".properties");
+        return Paths.of(dataDirectory).dataFile(namespace + ".properties");
     }
 }

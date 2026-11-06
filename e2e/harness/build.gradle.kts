@@ -33,7 +33,7 @@ dependencies {
     // 仅编译期依赖：运行期由真实 Paper 服务端提供，打入插件 jar 会冲突
     compileOnly("io.papermc.paper:paper-api:1.20.1-R0.1-SNAPSHOT")
     // 共享协议胶水（契约 env / 结果文件原子写出 / 桩基类）：打进桩 jar
-    implementation("top.wcpe.mc:harness-core:0.1.1")
+    implementation(libs.harness.core)
 }
 
 java {

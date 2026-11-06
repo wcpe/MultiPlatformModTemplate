@@ -12,7 +12,7 @@ plugins {
     `java-library`
     id("top.wcpe.loom")
     // 8.3.11：修复 RelocatorRemapper.mapValue 与 loom 依赖树上新 ASM（visitLdcInsn 传 Type）的不兼容
-    id("com.gradleup.shadow") version "8.3.11"
+    alias(libs.plugins.shadow)
     // 车道约定插件须晚于 java-library / top.wcpe.loom / shadow：验收源集、打包链路与 dev run 都挂在它们之上
     id("build-conventions.neoforge")
     // 分析类插件（spotbugs / ktlint / detekt）不在车道内声明：由 build-conventions.quality 应用，

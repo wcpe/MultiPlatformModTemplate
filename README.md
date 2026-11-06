@@ -16,7 +16,7 @@
 L0 core-domain   功能域：玩法规则 + 领域模型 + 端口(Port) + 自有 EventBus(域间解耦)   ← 玩法只写这里
 L1 core-runtime / core-server / core-client / protocol            框架编排 / 端逻辑 / 跨端协议
 L2 platform-spi  平台抽象 SPI + PlatformProvider + FeatureGate     平台可插拔的唯一机制
-L3 平台胶水：Bukkit 为根多模块；全部平台车道（fabric/forge/neoforge/sponge）均为根构建子模块，核心经 project(...) 依赖（构建插件统一 top.wcpe.loom 1.17.1、Gradle 全车道 9.6.1，见 ADR-0025 / ADR-0026）
+L3 平台胶水：Bukkit 为根多模块；全部平台车道（fabric/forge/neoforge/sponge）均为根构建子模块，核心经 project(...) 依赖（构建插件统一 top.wcpe.loom，版本见 gradle.properties 的 mpmt.loomVersion；Gradle 全车道 9.6.1，见 ADR-0025 / ADR-0026）
      各版本内 common / server / client（或仅 server）分目录，平台只做胶水
 L4 版本差异只在「该版本构建」内，禁止单工程多源集堆多版本
 ```
@@ -55,7 +55,7 @@ L0/L1 不含任何平台 / 版本代码；跨平台、跨版本的差异全部�
 
 ## 快速开始
 
-P1/P2 已交付，P3 以 [`docs/PRD.md`](docs/PRD.md) 的 FR 状态为准。根 wrapper 为 Gradle **9.6.1**（全车道统一，ADR-0025；mod 平台构建插件为 WCPE Loom `top.wcpe.loom` 1.17.1）；全部平台车道为**单一根构建的子模块**（ADR-0026），任何 Gradle 调用都在仓库根执行（车道无自有 wrapper）；L0–L2 编译为 Java 8 字节码，**根构建守护 JVM 须 ≥25**（26.2 两条车道在配置期硬校验）。
+P1/P2 已交付，P3 以 [`docs/PRD.md`](docs/PRD.md) 的 FR 状态为准。根 wrapper 为 Gradle **9.6.1**（全车道统一，ADR-0025；mod 平台构建插件为 WCPE Loom `top.wcpe.loom`，版本见 `gradle.properties` 的 `mpmt.loomVersion`）；全部平台车道为**单一根构建的子模块**（ADR-0026），任何 Gradle 调用都在仓库根执行（车道无自有 wrapper）；L0–L2 编译为 Java 8 字节码，**根构建守护 JVM 须 ≥25**（26.2 两条车道在配置期硬校验）。
 
 > 当前上游 `mc-testkit` plugin marker 不可用时，根构建仅会从本机 Maven 缓存回退解析该插件及实现模块；首次配置失败时，先按 [`docs/OPERATIONS.md`](docs/OPERATIONS.md) 准备对应本地制品。该临时前提不等于冷缓存或新机器验证已通过。
 

@@ -97,5 +97,5 @@
 
 > **现状注记（本 spec 为 M0 历史记录）**：上文 §2–§5 与"spike 结论"记录的是 M0 当时的构建形态与实测结论，**保留原样不追改**。
 > - 文中的 `includeBuild` 复合构建（ADR-0007）与其后的"独立 wrapper 车道 + 受控内部 JAR"形态，已被 [ADR-0026](../adr/0026-single-build-subproject-unification.md) **取代**：全部平台车道现为**单一根构建的子模块**，核心经 `project(":core:domain")` 项目依赖消费。
-> - 构建插件已由 Fabric Loom 1.7 演进为统一的 `top.wcpe.loom` 1.17.1（ADR-0025），Gradle 全车道 9.6.1，根构建硬要求守护 JVM ≥ 25。
+> - 构建插件已由 Fabric Loom 1.7 演进为统一的 `top.wcpe.loom`（ADR-0025，版本见 `gradle.properties` 的 `mpmt.loomVersion`），Gradle 全车道 9.6.1，根构建硬要求守护 JVM ≥ 25。
 > - 不变的部分继续有效：Bukkit 走根构建常规模块 + shadow（含 relocate）；各车道都须验证 core 进产物且不被错误 remap。

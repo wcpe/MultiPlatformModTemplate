@@ -67,7 +67,16 @@ class ForgeTypedPayloadChannelBehaviourTest {
         ForgeTypedPayloadChannel channel = channelWithType(
                 ResourceLocation.fromNamespaceAndPath("mpmt", "test-client-empty"));
 
+        // 未注册即投递：不得抛，也不得产生任何分发。
+        // 但光看「没抛」证明不了什么，所以随后在同一通道上注册并发一次作反向对照：
+        // 能收到就说明收发链路本身是通的，「未注册时不分发」才是真的分支行为。
         deliver(channel, payload(channel, new byte[] {1}), clientContext());
+
+        List<byte[]> received = new ArrayList<>();
+        channel.registerClientReceiver(received::add);
+        deliver(channel, payload(channel, new byte[] {1}), clientContext());
+
+        assertEquals(1, received.size(), "注册后应恰好收到一次，证明链路畅通且之前确实未分发");
     }
 
     @Test
@@ -112,6 +121,12 @@ class ForgeTypedPayloadChannelBehaviourTest {
         ServerPlayer sender = Forge121MinecraftTestSupport.newPlayer(java.util.UUID.randomUUID(), "发送方");
 
         deliver(channel, payload(channel, new byte[] {1}), serverContext(sender));
+
+        List<byte[]> received = new ArrayList<>();
+        channel.registerServerReceiver((player, data) -> received.add(data));
+        deliver(channel, payload(channel, new byte[] {1}), serverContext(sender));
+
+        assertEquals(1, received.size(), "注册后应恰好收到一次，证明链路畅通且之前确实未分发");
     }
 
     @Test

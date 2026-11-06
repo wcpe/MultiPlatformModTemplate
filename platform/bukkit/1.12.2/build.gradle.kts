@@ -13,7 +13,7 @@ plugins {
     id("build-conventions.quality")
     id("build-conventions.platform")
     java
-    id("com.gradleup.shadow") version "8.3.11"
+    alias(libs.plugins.shadow)
     // 车道约定插件须晚于 shadow（打包链路按名取 jar/shadowJar），早于 realserver 门禁（验收扩展取值先落地）
     id("build-conventions.bukkit")
     id("top.wcpe.mc.mpmt.realserver-acceptance")
@@ -33,7 +33,6 @@ val acceptanceChannel = "MPMTTEST"
 val regionSchedulerClass = "top.wcpe.mc.mpmt.platform.bukkit.capability.BukkitSchedulerPort"
 val adapterClass = "top.wcpe.mc.mpmt.platform.bukkit.version.v1_12.V1_12BukkitVersionAdapter"
 val adapterClassPath = "top/wcpe/mc/mpmt/platform/bukkit/version/v1_12/V1_12BukkitVersionAdapter.class"
-val snakeyamlVersion = "2.2"
 
 repositories {
     mavenCentral()

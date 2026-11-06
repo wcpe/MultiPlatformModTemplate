@@ -17,7 +17,7 @@ plugins {
     id("top.wcpe.loom")
     // 车道约定插件须在 loom 之后应用：gametest 源集要晚于 loom 按现有源集注册 migrate*Mappings 任务的时机创建
     id("build-conventions.fabric")
-    id("com.gradleup.shadow") version "8.3.11"
+    alias(libs.plugins.shadow)
     // 分析类插件（spotbugs / ktlint / detekt）不在车道内声明：由 build-conventions.quality 应用，
     // 版本与类路径由根 plugins{} 单点 pin，重复声明会分裂插件类加载器并破坏 loom 的清单服务。
 }
@@ -31,7 +31,6 @@ val fabricApiVersion = "0.116.14+1.21.1"
 val targetJavaVersion = 21
 val selectedL4Name = "v1_21"
 val unselectedL4Name = "v1_20"
-val snakeyamlVersion = "2.2"
 // 依赖 platform-spi（经 api 传递 core-runtime + core-kernel），经项目依赖消费
 val platformApiCoordinate = project(":platform:fabric:fabric-api")
 val spiCoordinate = project(":core:spi")
@@ -41,6 +40,8 @@ val serverCoordinate = project(":core:server")
 val clientCoordinate = project(":core:client")
 // 依赖 core-config（ConfigPort 的文件实现 DirectoryConfigPort，能力装配期注册）
 val configCoordinate = project(":core:config")
+// 依赖 core-paths（路径预设，ADR-0010 决策 2）
+val pathsCoordinate = project(":core:paths")
 // realserver 验收 harness 平台无关核心（仅 gametest 接入层用，不入产品 jar，ADR-0014）
 val acceptanceCoordinate = project(":modules:acceptance")
 
@@ -126,6 +127,8 @@ dependencies {
     // 配置端口实现（core-config）：能力装配注册 ConfigPort 用，同样纯 Java、shade 进产物、不参与 remap
     implementation(configCoordinate)
     shadowBundle(configCoordinate)
+    implementation(pathsCoordinate)
+    shadowBundle(pathsCoordinate)
 
     // 功能域（L0 玩法逻辑）：经 mpmtDomains() 动态覆盖——新增域无需改本脚本（ADR-0028）。
     // 域经 META-INF/services 声明 Feature，由 core-runtime 启动期自动发现。
@@ -136,17 +139,17 @@ dependencies {
     }
 
     // 第三方运行期依赖：shade 进产物并 relocate 到 top.wcpe.mc.mpmt.libs.*（ADR-0012，防类冲突的统一约定）
-    implementation("org.yaml:snakeyaml:$snakeyamlVersion")
-    shadowBundle("org.yaml:snakeyaml:$snakeyamlVersion")
+    implementation(libs.snakeyaml)
+    shadowBundle(libs.snakeyaml)
 
     // gametest 接入层依赖 realserver 验收平台无关核心（控制协议 / 协调 / 报告 / GameTest 框架）
     "gametestImplementation"(acceptanceCoordinate)
 
     // 跨栈字节对齐 spike 的纯 JVM 测试
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
     testImplementation("org.junit.jupiter:junit-jupiter-params")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 // 打包链路：jar（仅本模块类）→ shadowJar（+core+snakeyaml，relocate）→ remapJar（remap MC 引用）

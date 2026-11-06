@@ -1,0 +1,10 @@
+# mpmt 能力域（capability）的配置。首次启动时自动生成，之后可自由修改。
+#
+# 本文件由 core-config 的 DirectoryConfigPort 读取（YAML，键名 = 代码里的字段名）。
+# 字段名用 camelCase 而非 kebab-case：snakeyaml 按 Java 字段名映射，改名会让两者脱钩。
+# 删掉本文件不会导致启动失败（行为回到代码缺省值）；写错值会被归一为缺省值。
+
+# 是否在玩家进服时向本人回显当前平台能力快照（仅用于排障与上手确认）。
+# 关掉后不再群发该提示，其余能力探测不受影响。
+# 默认：true。
+announceOnJoin: true

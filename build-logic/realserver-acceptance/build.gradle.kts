@@ -3,8 +3,8 @@
 // 真服门禁的失败文案（docs/adr/0014-realserver-acceptance-harness.md）；编排一律经 Gradle 任务图，禁 shell 入口。
 plugins {
     `kotlin-dsl`
-    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
-    id("dev.detekt") version "2.0.0-alpha.6"
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
 }
 
 repositories {
@@ -40,11 +40,11 @@ dependencies {
     // detekt 2.x 应用插件时即需要 KotlinBasePlugin 类型（1.x 内嵌，2.x 改为依赖 Kotlin 插件）。
     implementation(kotlin("gradle-plugin"))
 
-    testImplementation("org.junit.jupiter:junit-jupiter:5.14.4")
+    testImplementation(libs.junit.jupiter)
     // ProjectBuilder 行为断言：把插件应用到假工程上检查任务注册与属性契约，
     // 取代原先「读插件源码做文本包含判断」的写法（ADR-0029）。仅从本地 Gradle 分发解析，无需联网。
     testImplementation(gradleTestKit())
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 detekt {
