@@ -28,7 +28,7 @@ spotbugs-gradle-plugin = "6.0.26"
 ktlint-gradle = "14.2.0"
 detekt = "2.0.0-alpha.6"
 shadow = "8.3.11"
-sponge-gradle = "2.3.0"
+sponge-gradle = "2.5.1"
 foojay-resolver = "0.10.0"
 mc-testkit = "0.16.0"
 
