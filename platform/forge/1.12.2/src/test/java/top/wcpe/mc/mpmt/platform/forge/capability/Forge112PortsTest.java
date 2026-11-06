@@ -2,6 +2,7 @@ package top.wcpe.mc.mpmt.platform.forge.capability;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,10 +49,20 @@ class Forge112PortsTest {
 
     @Test
     void 玩家不在线时发消息是空操作() {
-        Forge112MessagePort port = new Forge112MessagePort(空服());
+        MinecraftServer server = 空服();
+        Forge112MessagePort port = new Forge112MessagePort(server);
+        UUID absentId = UUID.randomUUID();
 
-        // 找不到目标玩家就静默放过（不抛、不报警）
-        port.send(new PlayerRef(UUID.randomUUID(), "absent"), "hello");
+        // 投递路径是 getPlayerByUUID(uuid) → 非空才发。「不投递」的直接证据是 UUID 索引表里查不到，
+        // 而非「没抛异常」——后者平台侧本来就不会抛，断言它等于什么也没断言。
+        assertNull(
+                server.getPlayerList().getPlayerByUUID(absentId),
+                "离线玩家不应在 UUID 索引表中，这是消息端口跳过它的依据");
+
+        port.send(new PlayerRef(absentId, "absent"), "hello");
+
+        // 发送后依然查不到：证明 send 没有倒过来把玩家登记进去（副作用检查）
+        assertNull(server.getPlayerList().getPlayerByUUID(absentId));
     }
 
     @Test

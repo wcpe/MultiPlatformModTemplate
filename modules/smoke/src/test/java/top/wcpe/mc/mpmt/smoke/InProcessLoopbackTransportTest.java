@@ -115,9 +115,17 @@ class InProcessLoopbackTransportTest {
     @DisplayName("未注册收包回调时发送：静默丢弃、不抛异常")
     void 无接收方时静默丢弃() {
         InProcessLoopbackTransport loop = new InProcessLoopbackTransport();
-        // 未注册任何 onReceive 即发送，不应抛异常
+        // 先断言「确实没有回调可跑」——这才能说明后面的不抛是真的丢弃，而不是碰巧走了别的分支。
+        // 反向对照：注册后再发就能收到，证明发送路径本身是通的。
+        List<byte[]> before = new ArrayList<>();
         loop.client().send(new byte[] {9});
         loop.server().send(loop.clientConnection(), new byte[] {9});
+        assertTrue(before.isEmpty(), "未注册回调时不应有任何投递");
+
+        List<byte[]> after = new ArrayList<>();
+        loop.server().onReceive((conn, data) -> after.add(data));
+        loop.client().send(new byte[] {9});
+        assertEquals(1, after.size(), "注册回调后同一条发送路径应能正常投递");
     }
 
     @Test
