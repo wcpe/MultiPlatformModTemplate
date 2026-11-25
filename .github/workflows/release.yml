@@ -59,19 +59,6 @@ jobs:
         with:
           validate-template: "true"
 
-      - name: 上传发布诊断
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: release-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            **/build/reports/**
-            **/build/test-results/**
-            **/build/acceptance/**
-            **/hs_err_pid*.log
-          if-no-files-found: ignore
-          retention-days: 30
-
       - name: 创建 GitHub Release
         shell: bash
         env:
