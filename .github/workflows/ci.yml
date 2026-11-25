@@ -243,7 +243,7 @@ jobs:
       # key 带 run_id+run_attempt 保证 run 内唯一，防跨 run 串扰。
       - name: 保存本格结果文件到 cache
         if: always()
-        uses: actions/cache/save@0400d5f644dc74513175e3b8d6433e38cf87812f # v4
+        uses: actions/cache/save@v4
         with:
           key: e2e-results-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.name }}
           path: e2e/harness/build/mc-testkit/results/**
@@ -263,28 +263,28 @@ jobs:
       # 不用 restore-keys 模糊匹配；某格缺结果时恢复失败不致命——汇总步骤会按 MISSING 判失败。
       - name: 恢复结果 · Paper 1.20.1
         continue-on-error: true
-        uses: actions/cache/restore@0400d5f644dc74513175e3b8d6433e38cf87812f # v4
+        uses: actions/cache/restore@v4
         with:
           key: e2e-results-${{ github.run_id }}-${{ github.run_attempt }}-Paper 1.20.1
           path: e2e-results/Paper 1.20.1
 
       - name: 恢复结果 · Folia 1.20.1
         continue-on-error: true
-        uses: actions/cache/restore@0400d5f644dc74513175e3b8d6433e38cf87812f # v4
+        uses: actions/cache/restore@v4
         with:
           key: e2e-results-${{ github.run_id }}-${{ github.run_attempt }}-Folia 1.20.1
           path: e2e-results/Folia 1.20.1
 
       - name: 恢复结果 · Paper 1.21.1
         continue-on-error: true
-        uses: actions/cache/restore@0400d5f644dc74513175e3b8d6433e38cf87812f # v4
+        uses: actions/cache/restore@v4
         with:
           key: e2e-results-${{ github.run_id }}-${{ github.run_attempt }}-Paper 1.21.1
           path: e2e-results/Paper 1.21.1
 
       - name: 恢复结果 · Paper 26.2
         continue-on-error: true
-        uses: actions/cache/restore@0400d5f644dc74513175e3b8d6433e38cf87812f # v4
+        uses: actions/cache/restore@v4
         with:
           key: e2e-results-${{ github.run_id }}-${{ github.run_attempt }}-Paper 26.2
           path: e2e-results/Paper 26.2
