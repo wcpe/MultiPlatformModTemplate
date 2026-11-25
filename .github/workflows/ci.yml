@@ -259,8 +259,9 @@ jobs:
       contents: read
       actions: read
     steps:
-      # 逐格从 cache 恢复结果文件：key 与矩阵格保存端一致（run_id+run_attempt+格名），
-      # 不用 restore-keys 模糊匹配；某格缺结果时恢复失败不致命——汇总步骤会按 MISSING 判失败。
+      # 逐格尝试从 cache 恢复结果文件（尽力而为）：同 run 的 cache 跨 job 可见性不可靠，
+      # 恢复不到不致命——硬门控在汇总步骤里以 needs.e2e-matrix.result 判定，
+      # 每个矩阵格的 mc-testkit 任务本身非 PASS 即失败，结果文件只是佐证。
       - name: 恢复结果 · Paper 1.20.1
         continue-on-error: true
         uses: actions/cache/restore@v4
@@ -317,12 +318,17 @@ jobs:
           failed = []
           for scenario, label in expected.items():
               values = cells.get(scenario)
-              status = (values or {}).get("status", "MISSING")
+              status = (values or {}).get("status", "未取到")
               server = (values or {}).get("server", "-")
               under_test = (values or {}).get("pluginUnderTest", "-")
               lines.append(f"| {scenario} | {label} | {status} | {server} | {under_test} |")
-              if status != "PASS":
+              if values and values.get("status") != "PASS":
                   failed.append(f"{scenario}={status}")
+
+          # 硬门控：矩阵格 job 结论（每格 mc-testkit 任务非 PASS 即失败）+ 已取到结果文件中的非 PASS。
+          matrix_result = "${{ needs.e2e-matrix.result }}"
+          if matrix_result != "success":
+              failed.append(f"矩阵格 job 结论={matrix_result}")
 
           report = "\n".join(lines)
           print(report)
