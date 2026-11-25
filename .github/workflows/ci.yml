@@ -239,6 +239,15 @@ jobs:
               --no-daemon --max-workers=2 --no-watch-fs --console=plain \
               ${{ matrix.task }}
 
+      # 结果文件跨 job 传递走 actions/cache（upload-artifact 组织级禁用）：
+      # key 带 run_id+run_attempt 保证 run 内唯一，防跨 run 串扰。
+      - name: 保存本格结果文件到 cache
+        if: always()
+        uses: actions/cache/save@0400d5f644dc74513175e3b8d6433e38cf87812f # v4
+        with:
+          key: e2e-results-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.name }}
+          path: e2e/harness/build/mc-testkit/results/**
+
   # 聚合报告：把各格结果文件汇总成一张表写进 workflow summary，任一格非 PASS 即失败。
   e2e-report:
     name: E2E 矩阵聚合报告
@@ -250,15 +259,35 @@ jobs:
       contents: read
       actions: read
     steps:
-      - name: 下载各格结果文件
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # 本 job 不检出仓库，故显式指定 -R；下载失败不静默（下一步会逐格报 MISSING 并失败）。
-          gh run download "${{ github.run_id }}" -R "${{ github.repository }}" \
-            -p 'e2e-results-*' -D e2e-results
-          find e2e-results -name '*.properties' | sort
+      # 逐格从 cache 恢复结果文件：key 与矩阵格保存端一致（run_id+run_attempt+格名），
+      # 不用 restore-keys 模糊匹配；某格缺结果时恢复失败不致命——汇总步骤会按 MISSING 判失败。
+      - name: 恢复结果 · Paper 1.20.1
+        continue-on-error: true
+        uses: actions/cache/restore@0400d5f644dc74513175e3b8d6433e38cf87812f # v4
+        with:
+          key: e2e-results-${{ github.run_id }}-${{ github.run_attempt }}-Paper 1.20.1
+          path: e2e-results/Paper 1.20.1
+
+      - name: 恢复结果 · Folia 1.20.1
+        continue-on-error: true
+        uses: actions/cache/restore@0400d5f644dc74513175e3b8d6433e38cf87812f # v4
+        with:
+          key: e2e-results-${{ github.run_id }}-${{ github.run_attempt }}-Folia 1.20.1
+          path: e2e-results/Folia 1.20.1
+
+      - name: 恢复结果 · Paper 1.21.1
+        continue-on-error: true
+        uses: actions/cache/restore@0400d5f644dc74513175e3b8d6433e38cf87812f # v4
+        with:
+          key: e2e-results-${{ github.run_id }}-${{ github.run_attempt }}-Paper 1.21.1
+          path: e2e-results/Paper 1.21.1
+
+      - name: 恢复结果 · Paper 26.2
+        continue-on-error: true
+        uses: actions/cache/restore@0400d5f644dc74513175e3b8d6433e38cf87812f # v4
+        with:
+          key: e2e-results-${{ github.run_id }}-${{ github.run_attempt }}-Paper 26.2
+          path: e2e-results/Paper 26.2
 
       - name: 汇总报告
         shell: bash
